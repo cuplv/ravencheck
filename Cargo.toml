@@ -6,6 +6,15 @@ members = ["lang", "macros"]
 name = "ravencheck"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
+license = "MIT"
+repository = "https://github.com/cuplv/ravencheck"
+categories = ["development-tools::testing"]
+exclude = [".gitignore"]
+
+description = """
+Decidable verification of Rust code using relational abstraction.
+"""
 
 [dependencies]
 ravencheck-macros = { path = "./macros" }
