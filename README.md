@@ -4,8 +4,23 @@
 
 ## Usage
 
-To use `ravencheck`, clone this repository and then add it as a
-dependency to your own package's Cargo.toml file:
+First, make sure you have the [CVC5](https://cvc5.github.io/) SMT
+solver available. You should be able to run `cvc5 --version` in your
+dev environment.
+
+Then, to use `ravencheck`, add its GitHub repository as a dependency
+in your Cargo.toml file:
+
+```
+# Cargo.toml
+...
+[dependencies]
+ravencheck = { git = "https://github.com/cuplv/ravencheck" }
+...
+```
+
+Alternatively, you can clone the repo and use its path on your
+filesystem as the dependency:
 
 ```
 # Cargo.toml
