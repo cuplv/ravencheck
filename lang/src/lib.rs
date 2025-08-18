@@ -1,0 +1,383 @@
+mod builder;
+pub use builder::Builder;
+mod cbpv;
+pub use cbpv::{
+    Binder1,
+    BinderN,
+    CaseName,
+    Cases,
+    Comp,
+    Literal,
+    LogOpN,
+    SName,
+    Pattern,
+    Quantifier,
+    Val,
+};
+mod depth;
+pub mod epr_check;
+mod expand_funs;
+mod expand_types;
+mod neg_normal_form;
+mod negate;
+mod partial_eval;
+pub mod prop;
+pub use prop::Prop;
+mod rebuild;
+pub use rebuild::Rebuild;
+mod rename;
+mod sig;
+pub use sig::{
+    CType,
+    FunOp,
+    PredOp,
+    Op,
+    RecOp,
+    Sig,
+    Sort,
+    VType
+};
+mod smt;
+pub use smt::CheckedSig;
+mod substitute;
+mod type_check;
+pub use type_check::TypeContext;
+mod vname;
+pub use vname::VName;
+mod gen;
+pub use gen::Gen;
+
+mod syn_to_cbpv;
+pub use syn_to_cbpv::{
+    syn_to_builder,
+};
+
+pub fn parse_str_syn<T: syn::parse::Parse>(input: &str) -> syn::Result<T> {
+    syn::parse_str(input)
+}
+
+pub fn parse_str_cbpv(input: &str) -> syn::Result<cbpv::Comp> {
+    
+    match syn::parse_str(input) {
+        Ok(expr) => match syn_to_builder(expr) {
+            Ok(b) => {
+                let mut gen = Gen::new();
+                Ok(b.build(&mut gen))
+            }
+            Err(e) => panic!("syn_to_builder error: {}", e),
+        }
+        Err(err) => Err(err),
+    }
+}
+
+impl Comp {
+    pub fn type_check_prop(&self, sig: &Sig) {
+        match self.type_check(&CType::return_prop(), sig) {
+            Ok(()) => {},
+            Err(e) => panic!("Type error: {}", e),
+        }
+    }
+    pub fn normal_form(self, sig: &Sig) -> Cases {
+        let mut gen = self.get_gen();
+        self.normal_form_x(sig, &mut gen, CaseName::root())
+    }
+    pub fn normal_form_single_case(
+        self,
+        sig: &Sig,
+        gen: &mut Gen,
+    ) -> Self {
+        let mut cases = self.normal_form_x(sig, gen, CaseName::root());
+        assert!(
+            cases.len() == 1,
+            "normal_form_single_case should only be called on comps that produce 1 case, but comp produced {} cases",
+            cases.len(),
+        );
+        cases.pop().unwrap().1
+    }
+    pub fn normal_form_x(
+        self,
+        sig: &Sig,
+        gen: &mut Gen,
+        starting_name: CaseName,
+    ) -> Cases {
+        let cases_pe = self.partial_eval(sig, gen, starting_name);
+        // println!("got {} cases from partial_eval", cases_pe.len());
+
+        let mut cases_nnf = Vec::new();
+        for (name,comp) in cases_pe.into_iter() {
+            cases_nnf.push((name, comp.neg_normal_form(sig,gen)));
+        };
+
+        let mut cases_exp = Vec::new();
+        for (name,comp) in cases_nnf.into_iter() {
+            cases_exp.push((name, comp.expand_funs(sig,gen,Vec::new())));
+        };
+
+        // println!("normal_form_x passing on {} cases", cases_exp.len());
+        cases_exp
+    }
+}
+
+impl Sig {
+    pub fn add_axiom<S1: ToString>(
+        &mut self,
+        def: S1,
+    ) {
+        let axiom = match parse_str_cbpv(&def.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error in parsing axiom \"{}\": {:?}",
+                def.to_string(),
+                e,
+            ),
+        };
+        match axiom.type_of(TypeContext::new(self.clone())) {
+            Ok(t) => {
+                if t != CType::return_prop() {
+                    panic!(
+                        "
+Axiom \"{}\" has type {:?}, must have type \"bool\"
+",
+                        def.to_string(),
+                        t,
+                    )
+                }
+            }
+            Err(e) => panic!(
+                "
+Type error in axiom \"{}\": {:?}",
+                def.to_string(),
+                e,
+            ),
+        }
+
+        let mut cases = axiom.normal_form(self);
+        assert!(
+            cases.len() == 1,
+            "Axiom comp should have 1 case, had {} cases instead",
+            cases.len(),
+        );
+        self.axioms.push(cases.pop().unwrap().1);
+    }
+    pub fn add_op_pred<S1: ToString, S2: ToString>(
+        &mut self,
+        name: S1,
+        def: S2,
+    ) {
+        let axiom = match parse_str_cbpv(&def.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error in parsing def of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+        let inputs = match axiom.type_of(TypeContext::new(self.clone())) {
+            Ok(t) => match t.unwrap_fun_v() {
+                Some((inputs, output)) => {
+                    assert!(
+                        output == VType::prop(),
+                        "Output type of \"{}\" must be \"bool\"",
+                        name.to_string(),
+                    );
+                    inputs
+                }
+                None => panic!()
+            }
+            Err(e) => panic!(
+                "
+Type error in def of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+        let op = Op::Pred(PredOp{
+            inputs,
+            axioms: vec![axiom],
+        });
+        self.ops.push((name.to_string(), op));
+    }
+
+    pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, const N: usize>(
+        &mut self,
+        name: S1,
+        inputs: [S2; N],
+        output: S3,
+    ) {
+        let inputs = inputs
+            .into_iter()
+            .map(|i| VType::Atom(Sort::UI(i.to_string())))
+            .collect();
+        match output.to_string().as_str() {
+            "bool" => {
+                let op = Op::Pred(PredOp{inputs, axioms: Vec::new()});
+                self.ops.push((name.to_string(), op));
+            }
+            _ => {
+                let op = Op::Fun(FunOp{
+                    inputs,
+                    output: VType::Atom(Sort::UI(output.to_string())),
+                    axioms: Vec::new(),
+                });
+                self.ops.push((name.to_string(), op));
+            }
+        }
+    }
+
+    pub fn add_op_fun<S1: ToString, S2: ToString>(
+        &mut self,
+        name: S1,
+        axiom: S2,
+    ) {
+        let axiom = match parse_str_cbpv(&axiom.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error in parsing axiom of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+        let (inputs, rest) = match axiom.type_of(TypeContext::new(self.clone())) {
+            Ok(t) => match t.unwrap_fun_v() {
+                Some(in_rest) => in_rest,
+                None => panic!()
+            }
+            Err(e) => panic!(
+                "
+Type error in axiom of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+
+        let fun_output = match rest.unwrap_fun_v() {
+            Some((inputs, output)) => {
+                assert!(
+                    output == VType::prop(),
+                    "Body type of \"{}\" def must be \"bool\"",
+                    name.to_string(),
+                );
+                assert!(
+                    inputs.len() == 1,
+                    "Def of \"{}\" must have one output argument",
+                    name.to_string(),
+                );
+                inputs[0].clone()
+            }
+            None => panic!(
+                "Def of \"{}\" is malformed, should be function of form |inputs| |output| {{ axiom body }}",
+                name.to_string(),
+            ),
+        };
+
+        let op = Op::Fun(FunOp{
+            inputs,
+            output: fun_output,
+            axioms: vec![axiom],
+        });
+        self.ops.push((name.to_string(), op));
+    }
+
+    pub fn add_op_rec<S1: ToString, S2: ToString, S3: ToString>(
+        &mut self,
+        name: S1,
+        axiom: S2,
+        def: S3,
+    ) {
+        let axiom = match parse_str_cbpv(&axiom.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error in parsing axiom of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+        let (inputs, rest) = match axiom.type_of(TypeContext::new(self.clone())) {
+            Ok(t) => match t.unwrap_fun_v() {
+                Some(in_rest) => in_rest,
+                None => panic!()
+            }
+            Err(e) => panic!(
+                "
+Type error in axiom of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+
+        let fun_output = match rest.unwrap_fun_v() {
+            Some((inputs, output)) => {
+                assert!(
+                    output == VType::prop(),
+                    "Body type of \"{}\" annotation must be \"bool\"",
+                    name.to_string(),
+                );
+                assert!(
+                    inputs.len() == 1,
+                    "Annotation of \"{}\" must have one output argument",
+                    name.to_string(),
+                );
+                inputs[0].clone()
+            }
+            None => panic!(
+                "Annotation of \"{}\" is malformed, should be function of form |inputs| |output| {{ annotation body }}",
+                name.to_string(),
+            ),
+        };
+
+        let def = match parse_str_cbpv(&def.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error in parsing definition of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        };
+
+        let self_op = Op::Fun(FunOp{
+            inputs: inputs.clone(),
+            output: fun_output.clone(),
+            axioms: vec![axiom.clone()],
+        });
+        let mut self_sig = self.clone();
+        self_sig.ops.push((name.to_string(), self_op));
+
+        match def.type_of(TypeContext::new(self_sig)) {
+            Ok(t) => {
+                let expected =
+                    CType::Return(
+                        VType::fun_v(inputs.clone(), fun_output.clone())
+                    );
+                if t != expected {
+                    panic!(
+                        "
+{:?}'s definition type {:?} does not match annotation type {:?}",
+                        name.to_string(),
+                        t,
+                        expected,
+                    );
+                }
+            }
+            Err(e) => panic!(
+                "
+Type error in definition of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        }
+
+        let op = Op::Rec(RecOp{
+            inputs,
+            output: fun_output,
+            axiom,
+            def,
+        });
+        self.ops.push((name.to_string(), op));
+
+    }
+}

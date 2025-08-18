@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["lang", "macros"]
+
+[package]
+name = "ravencheck"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ravencheck-macros = { path = "./macros" }
+ravenlang = { path = "./lang" }
+
+[[example]]
+name = "sets"

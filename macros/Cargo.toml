@@ -1,0 +1,21 @@
+[package]
+name = "ravencheck-macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ravencheck_macros"
+path = "src/lib.rs"
+proc-macro = true
+
+[[bin]]
+name = "macro_test"
+path = "src/bin/macro_test/main.rs"
+
+[dependencies]
+# rvn_core = { package = "ravenlang", path = "../lang" }
+# rvn_smt = { package = "ravenlang-smt", path = "../smt" }
+ravenlang = { path = "../lang" }
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = { version = "2.0", features = ["full","extra-traits"] }

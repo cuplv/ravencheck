@@ -1,0 +1,142 @@
+// This small example shows how to call the macro in your own code
+// when you have 'ravencheck' as a dependency.
+//
+// See src/macro_examples/* for more examples.
+
+// The 'check_module' macro generates a test module that verifies the
+// specified goal properties using an SMT solver. To run the
+// verification, simply use 'cargo test'. Just like normal Rust tests,
+// the verification-specific code is erased when compiling for
+// release.
+#[ravencheck::check_module]
+pub mod my_mod {
+    use std::collections::HashSet;
+
+    // The 'declare' attribute tells the solver that we have an
+    // uninterpreted sort called 'Set'.
+    #[declare]
+    #[derive(PartialEq, Eq, Clone)]
+    pub struct Set(pub HashSet<u32>);
+
+    // Here, 'declare' tells the solver that we have an uninterpreted
+    // constant called 'empty_set' with sort 'Set'.
+    #[declare]
+    pub fn empty_set() -> Set {
+        Set(HashSet::new())
+    }
+
+    // Declare an uninterpreted 'Elem' sort.
+    #[declare]
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub struct Elem(u32);
+
+    // Declare an uninterpreted relation (boolean-output function) on
+    // 'Elem' and 'Set'.
+    #[declare]
+    pub fn member(e: Elem, s: Set) -> bool {
+        s.0.contains(&e.0)
+    }
+
+    // The 'assume' attribute gives the body of the following function
+    // to the solver as an axiom.
+    //
+    // This function body is erased before the Rust compiler is
+    // called, and so we can use special logical syntax like
+    // forall(..) and exists(..).
+    #[assume]
+    fn equal_or_distinguisher() -> bool {
+        forall(|a:Set,b:Set| {
+            a == b || exists(|e:Elem| member(e,a) !=  member(e,b))
+        })
+    }
+
+    #[assume]
+    fn empty_set_no_member() -> bool {
+        forall(|e: Elem| {
+            !member(e, empty_set())
+        })
+    }
+
+    // Declare an uninterpreted function on 'Set'.
+    #[declare]
+    pub fn union(a: Set, b: Set) -> Set {
+        let Set(s1) = a;
+        let Set(s2) = b;
+        let s3 = s1.union(&s2).cloned().collect();
+        Set(s3)
+    }
+
+    // This is a special form of 'assume' that uses the function body
+    // as an axiom on (a,b,c) that must be true when union(a,b) = c.
+    #[annotate(union)]
+    fn union_def(a: Set, b: Set, c: Set) -> bool {
+        forall(|e: Elem| {
+            member(e,c) == (member(e,a) || member(e,b))
+        })
+    }
+
+    // The 'verify' attribute gives the following function body to the
+    // solver as a verification goal, which it checks based on the
+    // axioms it has received so-far.
+    //
+    // The #[verify] attribute is analogous to the #[test] attribute
+    // in an ordinary Rust testing module.
+    #[verify]
+    fn union_preserves_member() -> bool {
+        forall(|e:Elem,s:Set| {
+            !member(e,s) || member(e, union(s,s))
+        })
+    }
+
+    #[verify]
+    fn union_self_is_self() -> bool {
+        forall(|s:Set| union(s,s) == s)
+    }
+
+    #[verify]
+    fn union_empty_set() -> bool {
+        union(empty_set(), empty_set()) == empty_set()
+    }
+
+    // Here are ordinary Rust tests, which are checked by compiling
+    // them using the Rust compiler and then executing the results.
+    //
+    // Calling 'cargo test' will run these tests alongside the
+    // verification process for the #[verify] properties above.
+    #[cfg(test)]
+    mod runtime_properties {
+        use super::*;
+
+        // Since this is real Rust code that will be executed, we
+        // can't use logical quantifiers like forall(..) and
+        // exists(..).
+        //
+        // Compare this test to the 'union_self_is_self' verification
+        // property above.
+        #[test]
+        fn union_empty_set() {
+            assert!(
+                union(empty_set(), empty_set()) == empty_set()
+            )
+        }
+
+        #[test]
+        fn empty_is_empty() {
+            assert!(
+                !member(Elem(1), empty_set())
+            )
+        }
+    }
+}
+
+fn main() {
+    let s = my_mod::empty_set();
+    let result = my_mod::union(s.clone(), s.clone()) == s;
+    println!("Result is {}", result);
+}
+
+// Note that, since this file is built as an "example" by Cargo, the
+// tests and verification code are not actually executed by 'cargo
+// test'. If you want to play with and modify some examples, use the
+// ones in src/macro_examples/*, which are actually tested when you
+// run 'cargo test'.

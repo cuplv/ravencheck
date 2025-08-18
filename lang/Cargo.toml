@@ -1,0 +1,15 @@
+[package]
+name = "ravenlang"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ravenlang"
+path = "src/lib.rs"
+
+[dependencies]
+syn = { version = "2.0", features = ["full","extra-traits"] }
+graph-cycles = "0.3.0"
+petgraph = "0.8"
+easy-smt = "0.2.2"
+env_logger = "0.11.5"
