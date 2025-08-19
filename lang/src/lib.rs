@@ -160,6 +160,51 @@ Type error in axiom \"{}\": {:?}",
         );
         self.axioms.push(cases.pop().unwrap().1);
     }
+
+    pub fn add_annotation<S1: ToString, S2: ToString>(
+        &mut self,
+        op_name: S1,
+        def: S2,
+    ) {
+        let sig_clone = self.clone();
+        let mut found = false;
+
+        // Parse the comp from def
+        let c = match parse_str_cbpv(&def.to_string()) {
+            Ok(m) => m.expand_types(self),
+            Err(e) => panic!(
+                "
+Error parsing annotation: {}",
+                e,
+            ),
+        };
+
+        for (name,op) in self.ops.iter_mut() {
+            if &op_name.to_string() == name {
+                found = true;
+                match op {
+                    Op::Fun(op) => {
+                        // Check the type of c against the inputs and
+                        // outputs of op.
+                        match c.type_check(&op.annotation_type(), &sig_clone) {
+                            Ok(()) => {},
+                            Err(e) =>
+                                panic!("Type error in annotation def: {}", e),
+                        }
+
+                        op.axioms.push(c.clone());
+                    }
+                    _ => panic!("Annotation added to '{}', which is a type of operation other than function.", op_name.to_string()),
+                }
+            }
+        }
+
+        assert!(
+            found,
+            "No function called '{}' has been declared",
+            op_name.to_string(),
+        );
+    }
     pub fn add_op_pred<S1: ToString, S2: ToString>(
         &mut self,
         name: S1,

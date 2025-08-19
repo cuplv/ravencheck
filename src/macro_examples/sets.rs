@@ -56,7 +56,9 @@ pub mod my_mod {
     }
 
     #[annotate(union)]
-    fn union_def(a: Set, b: Set, c: Set) -> bool {
+    fn union_def() -> bool {
+        |a: Set, b: Set|
+        |c: Set|
         forall(|e: Elem| {
             member(e,c) == (member(e,a) || member(e,b))
         })

@@ -251,6 +251,18 @@ pub struct FunOp {
     pub axioms: Vec<Comp>,
 }
 
+impl FunOp {
+    pub fn annotation_type(&self) -> CType {
+        CType::Return(VType::fun_v(
+            self.inputs.clone(),
+            VType::fun_v(
+                [self.output.clone()],
+                VType::prop(),
+            )
+        ))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredOp {
     pub inputs: Vec<VType>,

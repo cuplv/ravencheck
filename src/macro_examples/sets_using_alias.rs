@@ -36,7 +36,9 @@ pub mod my_mod {
     }
 
     #[annotate(union)]
-    fn union_def(a: MySet, b: MySet, c: MySet) -> bool {
+    fn union_def() -> bool {
+        |a: MySet, b: MySet|
+        |c: MySet|
         forall(|e: u32| {
             member(e,c) == (member(e,a) || member(e,b))
         })
@@ -45,7 +47,7 @@ pub mod my_mod {
     #[verify]
     fn union_idempotent() -> bool {
         forall(|a: MySet, b: MySet| {
-            union(union(a,b), b) == union(a,b)
+            union(union(a,b), b) != union(a,b)
         })
     }
 

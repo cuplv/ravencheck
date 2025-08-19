@@ -114,6 +114,9 @@ Error in type-checking definition of \"{}\": {:?}",
     ) {
         self.0.declare_op(name, inputs, output);
     }
+    pub fn add_annotation(&mut self, name: &str, body: &str) {
+        self.0.add_annotation(name, body);
+    }
     pub fn add_op_pred<S1: ToString, S2: ToString>(
         &mut self,
         name: S1,

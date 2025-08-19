@@ -13,6 +13,7 @@ use syn::{
     ItemFn,
     ItemMod,
     Meta,
+    Path,
     ReturnType,
     Stmt,
     Type,
@@ -37,55 +38,63 @@ enum RvnAttr {
     Annotate(String),
     Assume,
     Declare,
+    Define,
     Verify,
+}
+
+fn path_to_one_str(p: &Path) -> String {
+    assert!(p.segments.len() == 1);
+    p.segments.first().unwrap().ident.to_string()
+}
+
+impl RvnAttr {
+    fn try_from_attr(attr: &Attribute) -> Option<RvnAttr> {
+        match &attr.meta {
+            Meta::Path(p) if p.segments.len() == 1 => {
+                match path_to_one_str(p).as_str() {
+                    "assume" => Some(RvnAttr::Assume),
+                    "declare" => Some(RvnAttr::Declare),
+                    "define" => Some(RvnAttr::Define),
+                    "verify" => Some(RvnAttr::Verify),
+                    _ => None,
+                }
+            }
+            Meta::List(l) if l.path.segments.len() == 1 => {
+                match path_to_one_str(&l.path).as_str() {
+                    "annotate" => {
+                        let fun_name: Ident = l.parse_args().unwrap();
+                        Some(RvnAttr::Annotate(fun_name.to_string()))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
     let mut out = None;
     attrs.retain_mut(|attr| {
-        match &attr.meta {
-            Meta::Path(p) if p.segments.len() == 1 => {
-                match p.segments.first().unwrap().ident.to_string().as_str() {
-                    "assume" => {
-                        assert!(
-                            out == None,
-                            "only one attr should be used per item, but used both {:?} and another",
-                            out.clone().unwrap(),
-                        );
-                        out = Some(RvnAttr::Assume);
-                        false
-                    }
-                    "declare" => {
-                        assert!(
-                            out == None,
-                            "only one attr should be used per item, but used both {:?} and another",
-                            out.clone().unwrap(),
-                        );
-                        out = Some(RvnAttr::Declare);
-                        false
-                    }
-                    "verify" => {
-                        assert!(
-                            out == None,
-                            "only one attr should be used per item, but used both {:?} and another",
-                            out.clone().unwrap(),
-                        );
-                        out = Some(RvnAttr::Verify);
-                        false
-                    }
-                    _ => true,
+        match RvnAttr::try_from_attr(attr) {
+            Some(ra) => {
+                match &out {
+                    Some(other) => panic!(
+                        "only one ravencheck command should be used per item, but both {:?} and {:?} were used together",
+                        other,
+                        ra,
+                    ),
+                    None => {}
                 }
+
+                out = Some(ra);
+
+                // Drop all ravencheck commands
+                false
             }
-            Meta::List(l) if l.path.segments.len() == 1 => {
-                match l.path.segments.first().unwrap().ident.to_string().as_str() {
-                    "annotate" => {
-                        out = Some(RvnAttr::Annotate(String::new()));
-                        false
-                    }
-                    _ => true,
-                }
-            }
-            _ => true,
+
+            // Don't drop anything that wasn't a ravencheck command
+            None => true, 
         }
     });
 
@@ -94,7 +103,7 @@ fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum SigItem {
-    // Annotation(String, String),
+    Annotation(String, Block),
     Axiom(Block),
     Goal(Block),
     Sort(String),
@@ -143,7 +152,12 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
         match item {
             Item::Fn(f) => {
                 match pop_rvn_attr(&mut f.attrs) {
-                    Some(RvnAttr::Annotate(_)) => false,
+                    Some(RvnAttr::Annotate(fname)) => {
+                        sig_items.push(
+                            SigItem::Annotation(fname, *(f.block).clone())
+                        );
+                        false
+                    }
                     Some(RvnAttr::Assume) => {
                         sig_items.push(
                             SigItem::Axiom(*(f.block).clone())
@@ -163,11 +177,6 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
                                     }
                                     t => todo!("Handle {:?}", t),
                                 }
-                                // FnArg::Typed(_p) => {
-                                //     arg_types.push(
-                                //         stringify!(_p.ty).to_string()
-                                //     );
-                                // }
                                 FnArg::Receiver(_) => panic!("
 you can't use 'declare' on a method function (one that takes a 'self' input)"
                                 ),
@@ -186,6 +195,7 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
 
                         true
                     }
+                    Some(RvnAttr::Define) => todo!("#[define] for fn item"),
                     Some(RvnAttr::Verify) => {
                         sig_items.push(
                             SigItem::Goal(*(f.block).clone())
@@ -218,6 +228,7 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
                     Some(RvnAttr::Declare) => {
                         sig_items.push(SigItem::Sort(i.ident.to_string()));
                     }
+                    Some(RvnAttr::Define) => todo!("#[define] for type item"),
                     Some(a) => panic!(
                         "attr {:?} cannot not be used on a type alias definition",
                         a,
@@ -267,6 +278,12 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
             // Turn sig_items into statements (of type syn::Stmt)
             let stmts: Vec<Stmt> = sig_items.into_iter().map(|i| {
                 match i {
+                    SigItem::Annotation(f,b) => {
+                        let b_tks = format!("{}", quote! { #b });
+                        syn::parse((quote! {
+                            sig.add_annotation(#f, #b_tks);
+                        }).into()).unwrap()
+                    }
                     SigItem::Axiom(b) => {
                         let b_tks = format!("{}", quote! { #b });
                         syn::parse((quote! {
