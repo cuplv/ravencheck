@@ -1,4 +1,5 @@
 #[crate::check_module(crate)]
+#[declare_types(u32)]
 pub mod my_mod {
     use std::collections::HashSet;
 
@@ -6,28 +7,25 @@ pub mod my_mod {
     type MySet = HashSet<u32>;
 
     #[declare]
-    type MyU32 = u32;
-
-    #[declare]
     fn empty_set() -> MySet {
         HashSet::new()
     }
 
     #[declare]
-    fn member(e: MyU32, s: MySet) -> bool {
+    fn member(e: u32, s: MySet) -> bool {
         s.contains(&e)
     }
 
     #[assume]
     fn equal_or_distinguisher() -> bool {
         forall(|a:MySet,b:MySet| {
-            a == b || exists(|e:MyU32| member(e,a) !=  member(e,b))
+            a == b || exists(|e:u32| member(e,a) !=  member(e,b))
         })
     }
 
     #[assume]
     fn empty_set_no_member() -> bool {
-        forall(|e: MyU32| {
+        forall(|e: u32| {
             !member(e, empty_set())
         })
     }
@@ -39,7 +37,7 @@ pub mod my_mod {
 
     #[annotate(union)]
     fn union_def(a: MySet, b: MySet, c: MySet) -> bool {
-        forall(|e: MyU32| {
+        forall(|e: u32| {
             member(e,c) == (member(e,a) || member(e,b))
         })
     }

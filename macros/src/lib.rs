@@ -101,6 +101,43 @@ enum SigItem {
     UFun(String, Vec<String>, String),
 }
 
+fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
+    attrs.retain_mut(|attr| {
+        match &attr.meta {
+            Meta::List(l) if l.path.segments.len() == 1 => {
+                match l.path.segments.first().unwrap().ident.to_string().as_str() {
+                    "declare_types" => {
+                        // parse out the type name arg, then push to sig_items
+                        // let types: Ident = l.parse_args().unwrap();
+                        // let types: Punctuated<Ident,Token![,]> = Punctuated::parse_terminated(l.tokens).unwrap();
+
+                        let parser =
+                            Punctuated
+                            ::<Ident,syn::Token![,]>
+                            ::parse_separated_nonempty;
+                        let types = parser
+                            .parse2(l.tokens.clone())
+                            .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
+
+                        for t in types.iter() {
+                            sig_items.push(SigItem::Sort(t.to_string()));
+                        }
+
+                        // Don't keep
+                        false
+                    }
+
+                    // Otherwise, do keep
+                    _ => true,
+                }
+            }
+
+            // Otherwise, do keep
+            _ => true,
+        }
+    })
+}
+
 fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
     items.retain_mut(|item| {
         match item {
@@ -219,6 +256,10 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
 
     let mut sig_items: Vec<SigItem> = Vec::new();
 
+    // Handle commands within the top-level attributes
+    handle_top_level(&mut m.attrs, &mut sig_items);
+
+    // Handle per-item commands within the module
     match &mut m.content {
         Some((_,items)) => {
             handle_items(items, &mut sig_items);
