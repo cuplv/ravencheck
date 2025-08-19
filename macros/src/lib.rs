@@ -169,7 +169,20 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
                         sig_items.push(SigItem::Sort(i.ident.to_string()));
                     }
                     Some(a) => panic!(
-                        "attr {:?} cannot not be used on a Struct",
+                        "attr {:?} cannot not be used on a struct definition",
+                        a,
+                    ),
+                    None => {}
+                }
+                true
+            }
+            Item::Type(i) => {
+                match pop_rvn_attr(&mut i.attrs) {
+                    Some(RvnAttr::Declare) => {
+                        sig_items.push(SigItem::Sort(i.ident.to_string()));
+                    }
+                    Some(a) => panic!(
+                        "attr {:?} cannot not be used on a type alias definition",
                         a,
                     ),
                     None => {}
