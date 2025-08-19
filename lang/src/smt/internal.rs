@@ -2,11 +2,14 @@ use easy_smt;
 use easy_smt::{Response, SExpr};
 use crate::{
     Binder1,
+    Builder,
     LogOpN,
     Comp,
+    Gen,
     Literal,
     Op,
     Quantifier,
+    rel_abs_name,
     Sig,
     Sort,
     Val,
@@ -44,6 +47,123 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                     })
                     .collect();
                 ctx.declare_fun(s,input_atoms,ctx.atom("Bool"))?;
+            }
+            Op::Fun(p) => {
+                
+                let input_types: Vec<VType> =
+                    VType::flatten_many(p.inputs.clone());
+                let output_types: Vec<VType> =
+                    VType::flatten(p.output.clone());
+                let rel_type_atoms: Vec<SExpr> = input_types
+                    .iter()
+                    .chain(output_types.iter())
+                    .map(|sort| {
+                        let s = sort
+                            .clone()
+                            .unwrap_atom()
+                            .expect("sig types must be atoms");
+                        ctx.atom(format!("{}", s.as_string()))
+                    })
+                    .collect();
+                // let input_atoms = abs_inputs
+                //     .iter()
+                //     .map(|sort| {
+                //         let s = sort
+                //             .clone()
+                //             .unwrap_atom()
+                //             .expect("sig types must be atoms");
+                //         ctx.atom(format!("{}", s.as_string()))
+                //     })
+                //     .collect();                    
+                ctx.declare_fun(
+                    rel_abs_name(s),
+                    rel_type_atoms,
+                    ctx.atom("Bool"),
+                )?;
+
+                
+                // For now, if there are any higher-order arguments,
+                // we omit the functionality axiom.
+                if !input_types.iter().any(|i| i.contains_thunk()) {
+                    let mut vgen = Gen::new();
+                    let ixs = vgen.next_many(input_types.len());
+                    let oxs1 = vgen.next_many(output_types.len());
+                    let oxs2 = vgen.next_many(output_types.len());
+                    let q_sig: Vec<(VName, VType)> = ixs
+                        .iter()
+                        .cloned()
+                        .zip(input_types.iter().cloned())
+                        .chain(
+                            oxs1
+                               .iter()
+                               .cloned()
+                               .zip(output_types.iter().cloned())
+                        )
+                        .chain(
+                            oxs2
+                               .iter()
+                               .cloned()
+                               .zip(output_types.iter().cloned())
+                        )
+                        .collect();
+
+                    let args1: Vec<Val> = ixs
+                        .iter()
+                        .cloned()
+                        .chain(oxs1.iter().cloned())
+                        .map(|i| i.val())
+                        .collect();
+                    let args2: Vec<Val> = ixs
+                        .iter()
+                        .cloned()
+                        .chain(oxs2.iter().cloned())
+                        .map(|i| i.val())
+                        .collect();
+
+                    let otup1: Builder = Builder::tuple(
+                        oxs1
+                            .iter()
+                            .cloned()
+                            .map(|x| Builder::return_(x.val()))
+                            .collect::<Vec<Builder>>()
+                    );
+                    let otup2: Builder = Builder::tuple(
+                        oxs1
+                            .iter()
+                            .cloned()
+                            .map(|x| Builder::return_(x.val()))
+                            .collect::<Vec<Builder>>()
+                    );
+
+                    let fun_axiom = Builder::log_op(
+                        LogOpN::Or,
+                        [
+                            Builder::log_op(
+                                LogOpN::And,
+                                [
+                                    Builder::force(Val::Var(
+                                        VName::new(rel_abs_name(s))
+                                    ))
+                                        .apply_v(args1),
+                                    Builder::force(Val::Var(
+                                        VName::new(rel_abs_name(s))
+                                    ))
+                                        .apply_v(args2),
+                                ]
+                            )
+                                .not(),
+                            otup1.eq_ne(true, otup2),
+                        ]
+                    )
+                        .quant(Quantifier::Forall, q_sig)
+                        .build(&mut vgen)
+                        .normal_form_single_case(&sig, &mut vgen);
+
+                    let mut builder = Context::new(ctx);
+                    let e = builder.smt(&fun_axiom)?;
+                    println!("SMT Axiom [Rel]: {}", ctx.display(e[0]));
+                    ctx.assert(e[0])?;
+                }
             }
             _ => {},
         }

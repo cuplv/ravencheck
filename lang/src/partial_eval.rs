@@ -239,10 +239,26 @@ impl Comp {
                                         anti_stack.push(Rebuild::Call(SName(s), vs, ps));
                                         self = Comp::return1(ret_v);
                                     }
-                                    None => panic!(
-                                        "Undeclared operator: {}",
-                                        s,
-                                    ),
+                                    // If undefined, assume it is a
+                                    // relational abstraction and
+                                    // treat it like a symbol.
+                                    None => {
+                                        let x_result = gen.next();
+                                        let mut flat_vs = Vec::new();
+                                        for v in vs {
+                                            flat_vs.append(&mut v.flatten());
+                                        }
+                                        anti_stack.push(Rebuild::LogOpN(
+                                            LogOpN::Pred(SName(s),true),
+                                            flat_vs,
+                                            x_result.clone(),
+                                        ));
+                                        self = Comp::return1(x_result);
+                                    }
+                                    // None => panic!(
+                                    //     "Undeclared operator: {}",
+                                    //     s,
+                                    // ),
                                 }
                             }
                             Some(f) => {

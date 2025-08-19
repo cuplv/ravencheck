@@ -33,6 +33,7 @@ pub use sig::{
     PredOp,
     Op,
     RecOp,
+    rel_abs_name,
     Sig,
     Sort,
     VType
@@ -255,17 +256,49 @@ Type error in def of \"{}\": {:?}",
             .into_iter()
             .map(|i| VType::Atom(Sort::UI(i.to_string())))
             .collect();
+        let output_t = VType::Atom(Sort::UI(output.to_string()));
         match output.to_string().as_str() {
             "bool" => {
                 let op = Op::Pred(PredOp{inputs, axioms: Vec::new()});
                 self.ops.push((name.to_string(), op));
             }
             _ => {
-                let op = Op::Fun(FunOp{
+                // Add an annotation that links the op to its
+                // relational abstraction.
+                //
+                // I'll need to also add a declaration of the
+                // relational abstraction in the "declare_signature"
+                // part of smt generation, as well as a functionality
+                // axiom for that relation.
+                // let anno =
+                //     todo!("annotation linking op to relational abstraction");
+                let rel_abs = VName::new(rel_abs_name(name.to_string())).val();
+
+                let anno =
+                    Builder::ret_thunk(
+                        Builder::fun_many_gen(inputs.clone(), |in_xs| {
+                            Builder::ret_thunk(
+                                Builder::fun_gen(output_t, |out_x| {
+                                    let mut args = in_xs;
+                                    args.push(out_x);
+                                    Builder::force(rel_abs).apply_v(args)
+                            })
+                            )
+                        })
+                    ).build(&mut Gen::new());
+                let fun_op = FunOp{
                     inputs,
                     output: VType::Atom(Sort::UI(output.to_string())),
-                    axioms: Vec::new(),
-                });
+                    axioms: vec![anno.clone()],
+                };
+
+                // match anno.type_check(&fun_op.annotation_type(), self) {
+                //     Ok(()) => {},
+                //     Err(e) => panic!("relational abstraction annotation did not type-check: {}", e),
+                // }
+
+                let op = Op::Fun(fun_op);
+
                 self.ops.push((name.to_string(), op));
             }
         }

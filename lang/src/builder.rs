@@ -125,6 +125,32 @@ impl Builder {
         })
     }
 
+    pub fn fun_gen<F>(t: VType, cont: F) -> Self
+    where
+        F: FnOnce(Val) -> Self + 'static,
+    {
+        Self::new(|vgen: &mut Gen| {
+            let x = vgen.next();
+            let v = x.clone().val();
+            Comp::Fun(vec![(x, Some(t))], Box::new(cont(v).build(vgen)))
+        })
+    }
+
+    pub fn fun_many_gen<Ts,F>(ts: Ts, cont: F) -> Self
+    where
+        Ts: Into<Vec<VType>> + 'static,
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+    {
+        Self::new(|vgen: &mut Gen| {
+            let ts = ts.into();
+
+            let xs = vgen.next_many(ts.len());
+            let vs = xs.clone().into_iter().map(|x| x.val()).collect();
+            let xts = xs.into_iter().zip(ts).map(|(x,t)| (x,Some(t))).collect();
+            Comp::Fun(xts, Box::new(cont(vs).build(vgen)))
+        })
+    }
+
     pub fn eq_ne(self, pos: bool, other: Self) -> Self {
         self.seq_gen(move |x| {
              other.seq_gen(move |y| {
@@ -194,6 +220,11 @@ impl Builder {
     pub fn flatten(self) -> Self {
         self.seq_gen(|x_thunk| {
             Builder::lift(Comp::force(x_thunk))
+        })
+    }
+    pub fn ret_thunk(self) -> Self {
+        Self::new(|vgen: &mut Gen| {
+            Comp::Return(vec![Val::Thunk(Box::new(self.build(vgen)))])
         })
     }
 

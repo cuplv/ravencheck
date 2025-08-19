@@ -155,12 +155,23 @@ impl Comp {
                                     ));
                                     self = *m;
                                 }
+                                // Treat None like a Symbol, since
+                                // it's probably a relational
+                                // abstraction.
                                 None => {
-                                    panic!(
-                                        "Symbol {:?} not found is sig",
-                                        s,
-                                    )
+                                    anti_stack.push(Rebuild::LogOpN(
+                                        LogOpN::Pred(s,is_pos),
+                                        vs,
+                                        x,
+                                    ));
+                                    self = *m;
                                 }
+                                // None => {
+                                //     panic!(
+                                //         "Symbol {:?} not found in sig",
+                                //         s,
+                                //     )
+                                // }
                             }
                         }
                         Binder1::LogQuantifier(q, xs, body) => {

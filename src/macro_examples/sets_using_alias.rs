@@ -47,7 +47,7 @@ pub mod my_mod {
     #[verify]
     fn union_idempotent() -> bool {
         forall(|a: MySet, b: MySet| {
-            union(union(a,b), b) != union(a,b)
+            union(union(a,b), b) == union(a,b)
         })
     }
 

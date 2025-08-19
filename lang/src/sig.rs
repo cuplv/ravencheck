@@ -263,6 +263,10 @@ impl FunOp {
     }
 }
 
+pub fn rel_abs_name<S: ToString>(s: S) -> String {
+    format!("relabs_{}", s.to_string())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredOp {
     pub inputs: Vec<VType>,
