@@ -47,14 +47,14 @@ pub mod my_mod {
     #[verify]
     fn union_idempotent() -> bool {
         forall(|a: MySet, b: MySet| {
-            union(union(a,b), b) == union(a,b)
+            union(union(a,b), b) != union(a,b)
         })
     }
 
     #[cfg(test)]
     mod normal_tests {
         use super::*;
-    
+
         #[test]
         fn union_empty_set() {
             assert!(

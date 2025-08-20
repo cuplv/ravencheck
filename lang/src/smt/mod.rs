@@ -250,7 +250,16 @@ fn query_negative_c(c: Comp, sig: &CheckedSig) -> Response {
 }
 
 pub fn assert_valid_with<T: ToString>(sig: &CheckedSig, s: T) {
-    assert_eq!(query_negative(s, sig), Response::Unsat);
+    match query_negative(s, sig) {
+        Response::Unsat => {},
+        Response::Sat => panic!("
+verification conditions are not valid, counterexample was found"
+        ),
+        Response::Unknown => panic!("
+verification could not be completed (sort cycle?)"
+        ),
+    }
+    // assert_eq!(query_negative(s, sig), Response::Unsat);
 }
 
 pub fn assert_invalid_with<T: ToString>(sig: &CheckedSig, s: T) {
