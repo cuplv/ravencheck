@@ -6,7 +6,7 @@ To perform a release to crates.io, do the following:
 * lang/Cargo.toml
 * macros/Cargo.toml
 * Cargo.toml
-* Makefile
+* README.md
 ```
 
 2. Create a release commit.
@@ -14,26 +14,18 @@ To perform a release to crates.io, do the following:
 3. Run the following commands, looking for any errors:
 
 ```
-$ make prep-release
-...
-$ cd lang
-$ cargo package --list
+$ cargo package -p ravenlang --list
 ...
 # (check to see that the list doesn't 
 # include anything unintended)
-$ cargo package
+$ cargo package -p ravenlang
 ...
-$ cargo publish
+$ cargo publish -p ravenlang
 ...
-$ cd -
 
-$ cd macros
 # (repeat the cargo package+publish steps above
-# for the macros package)
-$ cd -
+# for the 'ravencheck-macros' package)
 
 # (finally, repeat the cargo package+publish steps 
-# a third time for the top-level ravencheck package)
+# a third time for the 'ravencheck' package)
 ```
-
-4. Use git to clean up the files and changes created by step #3.
