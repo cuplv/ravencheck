@@ -48,6 +48,13 @@ impl CheckedSig {
         self.0.add_alias(s, t.clone());
         t
     }
+    pub fn add_alias_from_string<S1: ToString, S2: ToString>(
+        &mut self,
+        alias: S1,
+        ty_string: S2,
+    ) {
+        self.0.add_alias_from_string(alias, ty_string);
+    }
     pub fn add_constant<S1: ToString, S2: ToString>(
         &mut self,
         name: S1,

@@ -97,7 +97,7 @@ impl From<PatIdent> for VName {
 }
 
 impl VType {
-    fn from_syn(t: Type) -> Result<Self, Error> {
+    pub fn from_syn(t: Type) -> Result<Self, Error> {
         match t {
             Type::BareFn(t) => {
                 let mut input_types = Vec::new();

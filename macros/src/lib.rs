@@ -107,6 +107,7 @@ enum SigItem {
     Axiom(Block),
     Goal(Block),
     Sort(String),
+    SortAlias(Ident,Type),
     UFun(String, Vec<String>, String),
 }
 
@@ -228,7 +229,12 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
                     Some(RvnAttr::Declare) => {
                         sig_items.push(SigItem::Sort(i.ident.to_string()));
                     }
-                    Some(RvnAttr::Define) => todo!("#[define] for type item"),
+                    Some(RvnAttr::Define) => {
+                        sig_items.push(SigItem::SortAlias(
+                            i.ident.clone(),
+                            *(i.ty).clone(),
+                        ));
+                    }
                     Some(a) => panic!(
                         "attr {:?} cannot not be used on a type alias definition",
                         a,
@@ -299,6 +305,13 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                     SigItem::Sort(s) => {
                         syn::parse((quote! {
                             sig.add_sort(#s);
+                        }).into()).unwrap()
+                    }
+                    SigItem::SortAlias(i, ty) => {
+                        let i_tks = format!("{}", i);
+                        let ty_tks = format!("{}", quote! { #ty });
+                        syn::parse((quote! {
+                            sig.add_alias_from_string(#i_tks, #ty_tks);
                         }).into()).unwrap()
                     }
                     SigItem::UFun(name, inputs, output) => {

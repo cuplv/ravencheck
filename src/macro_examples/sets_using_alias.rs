@@ -20,6 +20,12 @@ pub mod my_mod {
     #[declare]
     type MySet = HashSet<u32>;
 
+    // The 'define' attribute informs the solver of a a type
+    // alias. The right-hand side of this definition must be a type
+    // that has already been declared (or defined) to the solver.
+    #[define]
+    type MySetAlias = MySet;
+
     // Here, 'declare' tells the solver that we have an uninterpreted
     // constant called 'empty_set' with type 'MySet'.
     #[declare]
@@ -56,7 +62,7 @@ pub mod my_mod {
 
     // Declare an uninterpreted function on 'MySet'.
     #[declare]
-    fn union(a: MySet, b: MySet) -> MySet {
+    fn union(a: MySet, b: MySetAlias) -> MySetAlias {
         a.union(&b).cloned().collect()
     }
 
@@ -82,7 +88,7 @@ pub mod my_mod {
     // in an ordinary Rust testing module.
     #[verify]
     fn union_idempotent() -> bool {
-        forall(|a: MySet, b: MySet| {
+        forall(|a: MySetAlias, b: MySet| {
             union(union(a,b), b) == union(a,b)
         })
     }
