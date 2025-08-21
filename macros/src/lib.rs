@@ -13,6 +13,7 @@ use syn::{
     ItemFn,
     ItemMod,
     Meta,
+    PatType,
     Path,
     ReturnType,
     Stmt,
@@ -22,14 +23,12 @@ use syn::{
 
 #[proc_macro]
 pub fn verify(input: TokenStream) -> TokenStream {
-    // let args: Punctuated<syn::Expr,syn::token::Comma> = syn::parse(input).unwrap();
     let mut args: Vec<syn::Expr> = syn::parse_macro_input!(input with Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated).into_iter().collect();
     let e = args.pop().unwrap();
     let sig = args.pop().unwrap();
     let out = quote! {
         (#sig).assert_valid(stringify!(#e));
     };
-    // println!("{}", out);
     out.into()
 }
 
@@ -108,6 +107,7 @@ enum SigItem {
     Goal(Block),
     Sort(String),
     SortAlias(Ident,Type),
+    DFun(Ident, Vec<PatType>, Type, Block),
     UFun(String, Vec<String>, String),
 }
 
@@ -117,10 +117,6 @@ fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match l.path.segments.first().unwrap().ident.to_string().as_str() {
                     "declare_types" => {
-                        // parse out the type name arg, then push to sig_items
-                        // let types: Ident = l.parse_args().unwrap();
-                        // let types: Punctuated<Ident,Token![,]> = Punctuated::parse_terminated(l.tokens).unwrap();
-
                         let parser =
                             Punctuated
                             ::<Ident,syn::Token![,]>
@@ -196,7 +192,29 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
 
                         true
                     }
-                    Some(RvnAttr::Define) => todo!("#[define] for fn item"),
+                    Some(RvnAttr::Define) => {
+                        let name = f.sig.ident.clone();
+                        let inputs = f.sig.inputs.iter().cloned().map(|arg| {
+                            match arg {
+                                FnArg::Typed(a) => a,
+                                FnArg::Receiver(_) => panic!("
+you can't use 'define' on a method function (one that takes a 'self' input)"
+                                ),
+                            }
+                        }).collect();
+                        let output = match f.sig.output.clone() {
+                            ReturnType::Default => panic!("
+You must give a return type when using 'define'"
+                            ),
+                            ReturnType::Type(_, t) => *t,
+                        };
+                        let body = (*f.block).clone();
+
+                        sig_items.push(
+                            SigItem::DFun(name, inputs, output, body)
+                        );
+                        true
+                    }
                     Some(RvnAttr::Verify) => {
                         sig_items.push(
                             SigItem::Goal(*(f.block).clone())
@@ -312,6 +330,15 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                         let ty_tks = format!("{}", quote! { #ty });
                         syn::parse((quote! {
                             sig.add_alias_from_string(#i_tks, #ty_tks);
+                        }).into()).unwrap()
+                    }
+                    SigItem::DFun(name, inputs, _output, body) => {
+                        let name_tk: String = format!("{}", name);
+                        let body_tk: String = format!("{}", quote! {
+                            |#(#inputs),*| #body
+                        });
+                        syn::parse((quote! {
+                            sig.add_fun(#name_tk, #body_tk);
                         }).into()).unwrap()
                     }
                     SigItem::UFun(name, inputs, output) => {

@@ -12,7 +12,8 @@
 #[crate::check_module(crate)]
 // This command declares the uninterpreted type 'u32' to the solver.
 #[declare_types(u32)]
-pub mod my_mod {
+#[allow(dead_code)]
+mod my_mod {
     use std::collections::HashSet;
 
     // The 'declare' attribute tells the solver that we have an
@@ -26,13 +27,6 @@ pub mod my_mod {
     #[define]
     type MySetAlias = MySet;
 
-    // Here, 'declare' tells the solver that we have an uninterpreted
-    // constant called 'empty_set' with type 'MySet'.
-    #[declare]
-    fn empty_set() -> MySet {
-        HashSet::new()
-    }
-
     // Declare an uninterpreted relation (boolean-output function) on
     // 'u32' and 'MySet'.
     #[declare]
@@ -44,13 +38,20 @@ pub mod my_mod {
     // to the solver as an axiom.
     //
     // This function body is erased before the Rust compiler is
-    // called, so we can use special logical syntax like forall(..)
-    // and exists(..).
+    // called, so we can use the special functions forall(..)  and
+    // exists(..).
     #[assume]
     fn equal_or_distinguisher() -> bool {
         forall(|a:MySet,b:MySet| {
             a == b || exists(|e:u32| member(e,a) !=  member(e,b))
         })
+    }
+
+    // Here, 'declare' tells the solver that we have an uninterpreted
+    // constant called 'empty_set' with type 'MySet'.
+    #[declare]
+    fn empty_set() -> MySet {
+        HashSet::new()
     }
 
     #[assume]
@@ -90,6 +91,49 @@ pub mod my_mod {
     fn union_idempotent() -> bool {
         forall(|a: MySetAlias, b: MySet| {
             union(union(a,b), b) == union(a,b)
+        })
+    }
+
+    #[declare]
+    fn insert(e: u32, mut s: MySet) -> MySet {
+        s.insert(e);
+        s
+    }
+
+    #[annotate(insert)]
+    fn insert_def() -> bool {
+        |e: u32, s1: MySet|
+        |s2: MySet|
+        forall(|x:u32| member(x,s2) == (member(x,s1) || x == e))
+    }
+
+    #[verify]
+    fn insert_monotonic() -> bool {
+        forall(|e1: u32, e2: u32, s: MySet| {
+            implies(
+                member(e1,s),
+                member(e1, insert(e2,s)),
+            )
+        })
+    }
+
+    // The 'define' attribute allows the solver to use the definition
+    // of the function, rather than treating it as uninterpreted.
+    //
+    // When using 'define', the function body must follow some rules:
+    //
+    // * All functions/constants used must already be declared/defined
+    // * No mutation or method calls
+    // * No recursion
+    #[define]
+    fn singleton(e: u32) -> MySet {
+        insert(e, empty_set())
+    }
+
+    #[verify]
+    fn singleton_membership() -> bool {
+        forall(|e1: u32, e2: u32| {
+            member(e1, singleton(e2)) == (e1 == e2)
         })
     }
 
