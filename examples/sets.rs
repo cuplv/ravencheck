@@ -11,20 +11,19 @@
 #[ravencheck::check_module]
 // This command declares the uninterpreted type 'u32' to the solver.
 #[declare_types(u32)]
-pub mod my_mod {
+mod my_mod {
     use std::collections::HashSet;
 
     // The 'declare' attribute tells the solver that we have an
     // uninterpreted type called 'MySet'.
     #[declare]
-    pub type MySet = HashSet<u32>;
+    type MySet = HashSet<u32>;
 
-    // Here, 'declare' tells the solver that we have an uninterpreted
-    // constant called 'empty_set' with type 'MySet'.
-    #[declare]
-    pub fn empty_set() -> MySet {
-        HashSet::new()
-    }
+    // The 'define' attribute informs the solver of a a type
+    // alias. The right-hand side of this definition must be a type
+    // that has already been declared (or defined) to the solver.
+    #[define]
+    type MySetAlias = MySet;
 
     // Declare an uninterpreted relation (boolean-output function) on
     // 'u32' and 'MySet'.
@@ -37,13 +36,20 @@ pub mod my_mod {
     // to the solver as an axiom.
     //
     // This function body is erased before the Rust compiler is
-    // called, so we can use special logical syntax like forall(..)
-    // and exists(..).
+    // called, so we can use the special functions forall(..)  and
+    // exists(..).
     #[assume]
     fn equal_or_distinguisher() -> bool {
         forall(|a:MySet,b:MySet| {
             a == b || exists(|e:u32| member(e,a) !=  member(e,b))
         })
+    }
+
+    // Here, 'declare' tells the solver that we have an uninterpreted
+    // constant called 'empty_set' with type 'MySet'.
+    #[declare]
+    pub fn empty_set() -> MySet {
+        HashSet::new()
     }
 
     #[assume]
@@ -55,7 +61,7 @@ pub mod my_mod {
 
     // Declare an uninterpreted function on 'MySet'.
     #[declare]
-    pub fn union(a: MySet, b: MySet) -> MySet {
+    pub fn union(a: MySet, b: MySetAlias) -> MySetAlias {
         a.union(&b).cloned().collect()
     }
 
@@ -81,8 +87,51 @@ pub mod my_mod {
     // in an ordinary Rust testing module.
     #[verify]
     fn union_idempotent() -> bool {
-        forall(|a: MySet, b: MySet| {
-            union(union(a,b), b) != union(a,b)
+        forall(|a: MySetAlias, b: MySet| {
+            union(union(a,b), b) == union(a,b)
+        })
+    }
+
+    #[declare]
+    pub fn insert(e: u32, mut s: MySet) -> MySet {
+        s.insert(e);
+        s
+    }
+
+    #[annotate(insert)]
+    fn insert_def() -> bool {
+        |e: u32, s1: MySet|
+        |s2: MySet|
+        forall(|x:u32| member(x,s2) == (member(x,s1) || x == e))
+    }
+
+    #[verify]
+    fn insert_monotonic() -> bool {
+        forall(|e1: u32, e2: u32, s: MySet| {
+            implies(
+                member(e1,s),
+                member(e1, insert(e2,s)),
+            )
+        })
+    }
+
+    // The 'define' attribute allows the solver to use the definition
+    // of the function, rather than treating it as uninterpreted.
+    //
+    // When using 'define', the function body must follow some rules:
+    //
+    // * All functions/constants used must already be declared/defined
+    // * No mutation or method calls
+    // * No recursion
+    #[define]
+    pub fn singleton(e: u32) -> MySet {
+        insert(e, empty_set())
+    }
+
+    #[verify]
+    fn singleton_membership() -> bool {
+        forall(|e1: u32, e2: u32| {
+            member(e1, singleton(e2)) == (e1 == e2)
         })
     }
 
@@ -121,6 +170,10 @@ pub mod my_mod {
 // code.
 fn main() {
     let s = my_mod::empty_set();
-    let result = my_mod::union(s.clone(), s.clone()) == s;
-    println!("Result is {}", result);
+    let result1 = my_mod::union(s.clone(), s.clone()) == s;
+    println!("Result #1 is {}", result1);
+
+    let s2 = my_mod::insert(2, my_mod::singleton(1));
+    let result2 = my_mod::member(1, s2.clone()) && my_mod::member(2, s2);
+    println!("Result #2 is {}", result2);
 }
