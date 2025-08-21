@@ -49,42 +49,30 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                 ctx.declare_fun(s,input_atoms,ctx.atom("Bool"))?;
             }
             Op::Fun(p) => {
-                
-                let input_types: Vec<VType> =
-                    VType::flatten_many(p.inputs.clone());
-                let output_types: Vec<VType> =
-                    VType::flatten(p.output.clone());
-                let rel_type_atoms: Vec<SExpr> = input_types
-                    .iter()
-                    .chain(output_types.iter())
-                    .map(|sort| {
-                        let s = sort
-                            .clone()
-                            .unwrap_atom()
-                            .expect("sig types must be atoms");
-                        ctx.atom(format!("{}", s.as_string()))
-                    })
-                    .collect();
-                // let input_atoms = abs_inputs
-                //     .iter()
-                //     .map(|sort| {
-                //         let s = sort
-                //             .clone()
-                //             .unwrap_atom()
-                //             .expect("sig types must be atoms");
-                //         ctx.atom(format!("{}", s.as_string()))
-                //     })
-                //     .collect();                    
-                ctx.declare_fun(
-                    rel_abs_name(s),
-                    rel_type_atoms,
-                    ctx.atom("Bool"),
-                )?;
-
-                
                 // For now, if there are any higher-order arguments,
                 // we omit the functionality axiom.
-                if !input_types.iter().any(|i| i.contains_thunk()) {
+                if !p.inputs.iter().any(|i| i.contains_thunk()) {
+                    let input_types: Vec<VType> =
+                        VType::flatten_many(p.inputs.clone());
+                    let output_types: Vec<VType> =
+                        VType::flatten(p.output.clone());
+                    let rel_type_atoms: Vec<SExpr> = input_types
+                        .iter()
+                        .chain(output_types.iter())
+                        .map(|sort| {
+                            let s = sort
+                                .clone()
+                                .unwrap_atom()
+                                .expect("sig types must be atoms");
+                            ctx.atom(format!("{}", s.as_string()))
+                        })
+                        .collect();
+                    ctx.declare_fun(
+                        rel_abs_name(s),
+                        rel_type_atoms,
+                        ctx.atom("Bool"),
+                    )?;
+
                     let mut vgen = Gen::new();
                     let ixs = vgen.next_many(input_types.len());
                     let oxs1 = vgen.next_many(output_types.len());
