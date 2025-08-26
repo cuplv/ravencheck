@@ -31,6 +31,7 @@ pub use sig::{
     CType,
     FunOp,
     PredOp,
+    PredSymbol,
     Op,
     RecOp,
     rel_abs_name,
@@ -264,32 +265,28 @@ Type error in def of \"{}\": {:?}",
         inputs: [S2; N],
         output: S3,
     ) {
-        let inputs = inputs
-            .into_iter()
-            .map(|i| {
-                let t = VType::Atom(Sort::UI(i.to_string()));
-                t.expand_aliases(&self.type_aliases)
-            })
-            .collect();
-        let output_t =
-            VType::Atom(Sort::UI(output.to_string()))
-            .expand_aliases(&self.type_aliases);
-        match &output_t {
-            VType::Atom(Sort::Prop) => {
-                let op = Op::Pred(PredOp{inputs, axioms: Vec::new()});
-                self.ops.push((name.to_string(), op));
-            }
-            _ => {
+        let inputs: Vec<VType> = inputs.into_iter().map(|i| {
+            let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
+            t.expand_aliases(&self.type_aliases)
+        }).collect();
+        let output: VType = VType::from_string(output)
+            .expect("should be able to parse an input argument type as a VType")
+            .expand_aliases(&self.type_aliases);        
+
+        let op = if !inputs.iter().any(|i| i.contains_thunk()) {
+            if output == VType::prop() {
+                Op::Symbol(PredSymbol{inputs})
+            } else {
                 // Add an annotation that links the op to its
                 // relational abstraction.
                 let rel_abs = VName::new(rel_abs_name(name.to_string())).val();
 
-                let output_t_clone = output_t.clone();
+                let output_clone = output.clone();
                 let anno =
                     Builder::ret_thunk(
                         Builder::fun_many_gen(inputs.clone(), |in_xs| {
                             Builder::ret_thunk(
-                                Builder::fun_gen(output_t_clone, |out_x| {
+                                Builder::fun_gen(output_clone, |out_x| {
                                     let mut args = in_xs;
                                     args.push(out_x);
                                     Builder::force(rel_abs).apply_v(args)
@@ -297,17 +294,24 @@ Type error in def of \"{}\": {:?}",
                             )
                         })
                     ).build(&mut Gen::new());
-                let fun_op = FunOp{
+                Op::Fun(FunOp{
                     inputs,
-                    output: output_t,
+                    output,
                     axioms: vec![anno.clone()],
-                };
-
-                let op = Op::Fun(fun_op);
-
-                self.ops.push((name.to_string(), op));
+                })
             }
-        }
+        } else {
+            if output == VType::prop() {
+                todo!("Handle higher-order relations")
+            } else {
+                Op::Fun(FunOp{
+                    inputs,
+                    output,
+                    axioms: Vec::new(),
+                })
+            }
+        };
+        self.ops.push((name.to_string(), op));
     }
 
     pub fn add_op_fun<S1: ToString, S2: ToString>(

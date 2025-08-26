@@ -15,6 +15,7 @@ use syn::{
     LitBool,
     Pat,
     PatIdent,
+    PatType,
     Macro,
     ReturnType,
     Stmt,
@@ -97,6 +98,28 @@ impl From<PatIdent> for VName {
 }
 
 impl VType {
+    pub fn from_pat_type<S: ToString>(s: S) -> Result<Self, Error> {
+        let pt: PatType = match syn::parse_str(&s.to_string()) {
+            Ok(t) => t,
+            Err(e) => panic!(
+                "Could not parse \"{}\" as a typed pattern: {}",
+                s.to_string(),
+                e,
+            ),
+        };
+        Self::from_syn(*pt.ty)
+    }
+    pub fn from_string<S: ToString>(s: S) -> Result<Self, Error> {
+        let t: Type = match syn::parse_str(&s.to_string()) {
+            Ok(t) => t,
+            Err(e) => panic!(
+                "Could not parse \"{}\" as a type: {}",
+                s.to_string(),
+                e,
+            ),
+        };
+        Self::from_syn(t)
+    }
     pub fn from_syn(t: Type) -> Result<Self, Error> {
         match t {
             Type::BareFn(t) => {

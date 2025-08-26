@@ -108,7 +108,7 @@ enum SigItem {
     Sort(String),
     SortAlias(Ident,Type),
     DFun(Ident, Vec<PatType>, Type, Block),
-    UFun(String, Vec<String>, String),
+    UFun(String, Vec<PatType>, Type),
 }
 
 fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
@@ -163,32 +163,46 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
                     }
                     Some(RvnAttr::Declare) => {
                         let name = f.sig.ident.to_string();
-                        let mut arg_types = Vec::new();
-                        for arg in f.sig.inputs.iter() {
+                        let inputs = f.sig.inputs.iter().cloned().map(|arg| {
                             match arg {
-                                FnArg::Typed(a) => match *(a.ty.clone()) {
-                                    Type::Path(typepath) => {
-                                        arg_types.push(
-                                            typepath.path.segments.first().unwrap().ident.to_string()
-                                        );
-                                    }
-                                    t => todo!("Handle {:?}", t),
-                                }
+                                FnArg::Typed(a) => a,
                                 FnArg::Receiver(_) => panic!("
 you can't use 'declare' on a method function (one that takes a 'self' input)"
                                 ),
                             }
-                        }
-                        let out_type = match &f.sig.output {
-                            ReturnType::Default => "()".to_string(),
-                            ReturnType::Type(_, t) => match *(t.clone()) {
-                                Type::Path(typepath) => {
-                                    typepath.path.segments.first().unwrap().ident.to_string()
-                                }
-                                t => todo!("Handle {:?}", t),
-                            }
+                        }).collect();
+//                         let mut arg_types = Vec::new();
+//                         for arg in f.sig.inputs.iter() {
+//                             match arg {
+//                                 FnArg::Typed(a) => match *(a.ty.clone()) {
+//                                     Type::Path(typepath) => {
+//                                         arg_types.push(
+//                                             typepath.path.segments.first().unwrap().ident.to_string()
+//                                         );
+//                                     }
+//                                     t => todo!("Handle {:?}", t),
+//                                 }
+//                                 FnArg::Receiver(_) => panic!("
+// you can't use 'declare' on a method function (one that takes a 'self' input)"
+//                                 ),
+//                             }
+//                         }
+                        let output = match f.sig.output.clone() {
+                            ReturnType::Default => panic!("
+You must give a return type when using 'declare'"
+                            ),
+                            ReturnType::Type(_, t) => *t,
                         };
-                        sig_items.push(SigItem::UFun(name, arg_types, out_type));
+                        // let out_type = match &f.sig.output {
+                        //     ReturnType::Default => "()".to_string(),
+                        //     ReturnType::Type(_, t) => match *(t.clone()) {
+                        //         Type::Path(typepath) => {
+                        //             typepath.path.segments.first().unwrap().ident.to_string()
+                        //         }
+                        //         t => todo!("Handle {:?}", t),
+                        //     }
+                        // };
+                        sig_items.push(SigItem::UFun(name, inputs, output));
 
                         true
                     }
@@ -342,20 +356,29 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                         }).into()).unwrap()
                     }
                     SigItem::UFun(name, inputs, output) => {
-                        let i_tks_v: Vec<String> = inputs.into_iter().map(|i| {
-                            format!("{}", i)
+                        let name: String = format!("{}", name);
+                        let inputs: Vec<String> = inputs.into_iter().map(|i| {
+                            format!("{}", quote! { #i })
                         }).collect();
-                        let tks = if output.as_str() == "bool" {
-                            quote! {
-                                sig.add_relation(#name, [#(#i_tks_v),*]);
-                            }
-                        } else {
-                            let o_tks = format!("{}", output);
-                            quote! {
-                                sig.declare_op(#name, [#(#i_tks_v),*], #o_tks);
-                            }
+                        let output: String = format!("{}", quote! { #output });
+                        let tokens = quote! {
+                            sig.declare_op(#name, [#(#inputs),*], #output);
                         };
-                        syn::parse(tks.into()).unwrap()
+                        syn::parse2(tokens).unwrap()
+                        // let i_tks_v: Vec<String> = inputs.into_iter().map(|i| {
+                        //     format!("{}", i)
+                        // }).collect();
+                        // let tks = if output.to_string() == "bool" {
+                        //     quote! {
+                        //         sig.add_relation(#name, [#(#i_tks_v),*]);
+                        //     }
+                        // } else {
+                        //     let o_tks = format!("{}", output);
+                        //     quote! {
+                        //         sig.declare_op(#name, [#(#i_tks_v),*], #o_tks);
+                        //     }
+                        // };
+                        // syn::parse(tks.into()).unwrap()
                     }
                 }
             }).collect();
