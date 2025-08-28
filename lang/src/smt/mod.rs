@@ -44,6 +44,9 @@ impl CheckedSig {
         self.0.add_sort(s);
         t
     }
+    pub fn add_type_con<S: ToString>(&mut self, s: S, arity: usize) {
+        self.0.add_type_con(s, arity);
+    }
     pub fn add_alias<S1: ToString>(&mut self, s: S1, t: VType) -> VType {
         self.0.add_alias(s, t.clone());
         t
@@ -111,7 +114,7 @@ Error in type-checking definition of \"{}\": {:?}",
                 e,
             ),
         }
-        self.0.ops.push((name.to_string(), Op::Direct(fun)))
+        self.0.ops.push((name.to_string(), Vec::new(), Op::Direct(fun)))
     }
     pub fn declare_op<S1: ToString, S3: ToString, const N: usize>(
         &mut self,
@@ -156,7 +159,7 @@ Error in type-checking definition of \"{}\": {:?}",
             .unwrap()
             .clone();
         let op = match op {
-            Op::Rec(op) => op,
+            (_, Op::Rec(op)) => op,
             _ => panic!(),
         };
         let mut gn = Gen::new();

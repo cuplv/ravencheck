@@ -11,11 +11,13 @@ use syn::{
     ExprParen,
     ExprPath,
     ExprUnary,
+    GenericArgument,
     Lit,
     LitBool,
     Pat,
     PatIdent,
     PatType,
+    PathArguments,
     Macro,
     ReturnType,
     Stmt,
@@ -24,8 +26,8 @@ use syn::{
 };
 use crate::{
     Builder,
+    BType,
     LogOpN,
-    Sort,
     Pattern,
     Quantifier,
     Val,
@@ -133,16 +135,32 @@ impl VType {
                 };
                 Ok(VType::fun_v(input_types, output_type))
             }
-            Type::Path(p) => {
-                match p.path.get_ident() {
-                    Some(ty_i) => {
-                        if ty_i == "bool" {
-                            Ok(VType::prop())
-                        } else {
-                            Ok(VType::Atom(Sort::ui(ty_i)))
-                        }
+            Type::Path(mut p) => {
+                if p.path.segments.len() == 1 {
+                    let seg = p.path.segments.pop().unwrap().into_value();
+                    if &seg.ident == "bool" {
+                        Ok(VType::prop())
+                    } else {
+                        let args = match seg.arguments {
+                            PathArguments::None => Vec::new(),
+                            PathArguments::AngleBracketed(bs) => {
+                                bs
+                                    .args
+                                    .into_pairs()
+                                    .map(|p| p.into_value())
+                                    .map(|ga| match ga {
+                                        GenericArgument::Type(t) => t,
+                                        ga => panic!("Can't handle type argument of form {:?}", ga),
+                                    })
+                                    .map(|t| VType::from_syn(t).unwrap())
+                                    .collect()
+                            }
+                            PathArguments::Parenthesized(..) => return Err(format!("Can't handle parenthesized type arguments")),
+                        };
+                        Ok(VType::Base(BType::UI(seg.ident.to_string(), args)))
                     }
-                    None => Err(format!("Can't handle type path {:?}", p)),
+                } else {
+                    Err(format!("Can't handle type path {:?}, since it does not have exactly 1 segment.", p))
                 }
             }
             Type::Tuple(p) => {

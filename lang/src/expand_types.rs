@@ -28,6 +28,15 @@ fn expand_types_q(
     }).collect()
 }
 
+fn expand_types_tas(
+    tas: Vec<VType>, sig: &Sig
+) -> Vec<VType> {
+    tas
+        .into_iter()
+        .map(|t| t.expand_aliases(&sig.type_aliases))
+        .collect()
+}
+
 impl Binder1 {
     pub fn expand_types(self, sig: &Sig) -> Self {
         match self {
@@ -65,8 +74,9 @@ impl BinderN {
 impl Comp {
     pub fn expand_types(self, sig: &Sig) -> Self {
         match self {
-            Self::Apply(m, vs) => Self::Apply(
+            Self::Apply(m, tas, vs) => Self::Apply(
                 Box::new(m.expand_types(sig)),
+                expand_types_tas(tas, sig),
                 vs.into_iter().map(|v| v.expand_types(sig)).collect(),
             ),
             Self::BindN(b, ps, m) => Self::BindN(

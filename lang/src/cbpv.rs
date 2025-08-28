@@ -135,7 +135,7 @@ pub enum Binder1 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Comp {
-    Apply(Box<Comp>, Vec<Val>),
+    Apply(Box<Comp>, Vec<VType>, Vec<Val>),
     BindN(BinderN, Vec<Pattern>, Box<Comp>),
     Bind1(Binder1, VName, Box<Comp>),
     Force(Val),
@@ -145,8 +145,8 @@ pub enum Comp {
 }
 
 impl Comp {
-    pub fn apply<Vs: Into<Vec<Val>>>(m: Self, vs: Vs) -> Self {
-        Self::Apply(Box::new(m), vs.into())
+    pub fn apply<Ts: Into<Vec<VType>>, Vs: Into<Vec<Val>>>(m: Self, targs: Ts, vs: Vs) -> Self {
+        Self::Apply(Box::new(m), targs.into(), vs.into())
     }
     pub fn force<V: Into<Val>>(v: V) -> Self {
         Self::Force(v.into())

@@ -132,22 +132,22 @@ impl Comp {
                     match b {
                         Binder1::LogOpN(LogOpN::Pred(s,is_pos), vs) => {
                             match sig.ops_map().get(&s.0) {
-                                Some(Op::Const(..)) => {
+                                Some((_targs, Op::Const(..))) => {
                                     panic!("Got constant op {:?} in Pred", s)
                                 }
-                                Some(Op::Direct(..)) => {
+                                Some((_targs, Op::Direct(..))) => {
                                     panic!("Got direct fun {:?} in Pred", s)
                                 }
-                                Some(Op::Pred(op)) => {
+                                Some((_targs, Op::Pred(op))) => {
                                     println!("Expanding pred {}...", &s.0);
                                     self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
                                     break;
                                 }
-                                Some(Op::Fun(_op)) => {
+                                Some((_targs, Op::Fun(_op))) => {
                                     panic!("Got fun op {:?} in Pred", s)
                                 }
-                                Some(Op::Rec(..)) => todo!("expand_funs for RecOp"),
-                                Some(Op::Symbol(_op)) => {
+                                Some((_targs, Op::Rec(..))) => todo!("expand_funs for RecOp"),
+                                Some((_targs, Op::Symbol(_op))) => {
                                     anti_stack.push(Rebuild::LogOpN(
                                         LogOpN::Pred(s,is_pos),
                                         vs,
@@ -191,15 +191,15 @@ impl Comp {
                         .map(|p| p.unwrap_atom().expect("Call should only be bound to flat patterns"))
                         .collect();
                     match sig.ops_map().get(&s.0) {
-                        Some(Op::Fun(op)) => {
+                        Some((_targs, Op::Fun(op))) => {
                             println!("Expanding call {}...", &s.0);
                             self = expand_fun(op.clone(), vs, xs, *m, sig, gen);
                             break;
                         }
-                        Some(Op::Pred(_op)) => {
+                        Some((_targs, Op::Pred(_op))) => {
                             panic!("Got pred op {:?} in Fun", s)
                         }
-                        Some(Op::Rec(op)) => {
+                        Some((_targs, Op::Rec(op))) => {
                             println!("Expanding call {}...", &s.0);
                             self = expand_fun(op.clone().as_fun_op(), vs, xs, *m, sig, gen);
                             break;

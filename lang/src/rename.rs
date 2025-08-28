@@ -70,13 +70,13 @@ impl Comp {
 
     pub fn rename_r(self, gen: &mut Gen) -> Self {
         match self {
-            Self::Apply(m,vs) => {
+            Self::Apply(m, targs, vs) => {
                 let m2 = m.rename_r(gen);
                 let mut vs2 = Vec::new();
                 for v in vs.into_iter() {
                     vs2.push(v.rename_r(gen));
                 }
-                Self::apply(m2, vs2)
+                Self::apply(m2, targs, vs2)
             }
             Self::Return(vs) => {
                 let vs2 = vs

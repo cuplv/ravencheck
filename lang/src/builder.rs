@@ -258,7 +258,7 @@ impl Builder {
         Vs: Into<Vec<Val>> + 'static
     {
         Self::new(|gen: &mut Gen| {
-            Comp::apply(self.build(gen), vs)
+            Comp::apply(self.build(gen), Vec::new(), vs)
         })
     }
 
@@ -278,7 +278,7 @@ impl Builder {
             Comp::seq(
                 m,
                 x_thunk.clone(),
-                Comp::apply(Comp::force(x_thunk), vs),
+                Comp::apply(Comp::force(x_thunk), Vec::new(), vs),
             )
         })
     }

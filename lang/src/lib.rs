@@ -28,6 +28,7 @@ pub use rebuild::Rebuild;
 mod rename;
 mod sig;
 pub use sig::{
+    BType,
     CType,
     FunOp,
     PredOp,
@@ -36,7 +37,6 @@ pub use sig::{
     RecOp,
     rel_abs_name,
     Sig,
-    Sort,
     VType
 };
 mod smt;
@@ -193,7 +193,7 @@ Error parsing annotation: {}",
             ),
         };
 
-        for (name,op) in self.ops.iter_mut() {
+        for (name,_,op) in self.ops.iter_mut() {
             if &op_name.to_string() == name {
                 found = true;
                 match op {
@@ -256,7 +256,7 @@ Type error in def of \"{}\": {:?}",
             inputs,
             axioms: vec![axiom],
         });
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
     }
 
     pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, const N: usize>(
@@ -311,7 +311,7 @@ Type error in def of \"{}\": {:?}",
                 })
             }
         };
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
     }
 
     pub fn add_op_fun<S1: ToString, S2: ToString>(
@@ -366,7 +366,7 @@ Type error in axiom of \"{}\": {:?}",
             output: fun_output,
             axioms: vec![axiom],
         });
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
     }
 
     pub fn add_op_rec<S1: ToString, S2: ToString, S3: ToString>(
@@ -433,7 +433,7 @@ Error in parsing definition of \"{}\": {:?}",
             axioms: vec![axiom.clone()],
         });
         let mut self_sig = self.clone();
-        self_sig.ops.push((name.to_string(), self_op));
+        self_sig.ops.push((name.to_string(), Vec::new(), self_op));
 
         match def.type_of(TypeContext::new(self_sig)) {
             Ok(t) => {
@@ -465,7 +465,7 @@ Type error in definition of \"{}\": {:?}",
             axiom,
             def,
         });
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
 
     }
 }

@@ -71,7 +71,7 @@ impl Comp {
     ) -> Vec<(CaseName,Self)> {
         loop {
             match self {
-                Self::Apply(m, vs) => {
+                Self::Apply(m, _targs, vs) => {
                     stack.0.push(Frame::Args(vs));
                     self = *m;
                 }
@@ -113,8 +113,8 @@ impl Comp {
                         // of those new identifiers for atoms.
                         let mut sig2 = Vec::new();
                         for (x,t) in xs {
-                            match t.unwrap_atom() {
-                                Ok(s) => sig2.push((x,VType::Atom(s))),
+                            match t.unwrap_base() {
+                                Ok(s) => sig2.push((x, VType::Base(s))),
                                 Err(t) => {
                                     let (mut ss,v) = gen.flatten_sig(t);
                                     sig2.append(&mut ss);
@@ -170,7 +170,7 @@ impl Comp {
                             // expand_funs). The output, however, does get
                             // flattened.
                             Some(Frame::Args(vs)) => {
-                                match sig.ops_map().get(&s) {
+                                match sig.ops_map().get(&s).map(|t| t.1.clone()) {
                                     Some(Op::Const(..)) => panic!(
                                         "Found constant {} in Force position",
                                         s,
@@ -396,9 +396,9 @@ impl Pattern {
 impl Gen {
     fn flatten_sig(&mut self, t: VType) -> (Vec<(VName,VType)>, Val) {
         match t {
-            VType::Atom(s) => {
+            VType::Base(s) => {
                 let x = self.next();
-                (vec![(x.clone(), VType::Atom(s))], x.val())
+                (vec![(x.clone(), VType::Base(s))], x.val())
             }
             VType::Tuple(ts) => {
                 let mut ss = Vec::new();

@@ -3,6 +3,7 @@ use easy_smt::{Response, SExpr};
 use crate::{
     Binder1,
     Builder,
+    BType,
     LogOpN,
     Comp,
     Gen,
@@ -11,27 +12,66 @@ use crate::{
     Quantifier,
     rel_abs_name,
     Sig,
-    Sort,
     Val,
     VName,
     VType,
 };
 
+impl BType {
+    fn render_smt(&self) -> String {
+        match self {
+            BType::Prop => format!("Bool"),
+            BType::UI(name, args) if args.len() == 0 => format!("UI_{}", name),
+            BType::UI(name, args) => {
+                let mut s = format!("UI_{}__", name);
+                for a in args {
+                    s.push_str(&a.render_smt());
+                }
+                s.push_str("__");
+                s
+            }
+        }
+    }
+}
+
+impl VType {
+    fn render_smt(&self) -> String {
+        match self {
+            VType::Base(bt) => bt.render_smt(),
+            VType::Thunk(..) => panic!("Cannot render_smt for Thunk type"),
+            VType::Tuple(ts) => {
+                let mut s = format!("TUPLE__");
+                for t in ts {
+                    s.push_str(&t.render_smt());
+                }
+                s.push_str("__");
+                s
+            }
+        }
+    }
+}
+
 fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
-    for s in &sig.sorts {
-        ctx.declare_sort(format!("{}", Sort::ui(s).as_string()), 0)?;
+    for (name, num_args) in &sig.sorts {
+        if *num_args == 0 {
+            ctx.declare_sort(
+                format!("{}", BType::UI(name.clone(), Vec::new()).render_smt()), 0
+            )?;
+        } else {
+            todo!("declare sorts that have parameters");
+        }
     }
 
-    for (s,op) in &sig.ops {
+    for (s,_targs,op) in &sig.ops {
         match op {
             Op::Const(p) => {
                 let sort = ctx.atom(format!(
                     "{}",
                     p.vtype
                         .clone()
-                        .unwrap_atom()
-                        .expect("const types must be atoms")
-                        .as_string(),
+                        .unwrap_base()
+                        .expect("const types must be base")
+                        .render_smt(),
                 ));
                 ctx.declare_const(s, sort)?;
             }
@@ -41,9 +81,9 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                     .map(|sort| {
                         let s = sort
                             .clone()
-                            .unwrap_atom()
-                            .expect("sig types must be atoms");
-                        ctx.atom(format!("{}", s.as_string()))
+                            .unwrap_base()
+                            .expect("sig types must be base");
+                        ctx.atom(format!("{}", s.render_smt()))
                     })
                     .collect();
                 ctx.declare_fun(s,input_atoms,ctx.atom("Bool"))?;
@@ -62,9 +102,9 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                         .map(|sort| {
                             let s = sort
                                 .clone()
-                                .unwrap_atom()
+                                .unwrap_base()
                                 .expect("sig types must be atoms");
-                            ctx.atom(format!("{}", s.as_string()))
+                            ctx.atom(format!("{}", s.render_smt()))
                         })
                         .collect();
                     ctx.declare_fun(
@@ -355,9 +395,9 @@ impl <'a> Context<'a> {
             Binder1::LogQuantifier(q,xs,m) => {
                 let body = self.with_quantify(xs, |ctx| ctx.smt_comp(m))?;
                 let q_sig = xs.iter().map(|(x,s)| {
-                    let s = s.clone().unwrap_atom()
-                        .expect("quantifier types should be flattened to atoms before smt");
-                    (x.as_string(), self.ctx.atom(s.as_string()))
+                    let s = s.clone().unwrap_base()
+                        .expect("quantifier types should be flattened to base types before smt");
+                    (x.as_string(), self.ctx.atom(s.render_smt()))
                 });
                 match q {
                     Quantifier::Exists => {
@@ -398,7 +438,7 @@ impl <'a> Context<'a> {
 
     fn smt_comp(&mut self, term: &Comp) -> std::io::Result<Vec<SExpr>> {
         match term {
-            Comp::Apply(_m, _vs) =>
+            Comp::Apply(_m, _targs, _vs) =>
                 panic!("Apply must be eliminated before smt generation"),
             Comp::BindN(_b,_vs,_m) => todo!(
                 "Comp::BindN terms should be eliminated before smt generation: {:?}",

@@ -53,9 +53,10 @@ impl BinderN {
 impl Comp {
     pub fn substitute(self, x: &VName, v: &Val) -> Self {
         match self {
-            Self::Apply(m, vs) => {
+            Self::Apply(m, targs, vs) => {
                 Self::apply(
                     m.substitute(x,v),
+                    targs,
                     vs
                         .into_iter()
                         .map(|v1| v1.substitute(x,v))

@@ -1,5 +1,6 @@
 use crate::{
     Binder1,
+    BType,
     Comp,
     Quantifier,
     Sig,
@@ -10,31 +11,35 @@ use petgraph::graph::Graph;
 
 use std::collections::HashSet;
 
-pub struct SortIndex(pub Vec<String>);
+pub struct SortIndex(pub Vec<BType>);
 
 impl SortIndex {
-    fn to_index(&self, s: &str) -> usize {
+    fn to_index(&self, s: &BType) -> usize {
         for (i,s1) in self.0.iter().enumerate() {
             if s1 == s {
                 return i
             }
         }
-        panic!("No index found for sort {}", s)
+        panic!("No index found for base type {}", s)
     }
-    fn from_index(&self, i: usize) -> String {
+    fn from_index(&self, i: usize) -> BType {
         self.0[i].clone()
     }
 }
 
 #[derive(Clone)]
-pub struct SortGraph(HashSet<(String,String)>);
+pub struct SortGraph(HashSet<(BType,BType)>);
 
 impl SortGraph {
     pub fn new() -> Self { SortGraph(HashSet::new()) }
-    fn add_edge(&mut self, s1: String, s2: String) {
+    fn add_edge(&mut self, s1: BType, s2: BType) {
+        assert!(
+            s1 != BType::prop() && s2 != BType::prop(),
+            "sort graph edges should not be on 'bool'",
+        );
         self.0.insert((s1,s2));
     }
-    pub fn get_cycles(&self) -> Vec<Vec<String>> {
+    pub fn get_cycles(&self) -> Vec<Vec<BType>> {
         let index = self.get_index();
         let mut i_graph = Vec::new();
         for (s1,s2) in self.0.iter() {
@@ -83,13 +88,13 @@ impl Comp {
     pub fn sort_graph(&self) -> SortGraph {
         self.sort_graph_r(HashSet::new())
     }
-    fn sort_graph_r(&self, foralls: HashSet<String>) -> SortGraph {
+    fn sort_graph_r(&self, foralls: HashSet<BType>) -> SortGraph {
         match self {
             Comp::Bind1(Binder1::LogQuantifier(q, xs, body), _x, m) => {
                 let mut q_sorts = Vec::new();
                 for (_x,t) in xs {
                     for s in t.clone().flatten() {
-                        q_sorts.push(s.unwrap_atom().unwrap().unwrap_ui())
+                        q_sorts.push(s.unwrap_base().unwrap())
                     }
                 }
                 match q {

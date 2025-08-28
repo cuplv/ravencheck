@@ -80,7 +80,7 @@ impl Comp {
     /// computation.
     pub fn advance_gen(&self, gen: &mut Gen) {
         match self {
-            Self::Apply(m,vs) => {
+            Self::Apply(m,_,vs) => {
                 m.advance_gen(gen);
                 for v in vs {
                     v.advance_gen(gen);

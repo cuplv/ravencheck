@@ -1,46 +1,143 @@
 use crate::cbpv::Comp;
 use std::collections::HashMap;
-use std::collections::HashSet;
+use std::fmt;
 
-/// A sort is a base type
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Sort {
+// /// A sort is a base type
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub enum Sort {
+//     Prop,
+//     UI(String),
+// }
+
+// impl Sort {
+//     pub fn prop() -> Self { Self::Prop }
+//     pub fn string() -> Self { Self::UI(format!("String")) }
+//     pub fn nat() -> Self { Self::UI(format!("Nat")) }
+//     pub fn set() -> Self { Self::UI(format!("Set")) }
+//     pub fn ui<T: ToString>(t: T) -> Self { Self::UI(t.to_string()) }
+//     pub fn as_string(&self) -> String {
+//         match self {
+//             Self::Prop => format!("Bool"),
+//             Self::UI(s) => format!("s_{}", s),
+//         }
+//     }
+//     // This one displays the sort as it would appear in the surface
+//     // language.
+//     pub fn render(&self) -> String {
+//         match self {
+//             Self::Prop => format!("bool"),
+//             Self::UI(s) => format!("{}", s),
+//         }
+//     }
+//     pub fn unwrap_ui(self) -> String {
+//         match self {
+//             Self::UI(s) => s,
+//             _ => panic!("Tried to unwrap non-ui sort"),
+//         }
+//     }
+// }
+
+/// A BType is a base type, which can be represented directly by a
+/// sort.
+///
+/// Although BTypes can contain VTypes, they should never contain
+/// Thunks.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BType {
     Prop,
-    UI(String),
+    UI(String, Vec<VType>),
 }
 
-impl Sort {
-    pub fn prop() -> Self { Self::Prop }
-    pub fn string() -> Self { Self::UI(format!("String")) }
-    pub fn nat() -> Self { Self::UI(format!("Nat")) }
-    pub fn set() -> Self { Self::UI(format!("Set")) }
-    pub fn ui<T: ToString>(t: T) -> Self { Self::UI(t.to_string()) }
-    pub fn as_string(&self) -> String {
-        match self {
-            Self::Prop => format!("Bool"),
-            Self::UI(s) => format!("s_{}", s),
-        }
+impl fmt::Display for BType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.render())
     }
-    // This one displays the sort as it would appear in the surface
-    // language.
+}
+
+impl BType {
+    pub fn prop() -> Self { Self::Prop }
+    pub fn ui<S: ToString>(s: S) -> Self {
+        assert!(
+            &s.to_string() != "bool",
+            "\"bool\" should not be used as an uninterpreted type name."
+        );
+        Self::UI(s.to_string(), Vec::new())
+    }
+    pub fn ui_args<S: ToString>(s: S, args: Vec<VType>) -> Self {
+        assert!(
+            &s.to_string() != "bool",
+            "\"bool\" should not be used as an uninterpreted type name."
+        );
+        assert!(
+            args.iter().all(|t| !t.contains_thunk()),
+            "type arguments to \"{}\" should not contain thunks",
+            s.to_string(),
+        );
+        Self::UI(s.to_string(), args)
+    }
     pub fn render(&self) -> String {
         match self {
-            Self::Prop => format!("bool"),
-            Self::UI(s) => format!("{}", s),
+            BType::Prop => format!("bool"),
+            BType::UI(name, args) if args.len() == 0 => {
+                format!("{}", name)
+            }
+            BType::UI(name, args) => {
+                let mut out = format!("{}<", name);
+                let mut first = true;
+                for t in args {
+                    if first {
+                        first = false;
+                        out.push_str(&t.render());
+                    } else {
+                        out.push_str(&format!(", {}", t.render()));
+                    }
+                }
+                out.push_str(">");
+                out
+            }
         }
     }
-    pub fn unwrap_ui(self) -> String {
+    pub fn contains_prop(&self) -> bool {
         match self {
-            Self::UI(s) => s,
-            _ => panic!("Tried to unwrap non-ui sort"),
+            BType::Prop => true,
+            BType::UI(_, args) => args.iter().any(|t| t.contains_prop()),
+        }
+    }
+    pub fn contains_ui(&self, name: &str) -> bool {
+        match self {
+            BType::Prop => false,
+            BType::UI(n, args) => {
+                n == name || args.iter().any(|t| t.contains_ui(name))
+            }
+        }
+    }
+    pub fn contains_thunk(&self) -> bool {
+        match self {
+            BType::Prop => false,
+            BType::UI(_, args) => args.iter().any(|t| t.contains_thunk()),
+        }
+    }
+    pub fn expand_aliases(self, aliases: &HashMap<String,VType>) -> VType {
+        match self {
+            BType::Prop => VType::Base(BType::Prop),
+            BType::UI(s, args) => match aliases.get(&s) {
+                Some(t) => {
+                    assert!(args.len() == 0, "Aliases must have zero arity, but {} with arity {} was aliased.", s, args.len());
+                    t.clone()
+                }
+                None => VType::Base(BType::UI(
+                    s,
+                    args.into_iter().map(|t| t.expand_aliases(aliases)).collect(),
+                )),
+            }
         }
     }
 }
 
 /// A VType is a base type or a tuple
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VType {
-    Atom(Sort),
+    Base(BType),
     Tuple(Vec<VType>),
     Thunk(Box<CType>),
 }
@@ -48,15 +145,14 @@ pub enum VType {
 impl VType {
     pub fn contains_prop(&self) -> bool {
         match self {
-            VType::Atom(s) => *s == Sort::prop(),
+            VType::Base(t) => t.contains_prop(),
             VType::Tuple(vs) => vs.iter().any(|t| t.contains_prop()),
             vt => panic!("no contains_prop for {:?}", vt),
         }
     }
     pub fn contains_ui(&self, s: &str) -> bool {
         match self {
-            VType::Atom(Sort::UI(s1)) => s == s1,
-            VType::Atom(Sort::Prop) => false,
+            VType::Base(t) => t.contains_ui(s),
             VType::Tuple(ts) => {
                 ts.iter().map(|t| t.contains_ui(s)).any(|r| r)
             }
@@ -65,11 +161,7 @@ impl VType {
     }
     pub fn expand_aliases(self, aliases: &HashMap<String,Self>) -> Self {
         match self {
-            VType::Atom(Sort::UI(s)) => match aliases.get(&s) {
-                Some(t) => t.clone(),
-                None => VType::Atom(Sort::UI(s)),
-            }
-            VType::Atom(Sort::Prop) => VType::Atom(Sort::Prop),
+            VType::Base(t) => t.expand_aliases(aliases),
             VType::Tuple(ts) => VType::Tuple(
                 ts.into_iter().map(|t| t.expand_aliases(aliases)).collect()
             ),
@@ -78,13 +170,8 @@ impl VType {
         }
     }
     pub fn render(&self) -> String {
-        assert!(
-            !self.contains_thunk(),
-            "cannot render vtype that contains thunk: {:?}",
-            self,
-        );
         match self.clone() {
-            VType::Atom(s) => s.render(),
+            VType::Base(t) => t.render(),
             VType::Tuple(ts) => {
                 let mut out = String::from("(");
                 let mut first = true;
@@ -99,12 +186,12 @@ impl VType {
                 out.push_str(")");
                 out
             }
-            _ => unreachable!(),
+            VType::Thunk(..) => format!("{{thunk}}"),
         }
     }
     pub fn contains_thunk(&self) -> bool {
         match self {
-            VType::Atom(_s) => false,
+            VType::Base(t) => t.contains_thunk(),
             VType::Tuple(ts) => {
                 for t in ts {
                     if t.contains_thunk() {
@@ -116,17 +203,17 @@ impl VType {
             VType::Thunk(_ct) => true,
         }
     }
-    pub fn unwrap_atom(self) -> Result<Sort,Self> {
+    pub fn unwrap_base(self) -> Result<BType,Self> {
         match self {
-            VType::Atom(s) => Ok(s),
+            VType::Base(t) => Ok(t),
             t => Err(t),
         }
     }
     pub fn flatten(self) -> Vec<Self> {
         let mut out = Vec::new();
         match self {
-            Self::Atom(s) => {
-                out.push(Self::Atom(s));
+            Self::Base(t) => {
+                out.push(Self::Base(t));
             }
             Self::Tuple(ts) => {
                 for t in ts {
@@ -151,7 +238,7 @@ impl VType {
     }
 
     pub fn ui<T: ToString>(s: T) -> Self {
-        Self::Atom(Sort::ui(s))
+        Self::Base(BType::ui(s))
     }
 
     pub fn unit() -> Self {
@@ -177,11 +264,11 @@ impl VType {
         }
     }
     pub fn prop() -> Self {
-        Self::Atom(Sort::prop())
+        Self::Base(BType::prop())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CType {
     Fun(Vec<VType>, Box<CType>),
     Return(VType),
@@ -290,9 +377,11 @@ pub enum Op {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sig {
-    pub sorts: HashSet<String>,
+    pub sorts: HashMap<String,usize>,
     pub type_aliases: HashMap<String,VType>,
-    pub ops: Vec<(String, Op)>,
+    // The Vec<String> is the list of type parameters, which act as
+    // aliases on the types in the Op.
+    pub ops: Vec<(String, Vec<String>, Op)>,
     // Note that axioms here should already be in normal form.
     pub axioms: Vec<Comp>,
 }
@@ -300,27 +389,33 @@ pub struct Sig {
 impl Sig {
     pub fn empty() -> Sig {
         Sig {
-            sorts: HashSet::new(),
+            sorts: HashMap::new(),
             type_aliases: HashMap::new(),
             ops: Vec::new(),
             axioms: Vec::new(),
         }
     }
+    pub fn sort_arity(&self, s: &str) -> Option<usize> {
+        self.sorts.get(s).copied()
+    }
     pub fn all_op_names(&self) -> Vec<String> {
         self.ops_map().clone().into_iter().map(|(k,_)| k).collect()
     }
-    pub fn ops_map(&self) -> HashMap<String, Op> {
+    pub fn ops_map(&self) -> HashMap<String, (Vec<String>,Op)> {
         let mut m = HashMap::new();
-        for (n,o) in self.ops.clone() {
-            m.insert(n,o);
+        for (n,args,o) in self.ops.clone() {
+            m.insert(n,(args,o));
         }
         m
     }
-    pub fn ops_vec(&self) -> Vec<(String, Op)> {
+    pub fn ops_vec(&self) -> Vec<(String, Vec<String>, Op)> {
         self.ops.clone()
     }
     pub fn add_sort<S: ToString>(&mut self, s: S) {
-        self.sorts.insert(s.to_string());
+        self.sorts.insert(s.to_string(), 0);
+    }
+    pub fn add_type_con<S: ToString>(&mut self, s: S, arity: usize) {
+        self.sorts.insert(s.to_string(), arity);
     }
     pub fn add_alias<S1: ToString>(&mut self, s: S1, t: VType) {
         let s = s.to_string();
@@ -337,9 +432,10 @@ impl Sig {
         name: S1,
         sort: S2,
     ) {
-        assert!(self.sorts.contains(&sort.to_string()));
+        assert!(self.sorts.contains_key(&sort.to_string()));
         self.ops.push((
             name.to_string(),
+            Vec::new(),
             Op::Const(ConstOp{
                 vtype: VType::ui(sort.to_string()),
             }))
@@ -352,7 +448,7 @@ impl Sig {
     ) {
         for i in inputs.iter() {
             assert!(
-                self.sorts.contains(&i.to_string())
+                self.sorts.contains_key(&i.to_string())
                     || self.type_aliases.get(&i.to_string()).is_some(),
                 "{} is not a declared sort",
                 i.to_string(),
@@ -361,10 +457,10 @@ impl Sig {
         let op = Op::Symbol(PredSymbol{
             inputs: inputs
                 .into_iter()
-                .map(|s| VType::Atom(Sort::ui(s.to_string())).expand_aliases(&self.type_aliases))
+                .map(|s| VType::ui(s).expand_aliases(&self.type_aliases))
                 .collect(),
         });
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
     }
     pub fn add_relation_t<S1: ToString, const N: usize>(
         &mut self,
@@ -380,7 +476,7 @@ impl Sig {
                 .map(|t| t.expand_aliases(&self.type_aliases))
                 .collect(),
         });
-        self.ops.push((name.to_string(), op));
+        self.ops.push((name.to_string(), Vec::new(), op));
     }
 }
 

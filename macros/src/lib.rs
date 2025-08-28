@@ -15,6 +15,7 @@ use syn::{
     Meta,
     PatType,
     Path,
+    PathArguments,
     ReturnType,
     Stmt,
     Type,
@@ -105,9 +106,9 @@ enum SigItem {
     Annotation(String, Block),
     Axiom(Block),
     Goal(Block),
-    Sort(String),
-    SortAlias(Ident,Type),
+    TypeAlias(Ident,Type),
     DFun(Ident, Vec<PatType>, Type, Block),
+    Type(Ident, usize),
     UFun(String, Vec<PatType>, Type),
 }
 
@@ -119,14 +120,20 @@ fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
                     "declare_types" => {
                         let parser =
                             Punctuated
-                            ::<Ident,syn::Token![,]>
+                            ::<Path,syn::Token![,]>
                             ::parse_separated_nonempty;
                         let types = parser
                             .parse2(l.tokens.clone())
                             .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
 
-                        for t in types.iter() {
-                            sig_items.push(SigItem::Sort(t.to_string()));
+                        for mut p in types.into_iter() {
+                            let seg = p.segments.pop().unwrap().into_value();
+                            let args_len = match seg.arguments {
+                                PathArguments::None => 0,
+                                PathArguments::AngleBracketed(a) => a.args.len(),
+                                PathArguments::Parenthesized(..) => panic!("declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
+                            };
+                            sig_items.push(SigItem::Type(seg.ident, args_len));
                         }
 
                         // Don't keep
@@ -246,7 +253,7 @@ You must give a return type when using 'define'"
             Item::Struct(i) => {
                 match pop_rvn_attr(&mut i.attrs) {
                     Some(RvnAttr::Declare) => {
-                        sig_items.push(SigItem::Sort(i.ident.to_string()));
+                        sig_items.push(SigItem::Type(i.ident.clone(), 0));
                     }
                     Some(a) => panic!(
                         "attr {:?} cannot not be used on a struct definition",
@@ -259,10 +266,10 @@ You must give a return type when using 'define'"
             Item::Type(i) => {
                 match pop_rvn_attr(&mut i.attrs) {
                     Some(RvnAttr::Declare) => {
-                        sig_items.push(SigItem::Sort(i.ident.to_string()));
+                        sig_items.push(SigItem::Type(i.ident.clone(), 0));
                     }
                     Some(RvnAttr::Define) => {
-                        sig_items.push(SigItem::SortAlias(
+                        sig_items.push(SigItem::TypeAlias(
                             i.ident.clone(),
                             *(i.ty).clone(),
                         ));
@@ -334,12 +341,13 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.assert_valid(#b_tks);
                         }).into()).unwrap()
                     }
-                    SigItem::Sort(s) => {
+                    SigItem::Type(name, arg_len) => {
+                        let s = name.to_string();
                         syn::parse((quote! {
-                            sig.add_sort(#s);
+                            sig.add_type_con(#s, #arg_len);
                         }).into()).unwrap()
                     }
-                    SigItem::SortAlias(i, ty) => {
+                    SigItem::TypeAlias(i, ty) => {
                         let i_tks = format!("{}", i);
                         let ty_tks = format!("{}", quote! { #ty });
                         syn::parse((quote! {

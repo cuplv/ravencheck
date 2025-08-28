@@ -222,7 +222,7 @@ impl Comp {
                     else_b.neg_normal_form_r(sig,dem,gen),
                 )
             }
-            Self::Apply(_m, _vs) => {
+            Self::Apply(_m, _targs, _vs) => {
                 panic!(
                     "Apply should be gone before neg_normal_form_r: {:?}",
                     self,

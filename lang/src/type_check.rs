@@ -1,13 +1,13 @@
 use crate::{
     Binder1,
     BinderN,
+    BType,
     Comp,
     CType,
     Literal,
     LogOpN,
     Op,
     Sig,
-    Sort,
     Val,
     VName,
     VType,
@@ -75,7 +75,7 @@ impl Comp {
     }
     pub fn type_of(&self, mut tc: TypeContext) -> Result<CType, TypeError> {
         match self {
-            Self::Apply(m, vs) => match m.type_of(tc.clone())? {
+            Self::Apply(m, _targs, vs) => match m.type_of(tc.clone())? {
                 CType::Fun(ts, ct) => {
                     if ts.len() != vs.len() {
                         return Err(format!(
@@ -251,7 +251,7 @@ impl Pattern {
 
 impl Sig {
     fn get_type(&self, s: String) -> Result<VType, TypeError> {
-        for (name, op) in self.ops.clone() {
+        for (name, _, op) in self.ops.clone() {
             if name == s {
                 match op {
                     Op::Const(op) => {
@@ -336,6 +336,31 @@ impl Val {
     }
 }
 
+impl BType {
+    pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
+        match self {
+            Self::Prop => Ok(()),
+            Self::UI(name, args) => {
+                match sig.sort_arity(name) {
+                    Some(n) if n == args.len() => {
+                        for a in args {
+                            match a.validate(sig) {
+                                Ok(()) => {},
+                                Err(e) => return Err(e),
+                            }
+                        }
+                        Ok(())
+                    }
+                    Some(n) => {
+                        Err(format!("Type constructor {} expects {} types, but was applied to {} types instead in {:?}", name, n, args.len(), Self::UI(name.clone(),args.clone())))
+                    }
+                    None => Err(format!("Type '{}' has not been declared", name)),
+                }
+            }
+        }
+    }
+}
+
 impl CType {
     pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
         match self {
@@ -356,17 +381,8 @@ impl CType {
 impl VType {
     pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
         match self {
-            Self::Atom(Sort::Prop) => Ok(()),
-            Self::Atom(Sort::UI(s)) => {
-                if sig.sorts.contains(s) {
-                    Ok(())
-                } else {
-                    Err(format!("Sort {} is undeclared", s))
-                }
-            }
-            Self::Thunk(ct) => {
-                ct.validate(sig)
-            }
+            Self::Base(bt) => bt.validate(sig),
+            Self::Thunk(ct) => ct.validate(sig),
             Self::Tuple(ts) => {
                 for t in ts {
                     match t.validate(sig) {
@@ -377,5 +393,30 @@ impl VType {
                 Ok(())
             }
         }
+        // match self {
+        //     Self::Atom(Sort::Prop) => Ok(()),
+        //     Self::Atom(Sort::UI(s)) => {
+        //         match sig.sort_arity(s) {
+        //             Some(0) => Ok(()),
+        //             Some(n) => Err(format!("Found {} with no type-args, should have {} type-args.", s, n)),
+        //             None if sig.is_abstract(s) => Ok(()),
+        //             None => {
+        //                 Err(format!("Sort {} is undeclared", s))
+        //             }
+        //         }
+        //     }
+        //     Self::Thunk(ct) => {
+        //         ct.validate(sig)
+        //     }
+        //     Self::Tuple(ts) => {
+        //         for t in ts {
+        //             match t.validate(sig) {
+        //                 Ok(()) => {},
+        //                 Err(e) => return Err(e),
+        //             }
+        //         }
+        //         Ok(())
+        //     }
+        // }
     }
 }
