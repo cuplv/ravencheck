@@ -1,44 +1,38 @@
-use crate::sig::VType;
+use crate::sig::{OpCode, VType};
 use crate::vname::VName;
-use std::collections::HashSet;
 use std::fmt;
 
 impl VName {
     pub fn val(self) -> Val {
-        Val::Var(self)
-    }
-}
-
-/// Symbol names
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SName(pub String);
-
-impl From<String> for SName {
-    fn from(s: String) -> Self {
-        Self(s)
+        Val::Var(self, Vec::new())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    String(String),
-    Nat(u32),
-    Set(HashSet<u32>),
     LogTrue,
     LogFalse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpMode {
+    Const,
+    RelAbs,
+    ZeroArgAsConst,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Val {
     Literal(Literal),
+    OpCode(OpMode, OpCode),
     Thunk(Box<Comp>),
     Tuple(Vec<Val>),
-    Var(VName),
+    Var(VName, Vec<VType>),
 }
 
 impl Val {
     pub fn var(v: &VName) -> Self {
-        Self::Var(v.clone())
+        Self::Var(v.clone(), Vec::new())
     }
     pub fn thunk(c: &Comp) -> Self {
         Self::Thunk(Box::new(c.clone()))
@@ -96,7 +90,7 @@ impl Pattern {
 /// computation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinderN {
-    Call(SName, Vec<Val>),
+    Call(OpCode, Vec<Val>),
     Seq(Box<Comp>),
 }
 
@@ -105,7 +99,7 @@ pub enum BinderN {
 pub enum LogOpN {
     Or,
     And,
-    Pred(SName,bool),
+    Pred(OpCode,bool),
 }
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]

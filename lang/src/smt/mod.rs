@@ -88,7 +88,7 @@ impl CheckedSig {
         def: S2,
     ) {
         let fun = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(&self.0),
+            Ok(m) => m.expand_types(&self.0.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing definition of \"{}\": {:?}",
@@ -116,13 +116,14 @@ Error in type-checking definition of \"{}\": {:?}",
         }
         self.0.ops.push((name.to_string(), Vec::new(), Op::Direct(fun)))
     }
-    pub fn declare_op<S1: ToString, S3: ToString, const N: usize>(
+    pub fn declare_op<S1: ToString, S3: ToString, const N1: usize, const N2: usize>(
         &mut self,
         name: S1,
-        inputs: [&str; N],
+        targs: [&str; N1],
+        inputs: [&str; N2],
         output: S3,
     ) {
-        self.0.declare_op(name, inputs, output);
+        self.0.declare_op(name, targs, inputs, output);
     }
     pub fn add_annotation(&mut self, name: &str, body: &str) {
         self.0.add_annotation(name, body);

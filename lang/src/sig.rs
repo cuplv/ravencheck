@@ -37,6 +37,37 @@ use std::fmt;
 //     }
 // }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OpCode {
+    pub ident: String,
+    pub types: Vec<VType>,
+}
+
+impl fmt::Display for OpCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = format!("{}", &self.ident);
+        // write!(f, "{}::<", &self.ident)?;
+        if self.types.len() == 1 {
+            s.push_str(&format!("::<{}>", &self.types[0].render()));
+            // write!(f, "{}>", &self.types[0].render())
+        } else if self.types.len() > 1 {
+            s.push_str(&format!("::<"));
+            let mut first = true;
+            for t in &self.types {
+                if first {
+                    s.push_str(&format!("{}", t.render()));
+                    // write!(f, "{}", t.render())?;
+                    first = false;
+                } else {
+                    s.push_str(&format!(",{}", t.render()));
+                    // write!(f, ",{}", t.render())?;
+                }
+            }
+        }
+        write!(f, "{}", s)
+    }
+}
+
 /// A BType is a base type, which can be represented directly by a
 /// sort.
 ///
@@ -350,10 +381,6 @@ impl FunOp {
     }
 }
 
-pub fn rel_abs_name<S: ToString>(s: S) -> String {
-    format!("relabs_{}", s.to_string())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredOp {
     pub inputs: Vec<VType>,
@@ -394,6 +421,14 @@ impl Sig {
             ops: Vec::new(),
             axioms: Vec::new(),
         }
+    }
+    pub fn get_op(&self, s: &str) -> Option<(&Vec<String>, &Op)> {
+        for (name, tas, op) in self.ops.iter() {
+            if name == s {
+                return Some((tas, op))
+            }
+        }
+        None
     }
     pub fn sort_arity(&self, s: &str) -> Option<usize> {
         self.sorts.get(s).copied()

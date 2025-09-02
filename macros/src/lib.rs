@@ -8,6 +8,7 @@ use syn::{
     Attribute,
     Block,
     FnArg,
+    GenericParam,
     Ident,
     Item,
     ItemFn,
@@ -109,7 +110,7 @@ enum SigItem {
     TypeAlias(Ident,Type),
     DFun(Ident, Vec<PatType>, Type, Block),
     Type(Ident, usize),
-    UFun(String, Vec<PatType>, Type),
+    UFun(String, Vec<Ident>, Vec<PatType>, Type),
 }
 
 fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
@@ -170,6 +171,16 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
                     }
                     Some(RvnAttr::Declare) => {
                         let name = f.sig.ident.to_string();
+
+                        let mut targs = Vec::new();
+                        for g in f.sig.generics.params.iter() {
+                            match g {
+                                GenericParam::Type(tp) =>
+                                    targs.push(tp.ident.clone()),
+                                _ => {}
+                            }
+                        }
+
                         let inputs = f.sig.inputs.iter().cloned().map(|arg| {
                             match arg {
                                 FnArg::Typed(a) => a,
@@ -178,38 +189,15 @@ you can't use 'declare' on a method function (one that takes a 'self' input)"
                                 ),
                             }
                         }).collect();
-//                         let mut arg_types = Vec::new();
-//                         for arg in f.sig.inputs.iter() {
-//                             match arg {
-//                                 FnArg::Typed(a) => match *(a.ty.clone()) {
-//                                     Type::Path(typepath) => {
-//                                         arg_types.push(
-//                                             typepath.path.segments.first().unwrap().ident.to_string()
-//                                         );
-//                                     }
-//                                     t => todo!("Handle {:?}", t),
-//                                 }
-//                                 FnArg::Receiver(_) => panic!("
-// you can't use 'declare' on a method function (one that takes a 'self' input)"
-//                                 ),
-//                             }
-//                         }
+
                         let output = match f.sig.output.clone() {
                             ReturnType::Default => panic!("
 You must give a return type when using 'declare'"
                             ),
                             ReturnType::Type(_, t) => *t,
                         };
-                        // let out_type = match &f.sig.output {
-                        //     ReturnType::Default => "()".to_string(),
-                        //     ReturnType::Type(_, t) => match *(t.clone()) {
-                        //         Type::Path(typepath) => {
-                        //             typepath.path.segments.first().unwrap().ident.to_string()
-                        //         }
-                        //         t => todo!("Handle {:?}", t),
-                        //     }
-                        // };
-                        sig_items.push(SigItem::UFun(name, inputs, output));
+
+                        sig_items.push(SigItem::UFun(name, targs, inputs, output));
 
                         true
                     }
@@ -363,30 +351,20 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.add_fun(#name_tk, #body_tk);
                         }).into()).unwrap()
                     }
-                    SigItem::UFun(name, inputs, output) => {
+                    SigItem::UFun(name, targs, inputs, output) => {
                         let name: String = format!("{}", name);
+                        let targs: Vec<String> = targs.into_iter().map(|i| {
+                            format!("{}", quote! { #i })
+                        }).collect();
                         let inputs: Vec<String> = inputs.into_iter().map(|i| {
                             format!("{}", quote! { #i })
                         }).collect();
                         let output: String = format!("{}", quote! { #output });
                         let tokens = quote! {
-                            sig.declare_op(#name, [#(#inputs),*], #output);
+                            sig.declare_op(#name, [#(#targs),*], [#(#inputs),*], #output);
                         };
+                        // println!("{}", tokens);
                         syn::parse2(tokens).unwrap()
-                        // let i_tks_v: Vec<String> = inputs.into_iter().map(|i| {
-                        //     format!("{}", i)
-                        // }).collect();
-                        // let tks = if output.to_string() == "bool" {
-                        //     quote! {
-                        //         sig.add_relation(#name, [#(#i_tks_v),*]);
-                        //     }
-                        // } else {
-                        //     let o_tks = format!("{}", output);
-                        //     quote! {
-                        //         sig.declare_op(#name, [#(#i_tks_v),*], #o_tks);
-                        //     }
-                        // };
-                        // syn::parse(tks.into()).unwrap()
                     }
                 }
             }).collect();

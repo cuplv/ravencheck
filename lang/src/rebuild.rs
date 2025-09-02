@@ -3,9 +3,9 @@ use crate::{
     BinderN,
     Comp,
     LogOpN,
+    OpCode,
     Pattern,
     Quantifier,
-    SName,
     Val,
     VName,
     VType,
@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rebuild {
-    Call(SName, Vec<Val>, Vec<Pattern>),
+    Call(OpCode, Vec<Val>, Vec<Pattern>),
     Eq(bool, Vec<Val>, Vec<Val>, VName),
     Quantifier(Quantifier, Vec<(VName,VType)>, Comp, VName),
     Not(Val, VName),
@@ -27,9 +27,9 @@ impl Comp {
             Rebuild::Bind1(b,x) => {
                 Self::Bind1(b, x, Box::new(self))
             }
-            Rebuild::Call(s,vs,ps) => {
+            Rebuild::Call(oc,vs,ps) => {
                 Self::BindN(
-                    BinderN::Call(s,vs),
+                    BinderN::Call(oc,vs),
                     ps,
                     Box::new(self)
                 )

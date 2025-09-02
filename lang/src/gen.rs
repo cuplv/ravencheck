@@ -67,7 +67,7 @@ impl Binder1 {
 impl BinderN {
     fn advance_gen(&self, gen: &mut Gen) {
         match self {
-            Self::Call(_name, _vs) => todo!(),
+            Self::Call(_oc, _vs) => todo!(),
             Self::Seq(m) => {
                 m.advance_gen(gen);
             }
@@ -148,13 +148,14 @@ impl Val {
     fn advance_gen(&self, gen: &mut Gen) {
         match self {
             Val::Literal(_l) => {},
+            Val::OpCode(..) => {},
             Val::Thunk(m) => m.advance_gen(gen),
             Val::Tuple(vs) => {
                 for v in vs {
                     v.advance_gen(gen);
                 }
             }
-            Val::Var(x) => gen.advance(x),
+            Val::Var(x,_) => gen.advance(x),
         }
     }
 }

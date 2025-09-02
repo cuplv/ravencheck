@@ -146,7 +146,7 @@ impl Comp {
             Self::Return(vs) => {
                 for v in vs {
                     match v {
-                        Val::Var(x) => { dem.add_positive(x); }
+                        Val::Var(x,_) => { dem.add_positive(x); }
                         _ => {},
                     }
                 }
@@ -238,7 +238,7 @@ impl Val {
     /// nothing gets demanded inside of Thunks.
     pub fn demand_positive(&self, dem: &mut DemandSet) {
         match self {
-            Self::Var(x) => {
+            Self::Var(x, _) => {
                 dem.add_positive(x);
             }
             Self::Tuple(vs) => {
@@ -257,9 +257,9 @@ impl Val {
         gen: &mut Gen
     ) -> Self {
         match self {
-            Self::Var(x) => {
+            Self::Var(x, types) => {
                 let x2 = dem.add_negative_gen(&x,gen);
-                Self::Var(x2)
+                Self::Var(x2, types.clone())
             }
             Self::Literal(Literal::LogTrue) =>
                 Self::Literal(Literal::LogFalse),

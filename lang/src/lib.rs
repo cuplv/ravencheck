@@ -9,7 +9,7 @@ pub use cbpv::{
     Comp,
     Literal,
     LogOpN,
-    SName,
+    OpMode,
     Pattern,
     Quantifier,
     Val,
@@ -25,6 +25,7 @@ pub mod prop;
 pub use prop::Prop;
 mod rebuild;
 pub use rebuild::Rebuild;
+mod relevant;
 mod rename;
 mod sig;
 pub use sig::{
@@ -34,8 +35,8 @@ pub use sig::{
     PredOp,
     PredSymbol,
     Op,
+    OpCode,
     RecOp,
-    rel_abs_name,
     Sig,
     VType
 };
@@ -121,12 +122,28 @@ impl Comp {
 }
 
 impl Sig {
+    pub fn get_applied_op(
+        &self,
+        oc: &OpCode,
+    ) -> Result<Op, String> {
+        let name = &oc.ident;
+        let targs = &oc.types;
+        match self.get_op(name) {
+            Some((tas, op)) if targs.len() == tas.len() => {
+                Ok(op.clone().expand_types_from_call(targs, tas).unwrap())
+            }
+            Some(_) =>
+                Err(format!("Wrong number of type args for op '{}'", name)),
+            None => Err(format!("Op '{}' is undefined", name)),
+        }
+    }
+
     pub fn add_axiom<S1: ToString>(
         &mut self,
         def: S1,
     ) {
         let axiom = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing axiom \"{}\": {:?}",
@@ -185,7 +202,7 @@ Type error in axiom \"{}\": {:?}",
 
         // Parse the comp from def
         let c = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error parsing annotation: {}",
@@ -225,7 +242,7 @@ Error parsing annotation: {}",
         def: S2,
     ) {
         let axiom = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing def of \"{}\": {:?}",
@@ -259,12 +276,16 @@ Type error in def of \"{}\": {:?}",
         self.ops.push((name.to_string(), Vec::new(), op));
     }
 
-    pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, const N: usize>(
+    pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, S4: ToString, const N1: usize, const N2: usize>(
         &mut self,
         name: S1,
-        inputs: [S2; N],
-        output: S3,
+        targs: [S2; N1],
+        inputs: [S3; N2],
+        output: S4,
     ) {
+        let targs: Vec<String> =
+            targs.into_iter().map(|s| s.to_string()).collect();
+
         let inputs: Vec<VType> = inputs.into_iter().map(|i| {
             let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
             t.expand_aliases(&self.type_aliases)
@@ -279,7 +300,11 @@ Type error in def of \"{}\": {:?}",
             } else {
                 // Add an annotation that links the op to its
                 // relational abstraction.
-                let rel_abs = VName::new(rel_abs_name(name.to_string())).val();
+
+                let code_args = targs.iter().cloned().map(VType::ui).collect();
+                let code = OpCode { ident: name.to_string(), types: code_args };
+                // let rel_abs = VName::new(rel_abs_name(name.to_string())).val();
+                let rel_abs = Val::OpCode(OpMode::RelAbs, code);
 
                 let output_clone = output.clone();
                 let anno =
@@ -311,7 +336,7 @@ Type error in def of \"{}\": {:?}",
                 })
             }
         };
-        self.ops.push((name.to_string(), Vec::new(), op));
+        self.ops.push((name.to_string(), targs, op));
     }
 
     pub fn add_op_fun<S1: ToString, S2: ToString>(
@@ -320,7 +345,7 @@ Type error in def of \"{}\": {:?}",
         axiom: S2,
     ) {
         let axiom = match parse_str_cbpv(&axiom.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing axiom of \"{}\": {:?}",
@@ -376,7 +401,7 @@ Type error in axiom of \"{}\": {:?}",
         def: S3,
     ) {
         let axiom = match parse_str_cbpv(&axiom.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing axiom of \"{}\": {:?}",
@@ -418,7 +443,7 @@ Type error in axiom of \"{}\": {:?}",
         };
 
         let def = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(self),
+            Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
                 "
 Error in parsing definition of \"{}\": {:?}",

@@ -9,8 +9,9 @@ use crate::{
     Gen,
     Literal,
     Op,
+    OpCode,
+    OpMode,
     Quantifier,
-    rel_abs_name,
     Sig,
     Val,
     VName,
@@ -51,19 +52,51 @@ impl VType {
     }
 }
 
-fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
-    for (name, num_args) in &sig.sorts {
-        if *num_args == 0 {
-            ctx.declare_sort(
-                format!("{}", BType::UI(name.clone(), Vec::new()).render_smt()), 0
-            )?;
-        } else {
-            todo!("declare sorts that have parameters");
-        }
+fn render_smt_op_name(name: &str, ts: &Vec<VType>) -> String {
+    let mut s = format!("F_{}__", name);
+    for t in ts {
+        s.push_str(&t.render_smt());
+    }
+    s.push_str("__");
+    s
+}
+
+impl OpCode {
+    fn render_smt(&self) -> String {
+        render_smt_op_name(&self.ident, &self.types)
+    }
+}
+
+fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::Result<()> {
+    // for (name, num_args) in &sig.sorts {
+    //     if *num_args == 0 {
+    //         ctx.declare_sort(
+    //             format!("{}", BType::UI(name.clone(), Vec::new()).render_smt()), 0
+    //         )?;
+    //     } else {
+    //         todo!("declare sorts that have parameters");
+    //     }
+    // }
+    let mut relevant = term.relevant(sig);
+
+    // Add relevant items from axioms
+    for a in &sig.axioms {
+        relevant = relevant.union(a.relevant(sig));
     }
 
-    for (s,_targs,op) in &sig.ops {
-        match op {
+    for t in relevant.base_types() {
+        assert!(
+            *t != BType::prop(),
+            "Bool should not be listed as a relevant type"
+        );
+        ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
+        println!("Declared {} as {}", t, t.render_smt());
+    }
+
+    for code in relevant.ops() {
+        let op_smt = code.render_smt();
+        println!("Declared {} as {}", code, op_smt);
+        match sig.get_applied_op(code).expect("relevant op should be defined") {
             Op::Const(p) => {
                 let sort = ctx.atom(format!(
                     "{}",
@@ -73,7 +106,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                         .expect("const types must be base")
                         .render_smt(),
                 ));
-                ctx.declare_const(s, sort)?;
+                ctx.declare_const(op_smt, sort)?;
             }
             Op::Symbol(p) => {
                 let input_atoms = VType::flatten_many(p.inputs.clone())
@@ -82,11 +115,11 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                         let s = sort
                             .clone()
                             .unwrap_base()
-                            .expect("sig types must be base");
+                            .expect("symbol input types must be base");
                         ctx.atom(format!("{}", s.render_smt()))
                     })
                     .collect();
-                ctx.declare_fun(s,input_atoms,ctx.atom("Bool"))?;
+                ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
             }
             Op::Fun(p) => {
                 // For now, if there are any higher-order arguments,
@@ -108,7 +141,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                         })
                         .collect();
                     ctx.declare_fun(
-                        rel_abs_name(s),
+                        op_smt,
                         rel_type_atoms,
                         ctx.atom("Bool"),
                     )?;
@@ -169,13 +202,9 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                             Builder::log_op(
                                 LogOpN::And,
                                 [
-                                    Builder::force(Val::Var(
-                                        VName::new(rel_abs_name(s))
-                                    ))
+                                    Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
                                         .apply_v(args1),
-                                    Builder::force(Val::Var(
-                                        VName::new(rel_abs_name(s))
-                                    ))
+                                    Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
                                         .apply_v(args2),
                                 ]
                             )
@@ -193,9 +222,144 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig) -> std::io::Result<()> {
                     ctx.assert(e[0])?;
                 }
             }
-            _ => {},
+            op => todo!("declare_sig for op {:?}", op),
         }
     }
+
+    // for (s,_targs,op) in &sig.ops {
+    //     match op {
+    //         Op::Const(p) => {
+    //             let sort = ctx.atom(format!(
+    //                 "{}",
+    //                 p.vtype
+    //                     .clone()
+    //                     .unwrap_base()
+    //                     .expect("const types must be base")
+    //                     .render_smt(),
+    //             ));
+    //             ctx.declare_const(s, sort)?;
+    //         }
+    //         Op::Symbol(p) => {
+    //             let input_atoms = VType::flatten_many(p.inputs.clone())
+    //                 .iter()
+    //                 .map(|sort| {
+    //                     let s = sort
+    //                         .clone()
+    //                         .unwrap_base()
+    //                         .expect("sig types must be base");
+    //                     ctx.atom(format!("{}", s.render_smt()))
+    //                 })
+    //                 .collect();
+    //             ctx.declare_fun(s,input_atoms,ctx.atom("Bool"))?;
+    //         }
+    //         Op::Fun(p) => {
+    //             // For now, if there are any higher-order arguments,
+    //             // we omit the functionality axiom.
+    //             if !p.inputs.iter().any(|i| i.contains_thunk()) {
+    //                 let input_types: Vec<VType> =
+    //                     VType::flatten_many(p.inputs.clone());
+    //                 let output_types: Vec<VType> =
+    //                     VType::flatten(p.output.clone());
+    //                 let rel_type_atoms: Vec<SExpr> = input_types
+    //                     .iter()
+    //                     .chain(output_types.iter())
+    //                     .map(|sort| {
+    //                         let s = sort
+    //                             .clone()
+    //                             .unwrap_base()
+    //                             .expect("sig types must be atoms");
+    //                         ctx.atom(format!("{}", s.render_smt()))
+    //                     })
+    //                     .collect();
+    //                 ctx.declare_fun(
+    //                     rel_abs_name(s),
+    //                     rel_type_atoms,
+    //                     ctx.atom("Bool"),
+    //                 )?;
+
+    //                 let mut vgen = Gen::new();
+    //                 let ixs = vgen.next_many(input_types.len());
+    //                 let oxs1 = vgen.next_many(output_types.len());
+    //                 let oxs2 = vgen.next_many(output_types.len());
+    //                 let q_sig: Vec<(VName, VType)> = ixs
+    //                     .iter()
+    //                     .cloned()
+    //                     .zip(input_types.iter().cloned())
+    //                     .chain(
+    //                         oxs1
+    //                            .iter()
+    //                            .cloned()
+    //                            .zip(output_types.iter().cloned())
+    //                     )
+    //                     .chain(
+    //                         oxs2
+    //                            .iter()
+    //                            .cloned()
+    //                            .zip(output_types.iter().cloned())
+    //                     )
+    //                     .collect();
+
+    //                 let args1: Vec<Val> = ixs
+    //                     .iter()
+    //                     .cloned()
+    //                     .chain(oxs1.iter().cloned())
+    //                     .map(|i| i.val())
+    //                     .collect();
+    //                 let args2: Vec<Val> = ixs
+    //                     .iter()
+    //                     .cloned()
+    //                     .chain(oxs2.iter().cloned())
+    //                     .map(|i| i.val())
+    //                     .collect();
+
+    //                 let otup1: Builder = Builder::tuple(
+    //                     oxs1
+    //                         .iter()
+    //                         .cloned()
+    //                         .map(|x| Builder::return_(x.val()))
+    //                         .collect::<Vec<Builder>>()
+    //                 );
+    //                 let otup2: Builder = Builder::tuple(
+    //                     oxs1
+    //                         .iter()
+    //                         .cloned()
+    //                         .map(|x| Builder::return_(x.val()))
+    //                         .collect::<Vec<Builder>>()
+    //                 );
+
+    //                 let fun_axiom = Builder::log_op(
+    //                     LogOpN::Or,
+    //                     [
+    //                         Builder::log_op(
+    //                             LogOpN::And,
+    //                             [
+    //                                 Builder::force(Val::Var(
+    //                                     VName::new(rel_abs_name(s))
+    //                                 ))
+    //                                     .apply_v(args1),
+    //                                 Builder::force(Val::Var(
+    //                                     VName::new(rel_abs_name(s))
+    //                                 ))
+    //                                     .apply_v(args2),
+    //                             ]
+    //                         )
+    //                             .not(),
+    //                         otup1.eq_ne(true, otup2),
+    //                     ]
+    //                 )
+    //                     .quant(Quantifier::Forall, q_sig)
+    //                     .build(&mut vgen)
+    //                     .normal_form_single_case(&sig, &mut vgen);
+
+    //                 let mut builder = Context::new(ctx);
+    //                 let e = builder.smt(&fun_axiom)?;
+    //                 println!("SMT Axiom [Rel]: {}", ctx.display(e[0]));
+    //                 ctx.assert(e[0])?;
+    //             }
+    //         }
+    //         _ => {},
+    //     }
+    // }
 
     for a in &sig.axioms {
         let mut builder = Context::new(ctx);
@@ -223,7 +387,7 @@ pub fn check_sat_of_normal(
         ])
         .build()?;
     ctx.set_logic("ALL")?;
-    declare_sig(&mut ctx, sig)?;
+    declare_sig(&mut ctx, sig, term)?;
     // println!("Normal: {:?}", term_normal);
     let mut builder = Context::new(&mut ctx);
     let e = builder.smt(&term)?;
@@ -250,7 +414,7 @@ pub fn check_sat_simple(
         ])
         .build()?;
     ctx.set_logic("ALL")?;
-    declare_sig(&mut ctx, sig)?;
+    declare_sig(&mut ctx, sig, term)?;
 
     // let term_normal = term.clone().normal_form(sig);
     // // println!("Normal: {:?}", term_normal);
@@ -353,27 +517,30 @@ impl <'a> Context<'a> {
 
     fn smt_val(&self, term: &Val) -> std::io::Result<SExpr> {
         match term {
-            Val::Var(n) => match self.get_assign(n) {
+            // Normalized Vars do not have type args
+            Val::Var(n, _) => match self.get_assign(n) {
                 Some(Assignment::Defined(e)) =>
                     Ok(e.clone()),
                 Some(Assignment::Quantified) =>
                     Ok(self.ctx.atom(n.as_string())),
-                // In this case, assume it's a constant.
                 // Type-checking should have caught actual unbound
                 // variables.
-                None => Ok(self.ctx.atom(n.as_symbol_string())),
+                None => panic!("Unbound var {:?}", n),
             }
             Val::Literal(Literal::LogTrue) =>
                 Ok(self.ctx.true_()),
             Val::Literal(Literal::LogFalse) =>
                 Ok(self.ctx.false_()),
-            Val::Literal(l) =>
-                todo!("No smt for Val::Literal {:?}", l),
+            Val::OpCode(om,oc) => match om {
+                OpMode::Const | OpMode::ZeroArgAsConst =>
+                    Ok(self.ctx.atom(oc.render_smt())),
+                OpMode::RelAbs =>
+                    panic!("RelAbs({:?}) should not appear as a value after normalization", oc),
+            }
             Val::Thunk(_) =>
                 panic!("Thunks must be eliminated before smt"),
             Val::Tuple(_) =>
-                panic!("Tuple values must be eliminated before smt: {:?}",
-                term),
+                panic!("Tuple values must be eliminated before smt: {:?}", term),
         }
     }
 
@@ -422,12 +589,14 @@ impl <'a> Context<'a> {
                 match op {
                     LogOpN::And => Ok(self.ctx.and_many(args)),
                     LogOpN::Or => Ok(self.ctx.or_many(args)),
-                    LogOpN::Pred(s,true) => {
-                        args.insert(0, self.ctx.atom(s.0.clone()));
+                    // LogOpN::Pred(_oc,true) => todo!("smt Pred-true"),
+                    LogOpN::Pred(oc,true) => {
+                        args.insert(0, self.ctx.atom(oc.render_smt()));
                         Ok(self.ctx.list(args))
                     },
-                    LogOpN::Pred(s,false) => {
-                        args.insert(0, self.ctx.atom(s.0.clone()));
+                    // LogOpN::Pred(_oc,false) => todo!("smt Pred-false"),
+                    LogOpN::Pred(oc,false) => {
+                        args.insert(0, self.ctx.atom(oc.render_smt()));
                         Ok(self.ctx.not(self.ctx.list(args)))
                     },
                 }

@@ -8,10 +8,11 @@ use crate::{
     Literal,
     LogOpN,
     Op,
+    OpCode,
+    OpMode,
     Pattern,
     Rebuild,
     Sig,
-    SName,
     Val,
     VName,
     VType,
@@ -20,7 +21,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Frame {
     Seq(Vec<Pattern>, Comp),
-    Args(Vec<Val>),
+    Args(Vec<VType>,Vec<Val>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,13 +72,13 @@ impl Comp {
     ) -> Vec<(CaseName,Self)> {
         loop {
             match self {
-                Self::Apply(m, _targs, vs) => {
-                    stack.0.push(Frame::Args(vs));
+                Self::Apply(m, targs, vs) => {
+                    stack.0.push(Frame::Args(targs,vs));
                     self = *m;
                 }
                 Self::BindN(b, ps, m) => match b {
-                    BinderN::Call(s,vs) => {
-                        anti_stack.push(Rebuild::Call(s,vs,ps));
+                    BinderN::Call(oc,vs) => {
+                        anti_stack.push(Rebuild::Call(oc,vs,ps));
                         self = *m;
                     }
                     BinderN::Seq(m1) => {
@@ -159,50 +160,53 @@ impl Comp {
                     // If there is an unsubstituted var here, it must
                     // represent a primitive operator that we will
                     // intercept.
-                    Val::Var(VName::Manual(s)) => {
+                    Val::Var(VName::Manual(s), types) => {
+                        let oc = OpCode { ident: s.clone(), types };
+
                         match stack.0.pop() {
-                            // Primitive operators should only appear as
-                            // functions being applied to something, so we
-                            // expect an Args frame on the stack.
+                            // Primitive operators should only be
+                            // forced as as functions being applied to
+                            // something, so we expect an Args frame
+                            // on the stack.
                             //
                             // The input args remain unflattened here
                             // (this is dealt with later by
                             // expand_funs). The output, however, does get
                             // flattened.
-                            Some(Frame::Args(vs)) => {
-                                match sig.ops_map().get(&s).map(|t| t.1.clone()) {
-                                    Some(Op::Const(..)) => panic!(
+                            Some(Frame::Args(_targs,vs)) => {
+                                match sig.get_applied_op(&oc) {
+                                    Ok(Op::Const(..)) => panic!(
                                         "Found constant {} in Force position",
-                                        s,
+                                        oc,
                                     ),
-                                    Some(Op::Direct(f)) => {
+                                    Ok(Op::Direct(f)) => {
                                         self = Builder::lift(f.clone().rename(gen))
                                             .apply_rt(vs)
                                             .build(gen);
                                     }
-                                    Some(Op::Symbol(..)) => {
+                                    Ok(Op::Symbol(..)) => {
                                         let x_result = gen.next();
                                         let mut flat_vs = Vec::new();
                                         for v in vs {
                                             flat_vs.append(&mut v.flatten());
                                         }
                                         anti_stack.push(Rebuild::LogOpN(
-                                            LogOpN::Pred(SName(s),true),
+                                            LogOpN::Pred(oc,true),
                                             flat_vs,
                                             x_result.clone(),
                                         ));
                                         self = Comp::return1(x_result);
                                     }
-                                    Some(Op::Pred(..)) => {
+                                    Ok(Op::Pred(..)) => {
                                         let x_result = gen.next();
                                         anti_stack.push(Rebuild::LogOpN(
-                                            LogOpN::Pred(SName(s),true),
+                                            LogOpN::Pred(oc,true),
                                             vs,
                                             x_result.clone(),
                                         ));
                                         self = Comp::return1(x_result);
                                     }
-                                    Some(Op::Rec(op)) => {
+                                    Ok(Op::Rec(op)) => {
                                         // This is exactly the same as the
                                         // Fun case below.
     
@@ -219,10 +223,10 @@ impl Comp {
                                         // tuple (with type matching the
                                         // original output type).
                                         let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                        anti_stack.push(Rebuild::Call(SName(s), vs, ps));
+                                        anti_stack.push(Rebuild::Call(oc, vs, ps));
                                         self = Comp::return1(ret_v);
                                     }
-                                    Some(Op::Fun(op)) => {
+                                    Ok(Op::Fun(op)) => {
                                         // First, we need to flatten the
                                         // output type.
                                         let ts = op.output.clone().flatten();
@@ -236,29 +240,30 @@ impl Comp {
                                         // tuple (with type matching the
                                         // original output type).
                                         let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                        anti_stack.push(Rebuild::Call(SName(s), vs, ps));
+                                        anti_stack.push(Rebuild::Call(oc, vs, ps));
                                         self = Comp::return1(ret_v);
                                     }
-                                    // If undefined, assume it is a
-                                    // relational abstraction and
-                                    // treat it like a symbol.
-                                    None => {
-                                        let x_result = gen.next();
-                                        let mut flat_vs = Vec::new();
-                                        for v in vs {
-                                            flat_vs.append(&mut v.flatten());
-                                        }
-                                        anti_stack.push(Rebuild::LogOpN(
-                                            LogOpN::Pred(SName(s),true),
-                                            flat_vs,
-                                            x_result.clone(),
-                                        ));
-                                        self = Comp::return1(x_result);
-                                    }
-                                    // None => panic!(
-                                    //     "Undeclared operator: {}",
-                                    //     s,
-                                    // ),
+                                    Err(e) => panic!("Invalid OpCode '{}': {}", oc, e),
+                                    // // If undefined, assume it is a
+                                    // // relational abstraction and
+                                    // // treat it like a symbol.
+                                    // None => {
+                                    //     let x_result = gen.next();
+                                    //     let mut flat_vs = Vec::new();
+                                    //     for v in vs {
+                                    //         flat_vs.append(&mut v.flatten());
+                                    //     }
+                                    //     anti_stack.push(Rebuild::LogOpN(
+                                    //         LogOpN::Pred(SName(s),true),
+                                    //         flat_vs,
+                                    //         x_result.clone(),
+                                    //     ));
+                                    //     self = Comp::return1(x_result);
+                                    // }
+                                    // // None => panic!(
+                                    // //     "Undeclared operator: {}",
+                                    // //     s,
+                                    // // ),
                                 }
                             }
                             Some(f) => {
@@ -269,11 +274,42 @@ impl Comp {
                             }
                         }
                     }
+
+                    // Only the RelAbs mode is legal here,
+                    // representing the relation being applied to some
+                    // arguments.
+                    //
+                    // Handled just like the Symbol case above.
+                    Val::OpCode(OpMode::RelAbs, oc) => {
+                        match stack.0.pop() {
+                            Some(Frame::Args(_,vs)) => {
+                                let x_result = gen.next();
+                                let mut flat_vs = Vec::new();
+                                for v in vs {
+                                    flat_vs.append(&mut v.flatten());
+                                }
+                                anti_stack.push(Rebuild::LogOpN(
+                                    LogOpN::Pred(oc,true),
+                                    flat_vs,
+                                    x_result.clone(),
+                                ));
+                                self = Comp::return1(x_result);
+                            }
+                            Some(f) => {
+                                panic!("pe reached Force(RelAbs({:?})) with {:?} on stack, rather than an Args.", oc, f)
+                            }
+                            None => {
+                                panic!("pe reached Force(RelAbs({:?})) with empty stack, rather than an Args.", oc)
+                            }
+                        }
+                    }
+
                     v => panic!("pe stuck on Force({:?})", v),
                 }
                 Self::Fun(xs, m) => match stack.0.pop() {
-                    Some(Frame::Args(vs)) => {
+                    Some(Frame::Args(targs,vs)) => {
                         self = *m;
+                        assert!(targs.len() == 0, "Type args given to regular function");
                         assert!(xs.len() == vs.len(), "Arg count mismatch");
                         let names = xs.iter().map(|(x,_)| x);
                         for (x,v) in names.zip(&vs) {
@@ -293,7 +329,7 @@ impl Comp {
                     match cond {
                         Val::Literal(Literal::LogTrue) => { self = *then_b; }
                         Val::Literal(Literal::LogFalse) => { self = *else_b; }
-                        Val::Var(x) => {
+                        Val::Var(x, types) => {
                             // Branches evaluate in parallel and don't
                             // affect each other, so we send two distinct
                             // copies of the stack down each.
@@ -319,7 +355,7 @@ impl Comp {
                             );
                             let else_b = else_cases.pop().unwrap().1;
 
-                            self = Self::ite(x.val(), then_b, else_b);
+                            self = Self::ite(Val::Var(x, types), then_b, else_b);
                             return vec![(case_name, self.rebuild_from_stack(anti_stack))]
                         }
                         v => {
@@ -341,10 +377,10 @@ impl Comp {
                         }
                         self = m.substitute_many(&ss);
                     }
-                    Some(Frame::Args(v)) => {
+                    Some(Frame::Args(targs,v)) => {
                         panic!(
                             "pe stuck on return with {:?} on stack",
-                            Frame::Args(v),
+                            Frame::Args(targs,v),
                         )
                     }
                     None => {

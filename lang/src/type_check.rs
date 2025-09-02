@@ -7,6 +7,7 @@ use crate::{
     Literal,
     LogOpN,
     Op,
+    OpCode,
     Sig,
     Val,
     VName,
@@ -143,7 +144,7 @@ impl Comp {
                     tc.plus(x.clone(), VType::prop()),
                 )
             }
-            Self::BindN(BinderN::Call(_name, _args), _xs, _m) => {
+            Self::BindN(BinderN::Call(_oc, _args), _xs, _m) => {
                 panic!(
                     "BinderN::Call should only appear in phases after type_check"
                 )
@@ -250,51 +251,92 @@ impl Pattern {
 }
 
 impl Sig {
-    fn get_type(&self, s: String) -> Result<VType, TypeError> {
-        for (name, _, op) in self.ops.clone() {
-            if name == s {
-                match op {
-                    Op::Const(op) => {
-                        return Ok(op.vtype)
+    fn get_type(&self, oc: &OpCode) -> Result<VType, TypeError> {
+        match self.get_applied_op(oc) {
+            Ok(op) => match op {
+                Op::Const(op) => {
+                    return Ok(op.vtype)
+                }
+                Op::Direct(m) => {
+                    match m.type_of(TypeContext::new(self.clone()))? {
+                        CType::Return(t) => return Ok(t),
+                        _ => return Err(format!(
+                            "signature function \"{}\" did not have a computation type",
+                            oc,
+                        )),
                     }
-                    Op::Direct(m) => {
-                        match m.type_of(TypeContext::new(self.clone()))? {
-                            CType::Return(t) => return Ok(t),
-                            _ => return Err(format!(
-                                "
-signature function \"{}\" did not have a computation type",
-                                s,
-                            )),
-                        }
-                    }
-                    Op::Fun(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            op.output,
-                        ))
-                    },
-                    Op::Pred(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            VType::prop(),
-                        ))
-                    },
-                    Op::Rec(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            op.output,
-                        ))
-                    }
-                    Op::Symbol(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            VType::prop(),
-                        ))
-                    },
+                }
+                Op::Fun(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        op.output,
+                    ))
+                },
+                Op::Pred(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        VType::prop(),
+                    ))
+                },
+                Op::Rec(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        op.output,
+                    ))
+                }
+                Op::Symbol(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        VType::prop(),
+                    ))
                 }
             }
+            Err(e) => Err(e),
         }
-        Err(format!("Identifier {:?} is not bound or declared as a primitive operation. The following operations are declared: {:?}", s, self.all_op_names()))
+//         for (name, _, op) in self.ops.clone() {
+//             if name == s {
+//                 match op {
+//                     Op::Const(op) => {
+//                         return Ok(op.vtype)
+//                     }
+//                     Op::Direct(m) => {
+//                         match m.type_of(TypeContext::new(self.clone()))? {
+//                             CType::Return(t) => return Ok(t),
+//                             _ => return Err(format!(
+//                                 "
+// signature function \"{}\" did not have a computation type",
+//                                 s,
+//                             )),
+//                         }
+//                     }
+//                     Op::Fun(op) => {
+//                         return Ok(VType::fun_v(
+//                             op.inputs,
+//                             op.output,
+//                         ))
+//                     },
+//                     Op::Pred(op) => {
+//                         return Ok(VType::fun_v(
+//                             op.inputs,
+//                             VType::prop(),
+//                         ))
+//                     },
+//                     Op::Rec(op) => {
+//                         return Ok(VType::fun_v(
+//                             op.inputs,
+//                             op.output,
+//                         ))
+//                     }
+//                     Op::Symbol(op) => {
+//                         return Ok(VType::fun_v(
+//                             op.inputs,
+//                             VType::prop(),
+//                         ))
+//                     },
+//                 }
+//             }
+//         }
+//         Err(format!("Identifier {:?} is not bound or declared as a primitive operation. The following operations are declared: {:?}", s, self.all_op_names()))
     }
 }
 
@@ -313,8 +355,8 @@ impl Val {
             Self::Literal(l) => match l {
                 Literal::LogTrue => Ok(VType::prop()),
                 Literal::LogFalse => Ok(VType::prop()),
-                l => panic!("No type for literal {:?}", l),
             }
+            Self::OpCode(_om, _oc) => panic!("OpCode values should not exist at type-check time."),
             Self::Thunk(m) => Ok(VType::Thunk(Box::new(m.type_of(tc)?))),
             Self::Tuple(vs) => {
                 let mut ts = Vec::new();
@@ -323,11 +365,17 @@ impl Val {
                 }
                 Ok(VType::Tuple(ts))
             }
-            Self::Var(x) => {
+            Self::Var(x, types) => {
                 match tc.get(x) {
                     Ok(t) => Ok(t),
                     Err(_) => match x {
-                        VName::Manual(s) => tc.sig.get_type(s.clone()),
+                        VName::Manual(s) => {
+                            let oc = OpCode {
+                                ident: s.clone(),
+                                types: types.clone(),
+                            };
+                            tc.sig.get_type(&oc)
+                        }
                         VName::Auto(_n) => panic!("Unbound auto var {:?}", x),
                     }
                 }
@@ -352,7 +400,7 @@ impl BType {
                         Ok(())
                     }
                     Some(n) => {
-                        Err(format!("Type constructor {} expects {} types, but was applied to {} types instead in {:?}", name, n, args.len(), Self::UI(name.clone(),args.clone())))
+                        Err(format!("Type constructor '{}' expects {} types, but was applied to {} types instead in '{}'", name, n, args.len(), Self::UI(name.clone(),args.clone())))
                     }
                     None => Err(format!("Type '{}' has not been declared", name)),
                 }

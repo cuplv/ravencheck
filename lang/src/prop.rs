@@ -54,7 +54,7 @@ impl Prop {
 
 impl Comp {
     pub fn as_prop(mut self, sig: &Sig) -> Result<Prop> {
-        self = self.expand_types(sig);
+        self = self.expand_types(&sig.type_aliases);
         match self.type_check(&CType::return_prop(), sig) {
             Ok(()) => {
                 let mut vgen = self.get_gen();

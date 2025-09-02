@@ -41,8 +41,8 @@ impl Binder1 {
 impl BinderN {
     fn substitute(self, x: &VName, v: &Val) -> Self {
         match self {
-            Self::Call(s,vs) => Self::Call(
-                s,
+            Self::Call(oc,vs) => Self::Call(
+                oc,
                 vs.into_iter().map(|v1| v1.substitute(x,v)).collect(),
             ),
             Self::Seq(m) => Self::Seq(Box::new(m.substitute(x, v))),
@@ -128,7 +128,7 @@ impl Pattern {
 impl Val {
     fn substitute(self, x: &VName, v: &Val) -> Self {
         match self {
-            Self::Var(x2) if *x == x2 => { v.clone() },
+            Self::Var(x2, _) if *x == x2 => { v.clone() },
             Self::Thunk(c) => Self::Thunk(Box::new(c.substitute(x,v))),
             Self::Tuple(vs) => Self::Tuple(
                 vs

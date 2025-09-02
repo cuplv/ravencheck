@@ -57,6 +57,7 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<VName>, m: Comp, sig: &Sig, gen: 
     new_m
 }
 
+#[allow(dead_code)]
 fn expand_pred(op: PredOp, vs: Vec<Val>, x: VName, m: Comp, sig: &Sig, gen: &mut Gen, is_pos: bool) -> Comp {
     let sig_clone1 = sig.clone();
     let sig_clone2 = sig.clone();
@@ -130,49 +131,51 @@ impl Comp {
             match self {
                 Self::Bind1(b, x, m) => {
                     match b {
-                        Binder1::LogOpN(LogOpN::Pred(s,is_pos), vs) => {
-                            match sig.ops_map().get(&s.0) {
-                                Some((_targs, Op::Const(..))) => {
-                                    panic!("Got constant op {:?} in Pred", s)
-                                }
-                                Some((_targs, Op::Direct(..))) => {
-                                    panic!("Got direct fun {:?} in Pred", s)
-                                }
-                                Some((_targs, Op::Pred(op))) => {
-                                    println!("Expanding pred {}...", &s.0);
-                                    self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
-                                    break;
-                                }
-                                Some((_targs, Op::Fun(_op))) => {
-                                    panic!("Got fun op {:?} in Pred", s)
-                                }
-                                Some((_targs, Op::Rec(..))) => todo!("expand_funs for RecOp"),
-                                Some((_targs, Op::Symbol(_op))) => {
-                                    anti_stack.push(Rebuild::LogOpN(
-                                        LogOpN::Pred(s,is_pos),
-                                        vs,
-                                        x,
-                                    ));
-                                    self = *m;
-                                }
-                                // Treat None like a Symbol, since
-                                // it's probably a relational
-                                // abstraction.
-                                None => {
-                                    anti_stack.push(Rebuild::LogOpN(
-                                        LogOpN::Pred(s,is_pos),
-                                        vs,
-                                        x,
-                                    ));
-                                    self = *m;
-                                }
-                                // None => {
-                                //     panic!(
-                                //         "Symbol {:?} not found in sig",
-                                //         s,
-                                //     )
-                                // }
-                            }
+                        Binder1::LogOpN(LogOpN::Pred(oc,is_pos), vs) => {
+                            anti_stack.push(Rebuild::LogOpN(LogOpN::Pred(oc, is_pos), vs, x));
+                            self = *m;
+                            // match sig.get_applied_op(&oc).unwrap() {
+                            //     Op::Const(..) => {
+                            //         panic!("Got constant op {:?} in Pred", oc)
+                            //     }
+                            //     Op::Direct(..) => {
+                            //         panic!("Got direct fun {:?} in Pred", oc)
+                            //     }
+                            //     Op::Pred(op) => {
+                            //         println!("Expanding pred {}...", &oc.ident);
+                            //         self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
+                            //         break;
+                            //     }
+                            //     Op::Fun(_op) => {
+                            //         panic!("Got fun op {:?} in Pred", s)
+                            //     }
+                            //     Op::Rec(..) => todo!("expand_funs for RecOp"),
+                            //     Op::Symbol(_op) => {
+                            //         anti_stack.push(Rebuild::LogOpN(
+                            //             LogOpN::Pred(oc,is_pos),
+                            //             vs,
+                            //             x,
+                            //         ));
+                            //         self = *m;
+                            //     }
+                            //     // Treat None like a Symbol, since
+                            //     // it's probably a relational
+                            //     // abstraction.
+                            //     None => {
+                            //         anti_stack.push(Rebuild::LogOpN(
+                            //             LogOpN::Pred(oc,is_pos),
+                            //             vs,
+                            //             x,
+                            //         ));
+                            //         self = *m;
+                            //     }
+                            //     // None => {
+                            //     //     panic!(
+                            //     //         "Symbol {:?} not found in sig",
+                            //     //         s,
+                            //     //     )
+                            //     // }
+                            // }
                         }
                         Binder1::LogQuantifier(q, xs, body) => {
                             let body = body.expand_funs(sig,gen,Vec::new());
@@ -185,23 +188,26 @@ impl Comp {
                         }
                     }
                 }
-                Self::BindN(BinderN::Call(s, vs), ps, m) => {
+                Self::BindN(BinderN::Call(oc, vs), ps, m) => {
                     let xs = ps
                         .into_iter()
                         .map(|p| p.unwrap_atom().expect("Call should only be bound to flat patterns"))
                         .collect();
-                    match sig.ops_map().get(&s.0) {
-                        Some((_targs, Op::Fun(op))) => {
-                            println!("Expanding call {}...", &s.0);
-                            self = expand_fun(op.clone(), vs, xs, *m, sig, gen);
+                    match sig.get_applied_op(&oc).unwrap() {
+                        // Some((tas, op)) => {
+                        //     let op = op.clone().expand_types_from_call(&targs,tas);
+                        //     match op.expect(&format!("{:?} got wrong number of type arguments", s)) {
+                        Op::Fun(op) => {
+                            println!("Expanding call {}...", &oc);
+                            self = expand_fun(op, vs, xs, *m, sig, gen);
                             break;
                         }
-                        Some((_targs, Op::Pred(_op))) => {
-                            panic!("Got pred op {:?} in Fun", s)
+                        Op::Pred(_op) => {
+                            panic!("Got pred op {:?} in Fun", oc)
                         }
-                        Some((_targs, Op::Rec(op))) => {
-                            println!("Expanding call {}...", &s.0);
-                            self = expand_fun(op.clone().as_fun_op(), vs, xs, *m, sig, gen);
+                        Op::Rec(op) => {
+                            println!("Expanding call {}...", &oc);
+                            self = expand_fun(op.as_fun_op(), vs, xs, *m, sig, gen);
                             break;
                         }
                         r => panic!("Can't expand_fun on {:?}", r),

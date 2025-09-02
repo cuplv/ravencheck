@@ -9,7 +9,6 @@ use syn::{
     ExprLit,
     ExprMacro,
     ExprParen,
-    ExprPath,
     ExprUnary,
     GenericArgument,
     Lit,
@@ -18,6 +17,7 @@ use syn::{
     PatIdent,
     PatType,
     PathArguments,
+    PathSegment,
     Macro,
     ReturnType,
     Stmt,
@@ -40,26 +40,6 @@ type Error = String;
 fn mk_err<A,T: ToString>(s: T) -> Result<A,Error> {
     Err(s.to_string())
 }
-
-// fn pat_ident(p: Pat) -> (Ident, Option<Ident>) {
-//     match p {
-//         Pat::Ident(PatIdent{ ident, .. }) => (ident, None),
-//         Pat::Type(PatType{ pat, ty, .. }) => {
-//             let ident = match *pat {
-//                 Pat::Ident(PatIdent{ ident, .. }) => ident,
-//                 p => panic!("Expected Pat::Ident, not {:?}", p),
-//             };
-//             let t = match *ty {
-//                 Type::Path(p) => {
-//                     p.path.get_ident().expect("Failed to get type").clone()
-//                 }
-//                 p => panic!("Expected Type::Path, not {:?}", p),
-//             };
-//             (ident, Some(t))
-//         }
-//         p => panic!("no ident extraction for {:?}", p),
-//     }
-// }
 
 fn block_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
     match stmt {
@@ -353,10 +333,32 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         }
 
         Expr::Paren(ExprParen{expr,..}) => syn_to_builder(*expr),
-        Expr::Path(ExprPath{path,..}) => match path.get_ident() {
-            Some(i) => Ok(Builder::return_(VName::new(i).val())),
-            None => Err(format!("Unhandled path: {:?}", path)),
+
+        Expr::Path(mut ep) => {
+            if ep.path.segments.len() != 1 {
+                Err(format!("Path should not have more than one segment: {:?}", ep.path))
+            } else {
+                let PathSegment{ident,arguments} =
+                    ep.path.segments.pop().unwrap().into_value();
+                let types = match arguments {
+                    PathArguments::None => Vec::new(),
+                    PathArguments::AngleBracketed(a) => {
+                        a.args.into_pairs().map(|pr| {
+                            match pr.into_value() {
+                                GenericArgument::Type(t) =>
+                                    VType::from_syn(t).unwrap(),
+                                a => panic!("Can't handle this generic argument: {:?}", a),
+                            }
+                        }).collect()
+                    }
+                    PathArguments::Parenthesized(args) => {
+                        panic!("Can't handle parenthesized path arguments: {:?}", args)
+                    }
+                };
+                Ok(Builder::return_(Val::Var(VName::new(ident), types)))
+            }
         }
+
         Expr::Tuple(t) => {
             let mut bs = Vec::new();
             for e in t.elems.into_iter() {

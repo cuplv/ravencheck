@@ -53,7 +53,7 @@ impl Binder1 {
 impl BinderN {
     fn rename_r(self, gen: &mut Gen) -> Self {
         match self {
-            Self::Call(_,_) => todo!(),
+            Self::Call(..) => todo!(),
             Self::Seq(m) => Self::Seq(Box::new(m.rename_r(gen))),
         }
     }
@@ -166,13 +166,14 @@ impl Val {
     fn rename_r(self, gen: &mut Gen) -> Self {
         match self {
             Self::Literal(l) => Self::Literal(l),
+            Self::OpCode(om,oc) => Self::OpCode(om,oc),
             Self::Thunk(m) => Self::Thunk(Box::new(m.rename_r(gen))),
             Self::Tuple(vs) => Self::Tuple(
                 vs.into_iter().map(|v| v.rename_r(gen)).collect()
             ),
             // Remember, vars get renamed at their introduction point,
             // not at their use-points.
-            Self::Var(n) => Self::Var(n),
+            Self::Var(n,ts) => Self::Var(n,ts),
         }
     }
 }
