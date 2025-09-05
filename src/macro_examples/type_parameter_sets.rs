@@ -15,6 +15,16 @@ mod my_mod {
         member_poly::<u32>(e,s)
     }
 
+    #[assume((HashSet<E>, E))]
+    fn equal_or_dist<E: Eq + Hash>() -> bool {
+        forall(|s1: HashSet<E>, s2: HashSet<E>| {
+            s1 == s2 || exists(|e: E| {
+                member_poly::<E>(e, s1)
+                    != member_poly::<E>(e, s2)
+            })
+        })
+    }
+
     #[verify]
     fn trivial_u32() -> bool {
         forall(|e: u32, s1: HashSet<u32>, s2: HashSet<u32>| {
@@ -30,7 +40,7 @@ mod my_mod {
         forall(|e: u32, s1: HashSet<u32>, s2: HashSet<u32>| {
             implies(
                 s1 == s2 && member_poly::<u32>(e,s1),
-                member_poly::<u32>(e,s2),
+                !member_poly::<u32>(e,s2),
             )
         })
     }

@@ -152,13 +152,27 @@ impl Comp {
 }
 
 impl Sig {
-    pub fn sort_graph(&self) -> SortGraph {
-        // Operator axioms are counted when they are spliced into the
-        // main assertion, so we only look at the axioms here.
+    pub fn sort_graph_combined(&self, term: &Comp) -> SortGraph {
+        let (_, axioms) = self.relevant_with_axioms(term);
+
         let mut graph = SortGraph::new();
-        for a in self.axioms.iter() {
+
+        for a in &axioms {
             graph.append(a.sort_graph());
         }
+
+        graph.append(term.sort_graph());
+
         graph
     }
+
+    // pub fn sort_graph(&self) -> SortGraph {
+    //     // Operator axioms are counted when they are spliced into the
+    //     // main assertion, so we only look at the axioms here.
+    //     let mut graph = SortGraph::new();
+    //     for a in self.axioms.iter() {
+    //         graph.append(a.sort_graph());
+    //     }
+    //     graph
+    // }
 }

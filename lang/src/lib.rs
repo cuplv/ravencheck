@@ -29,6 +29,7 @@ mod relevant;
 mod rename;
 mod sig;
 pub use sig::{
+    Axiom,
     BType,
     CType,
     FunOp,
@@ -142,6 +143,29 @@ impl Sig {
         &mut self,
         def: S1,
     ) {
+        let tas: [String; 0] = [];
+        let inst_rules: [(String,String); 0] = [];
+        self.add_axiom2(def, tas, inst_rules);
+    }
+
+    pub fn add_axiom2<S1: ToString, S2: ToString, S3: ToString, const N1: usize, const N2: usize>(
+        &mut self,
+        def: S1,
+        tas: [S2; N1],
+        inst_rules: [(S3,S3); N2],
+    ) {
+        let mut tas_parsed = Vec::new();
+        for t in &tas {
+            tas_parsed.push(t.to_string());
+        }
+
+        let mut inst_rules_parsed = Vec::new();
+        for (a,b) in &inst_rules {
+            let a = BType::from_string(a.to_string()).unwrap();
+            let b = VType::from_string(b.to_string()).unwrap();
+            inst_rules_parsed.push((a,b));
+        }
+
         let axiom = match parse_str_cbpv(&def.to_string()) {
             Ok(m) => m.expand_types(&self.type_aliases),
             Err(e) => panic!(
@@ -151,7 +175,7 @@ Error in parsing axiom \"{}\": {:?}",
                 e,
             ),
         };
-        match axiom.type_of(TypeContext::new(self.clone())) {
+        match axiom.type_of(TypeContext::new_types(self.clone(), tas_parsed.clone())) {
             Ok(t) => {
                 if t != CType::return_prop() {
                     panic!(
@@ -177,7 +201,12 @@ Type error in axiom \"{}\": {:?}",
             "Axiom comp should have 1 case, had {} cases instead",
             cases.len(),
         );
-        self.axioms.push(cases.pop().unwrap().1);
+        let axiom = Axiom {
+            tas: tas.into_iter().map(|s| s.to_string()).collect(),
+            inst_rules: inst_rules_parsed,
+            body: cases.pop().unwrap().1,
+        };
+        self.axioms.push(axiom);
     }
 
     pub fn add_alias_from_string<S1: ToString, S2: ToString>(

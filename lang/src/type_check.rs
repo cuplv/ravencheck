@@ -20,6 +20,7 @@ use std::collections::HashMap;
 #[derive(Clone,Debug)]
 pub struct TypeContext {
     bindings: HashMap<VName, VType>,
+    type_bindings: Vec<String>,
     sig: Sig,
 }
 
@@ -27,6 +28,14 @@ impl TypeContext {
     pub fn new(sig: Sig) -> Self {
         TypeContext{
             bindings: HashMap::new(),
+            type_bindings: Vec::new(),
+            sig,
+        }
+    }
+    pub fn new_types(sig: Sig, type_bindings: Vec<String>) -> Self {
+        TypeContext{
+            bindings: HashMap::new(),
+            type_bindings,
             sig,
         }
     }
@@ -134,7 +143,7 @@ impl Comp {
             }
             Self::Bind1(Binder1::LogQuantifier(_q, xs, body), x, m) => {
                 for (_,vt) in xs {
-                    let () = vt.validate(&tc.sig)?;
+                    let () = vt.validate(&tc.sig, &tc.type_bindings)?;
                 }
                 body.type_check_r(
                     &CType::return_prop(),
@@ -170,7 +179,7 @@ impl Comp {
                 for (x,o) in xs.clone().into_iter() {
                     match o {
                         Some(t) => {
-                            let () = t.validate(&tc.sig)?;
+                            let () = t.validate(&tc.sig, &tc.type_bindings)?;
                             ts.push(t.clone());
                             tc = tc.plus(x, t);
                         }
@@ -385,14 +394,14 @@ impl Val {
 }
 
 impl BType {
-    pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
+    pub fn validate(&self, sig: &Sig, type_bindings: &Vec<String>) -> Result<(), TypeError> {
         match self {
             Self::Prop => Ok(()),
             Self::UI(name, args) => {
                 match sig.sort_arity(name) {
                     Some(n) if n == args.len() => {
                         for a in args {
-                            match a.validate(sig) {
+                            match a.validate(sig, type_bindings) {
                                 Ok(()) => {},
                                 Err(e) => return Err(e),
                             }
@@ -402,7 +411,10 @@ impl BType {
                     Some(n) => {
                         Err(format!("Type constructor '{}' expects {} types, but was applied to {} types instead in '{}'", name, n, args.len(), Self::UI(name.clone(),args.clone())))
                     }
-                    None => Err(format!("Type '{}' has not been declared", name)),
+                    None if args.len() == 0 && type_bindings.contains(name) => {
+                        Ok(())
+                    }
+                    None => Err(format!("Type '{}' has not been declared in {:?} + {:?}", name, sig, type_bindings)),
                 }
             }
         }
@@ -410,30 +422,30 @@ impl BType {
 }
 
 impl CType {
-    pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
+    pub fn validate(&self, sig: &Sig, type_bindings: &Vec<String>) -> Result<(), TypeError> {
         match self {
             Self::Fun(ts, ct) => {
                 for t in ts {
-                    match t.validate(sig) {
+                    match t.validate(sig, type_bindings) {
                         Ok(()) => {},
                         Err(e) => return Err(e),
                     }
                 }
-                ct.validate(sig)
+                ct.validate(sig, type_bindings)
             }
-            Self::Return(vt) => vt.validate(sig),
+            Self::Return(vt) => vt.validate(sig, type_bindings),
         }
     }
 }
 
 impl VType {
-    pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
+    pub fn validate(&self, sig: &Sig, type_bindings: &Vec<String>) -> Result<(), TypeError> {
         match self {
-            Self::Base(bt) => bt.validate(sig),
-            Self::Thunk(ct) => ct.validate(sig),
+            Self::Base(bt) => bt.validate(sig, type_bindings),
+            Self::Thunk(ct) => ct.validate(sig, type_bindings),
             Self::Tuple(ts) => {
                 for t in ts {
-                    match t.validate(sig) {
+                    match t.validate(sig, type_bindings) {
                         Ok(()) => {},
                         Err(e) => return Err(e),
                     }

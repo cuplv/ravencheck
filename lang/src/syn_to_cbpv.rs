@@ -79,6 +79,16 @@ impl From<PatIdent> for VName {
     }
 }
 
+impl BType {
+    pub fn from_string<S: ToString>(s: S) -> Result<Self, Error> {
+        let vt = VType::from_string(s)?;
+        match vt.unwrap_base() {
+            Ok(bt) => Ok(bt),
+            Err(vt) => Err(format!("{} is not a base type", vt.render())),
+        }
+    }
+}
+
 impl VType {
     pub fn from_pat_type<S: ToString>(s: S) -> Result<Self, Error> {
         let pt: PatType = match syn::parse_str(&s.to_string()) {

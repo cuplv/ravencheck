@@ -163,6 +163,14 @@ impl BType {
             }
         }
     }
+    pub fn get_ta(self) -> Option<String> {
+        match self {
+            BType::UI(name,args) if args.len() == 0 => {
+                Some(name)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// A VType is a base type or a tuple
@@ -403,6 +411,13 @@ pub enum Op {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Axiom {
+    pub tas: Vec<String>,
+    pub inst_rules: Vec<(BType,VType)>,
+    pub body: Comp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sig {
     pub sorts: HashMap<String,usize>,
     pub type_aliases: HashMap<String,VType>,
@@ -410,7 +425,7 @@ pub struct Sig {
     // aliases on the types in the Op.
     pub ops: Vec<(String, Vec<String>, Op)>,
     // Note that axioms here should already be in normal form.
-    pub axioms: Vec<Comp>,
+    pub axioms: Vec<Axiom>,
 }
 
 impl Sig {
@@ -459,7 +474,7 @@ impl Sig {
             "Recursive type alias \"{}\" is not allowed",
             s,
         );
-        assert!(t.validate(self) == Ok(()));
+        assert!(t.validate(self, &Vec::new()) == Ok(()));
         self.type_aliases.insert(s, t);
     }
     pub fn add_constant<S1: ToString, S2: ToString>(
@@ -503,7 +518,7 @@ impl Sig {
         inputs: [VType; N],
     ) {
         for i in inputs.iter() {
-            assert!(i.validate(self) == Ok(()));
+            assert!(i.validate(self, &Vec::new()) == Ok(()));
         }
         let op = Op::Symbol(PredSymbol{
             inputs: inputs

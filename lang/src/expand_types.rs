@@ -4,6 +4,7 @@ use crate::{
     BinderN,
     CType,
     Comp,
+    LogOpN,
     Op,
     OpCode,
     Val,
@@ -59,9 +60,19 @@ impl Binder1 {
             ),
             Self::LogNot(v) => Self::LogNot(v.expand_types(subs)),
             Self::LogOpN(op, vs) => Self::LogOpN(
-                op,
+                op.expand_types(subs),
                 vs.into_iter().map(|v| v.expand_types(subs)).collect(),
             ),
+        }
+    }
+}
+
+impl LogOpN {
+    pub fn expand_types(self, subs: &Subs) -> Self {
+        match self {
+            LogOpN::Or => LogOpN::Or,
+            LogOpN::And => LogOpN::And,
+            LogOpN::Pred(oc,b) => LogOpN::Pred(oc.expand_types(subs), b),
         }
     }
 }
@@ -89,6 +100,18 @@ impl BinderN {
 }
 
 impl Comp {
+    pub fn expand_types_from_call(
+        self,
+        targs: &Vec<VType>,
+        tas: &Vec<String>,
+    ) -> Option<Self> {
+        if targs.len() == tas.len() {
+            let subs = tas.iter().cloned().zip(targs.iter().cloned());
+            Some(self.expand_types(&HashMap::from_iter(subs)))
+        } else {
+            None
+        }
+    }
     pub fn expand_types(self, subs: &Subs) -> Self {
         match self {
             Self::Apply(m, tas, vs) => Self::Apply(
@@ -126,11 +149,16 @@ impl Comp {
 impl Val {
     pub fn expand_types(self, subs: &Subs) -> Self {
         match self {
+            Self::Literal(l) => Self::Literal(l),
+            Self::OpCode(om, oc) => Self::OpCode(om, oc.expand_types(subs)),
             Self::Thunk(m) => Self::Thunk(Box::new(m.expand_types(subs))),
             Self::Tuple(vs) => Self::Tuple(
                 vs.into_iter().map(|v| v.expand_types(subs)).collect()
             ),
-            v => v,
+            Self::Var(name, args) => Self::Var(
+                name,
+                args.into_iter().map(|a| a.expand_types(subs)).collect(),
+            ),
         }
     }
 }

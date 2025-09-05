@@ -1,4 +1,5 @@
 use crate::{
+    Axiom,
     Binder1,
     BinderN,
     BType,
@@ -11,6 +12,7 @@ use crate::{
     VType,
 };
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 pub struct Relevant {
@@ -125,5 +127,71 @@ impl Val {
             Self::Var(..) => {},
         }
         rel
+    }
+}
+
+impl Sig {
+    pub fn relevant_with_axioms(&self, term: &Comp) -> (Relevant, Vec<Comp>) {
+        let mut relevant = term.relevant(self);
+
+        let mut inst_axioms: Vec<Comp> = Vec::new();
+        for a in &self.axioms {
+            if a.tas.len() == 0 {
+                inst_axioms.push(a.body.clone());
+            } else {
+                for t in relevant.base_types() {
+                    match a.inst_for(t) {
+                        Some(a) => {
+                            inst_axioms.push(a);
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+
+        // Add relevant items from axioms
+        for a in &inst_axioms {
+            relevant = relevant.union(a.relevant(self));
+        }
+
+        // Do not recurse...
+
+        (relevant, inst_axioms)
+    }
+}
+
+impl Axiom {
+    /// Instantiate for the given BType, if it triggers a rule.
+    pub fn inst_for(&self, b: &BType) -> Option<Comp> {
+        for (l,r) in &self.inst_rules {
+            match (l,b) {
+                (BType::UI(name_l, args_l), BType::UI(name, args)) if name_l == name => {
+                    println!("Matching {} with {}", l, b);
+                    let mut matches: HashMap<String,VType> = HashMap::new();
+                    for (a_l,a) in args_l.iter().zip(args) {
+                        match a_l.clone().unwrap_base().unwrap().get_ta() {
+                            Some(s) => {
+                                matches.insert(s.clone(), a.clone());
+                            },
+                            None => {}
+                        }
+                    }
+                    let mut args = Vec::new();
+                    args.push(r.clone().expand_types(&matches));
+                    println!("Subbing types {:?} for {:?}", &args, &self.tas);
+                    let body = self.body.clone().expand_types_from_call(
+                        &args,
+                        &self.tas
+                    ).unwrap();
+                    println!("Inst axiom body: {:?}", &body);
+                    return Some(body);
+                }
+                (l,b) => {
+                    println!("Did not match {} with {}", l, b);
+                }
+            }
+        }
+        None
     }
 }

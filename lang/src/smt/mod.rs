@@ -82,6 +82,14 @@ impl CheckedSig {
     pub fn add_axiom<S1: ToString>(&mut self, axiom: S1) {
         self.0.add_axiom(axiom)
     }
+    pub fn add_axiom2<const N1: usize, const N2: usize>(
+        &mut self,
+        def: &str,
+        tas: [&str; N1],
+        inst_rules: [(&str,&str); N2],
+    ) {
+        self.0.add_axiom2(def, tas, inst_rules)
+    }
     pub fn add_fun<S1: ToString, S2: ToString>(
         &mut self,
         name: S1,
@@ -226,10 +234,11 @@ fn query_negative_c(c: Comp, sig: &CheckedSig) -> Response {
     println!("Checking {} cases...", p.cases.len());
     assert!(p.is_single_case(), "Should only be single-case props so far.");
     p.negate(sig.inner_sig());
-    let sig_graph = sig.inner_sig().sort_graph();
+    // let sig_graph = sig.inner_sig().sort_graph();
     for (name, case) in p.cases {
-        let mut g = sig_graph.clone();
-        g.append(case.sort_graph());
+        //let mut g = sig_graph.clone();
+        // g.append(case.sort_graph());
+        let g = sig.inner_sig().sort_graph_combined(&case);
         let cycles = g.get_cycles();
         if cycles.len() > 0 {
             println!("Sort cycles detected in case [{}]:", name);

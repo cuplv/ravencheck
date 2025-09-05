@@ -37,7 +37,7 @@ pub fn verify(input: TokenStream) -> TokenStream {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnAttr {
     Annotate(String),
-    Assume,
+    Assume(Vec<(Type,Type)>),
     Declare,
     Define,
     Verify,
@@ -53,7 +53,7 @@ impl RvnAttr {
         match &attr.meta {
             Meta::Path(p) if p.segments.len() == 1 => {
                 match path_to_one_str(p).as_str() {
-                    "assume" => Some(RvnAttr::Assume),
+                    "assume" => Some(RvnAttr::Assume(Vec::new())),
                     "declare" => Some(RvnAttr::Declare),
                     "define" => Some(RvnAttr::Define),
                     "verify" => Some(RvnAttr::Verify),
@@ -65,6 +65,17 @@ impl RvnAttr {
                     "annotate" => {
                         let fun_name: Ident = l.parse_args().unwrap();
                         Some(RvnAttr::Annotate(fun_name.to_string()))
+                    }
+                    "assume" => {
+                        let rule: Type = l.parse_args().unwrap();
+                        match rule {
+                            Type::Tuple(t) => {
+                                let a = t.elems[0].clone();
+                                let b = t.elems[1].clone();
+                                Some(RvnAttr::Assume(vec![(a,b)]))
+                            }
+                            t => todo!("Can't handle inst rule {:?}", t),
+                        }
                     }
                     _ => None,
                 }
@@ -105,7 +116,7 @@ fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum SigItem {
     Annotation(String, Block),
-    Axiom(Block),
+    Axiom(Block, Vec<Ident>, Vec<(Type,Type)>),
     Goal(Block),
     TypeAlias(Ident,Type),
     DFun(Ident, Vec<PatType>, Type, Block),
@@ -163,9 +174,21 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
                         );
                         false
                     }
-                    Some(RvnAttr::Assume) => {
+                    Some(RvnAttr::Assume(rules)) => {
+                        let mut tas = Vec::new();
+                        for g in f.sig.generics.params.iter() {
+                            match g {
+                                GenericParam::Type(tp) =>
+                                    tas.push(tp.ident.clone()),
+                                _ => {}
+                            }
+                        }
                         sig_items.push(
-                            SigItem::Axiom(*(f.block).clone())
+                            SigItem::Axiom(
+                                *(f.block).clone(),
+                                tas,
+                                rules,
+                            )
                         );
                         false
                     }
@@ -317,10 +340,19 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.add_annotation(#f, #b_tks);
                         }).into()).unwrap()
                     }
-                    SigItem::Axiom(b) => {
+                    SigItem::Axiom(b,tas,rules) => {
                         let b_tks = format!("{}", quote! { #b });
+                        let tas: Vec<String> = tas.into_iter().map(|i| {
+                            format!("{}", quote! { #i })
+                        }).collect();
+                        let rules: Vec<(String,String)> = rules.into_iter().map(|(a,b)| {
+                            (format!("{}", quote! { #a }), format!("{}", quote! { #b }))
+                        }).collect();
+                        let rules: Vec<_> = rules.into_iter().map(|(a,b)| {
+                            quote! { (#a, #b) }
+                        }).collect();
                         syn::parse((quote! {
-                            sig.add_axiom(#b_tks);
+                            sig.add_axiom2(#b_tks, [#(#tas),*], [#(#rules),*]);
                         }).into()).unwrap()
                     }
                     SigItem::Goal(b) => {
