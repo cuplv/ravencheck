@@ -5,10 +5,12 @@ use crate::{
     BType,
     Comp,
     LogOpN,
+    Op,
     OpCode,
     OpMode,
     Sig,
     Val,
+    VName,
     VType,
 };
 
@@ -97,8 +99,13 @@ impl Comp {
                 match b {
                     BinderN::Call(_oc, _args) =>
                         todo!("relevant for BinderN::Call"),
-                    _ => todo!("relevant for BinderN"),
+                    b => todo!("relevant for BinderN {:?}", b),
                 }
+            }
+            Self::Ite(v, m1, m2) => {
+                rel = rel.union(v.relevant(sig));
+                rel = rel.union(m1.relevant(sig));
+                rel = rel.union(m2.relevant(sig));
             }
             Self::Return(..) => {},
             m => todo!("relevant for {:?}", m),
@@ -124,7 +131,29 @@ impl Val {
                     rel = rel.union(v.relevant(sig));
                 }
             }
-            Self::Var(..) => {},
+            Self::Var(name, types) => {
+                match name {
+                    VName::Manual(s) => {
+                        let code = OpCode {
+                            ident: s.clone(),
+                            types: types.clone(),
+                        };
+                        match sig.get_applied_op(&code) {
+                            Ok(Op::Const(op)) => {
+                                for t in op.vtype.flatten() {
+                                    rel = rel.add_base_type(
+                                        t.unwrap_base().unwrap()
+                                    );
+                                }
+                                rel = rel.add_oc(code);
+                            }
+                            Ok(op) => panic!("Found {:?} as a free value after normalization", &op),
+                            Err(..) => {},
+                        }
+                    }
+                    _ => {},
+                }
+            }
         }
         rel
     }
@@ -132,6 +161,8 @@ impl Val {
 
 impl Sig {
     pub fn relevant_with_axioms(&self, term: &Comp) -> (Relevant, Vec<Comp>) {
+        println!("Calling relevant_with_axioms on...");
+        println!("term: {:?}", &term);
         let mut relevant = term.relevant(self);
 
         let mut inst_axioms: Vec<Comp> = Vec::new();
@@ -152,6 +183,7 @@ impl Sig {
 
         // Add relevant items from axioms
         for a in &inst_axioms {
+            println!("axiom: {:?}", &a);
             relevant = relevant.union(a.relevant(self));
         }
 

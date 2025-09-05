@@ -210,8 +210,21 @@ impl Op {
                     op.axioms.into_iter().map(|a| a.expand_types(subs)).collect();
                 Op::Fun(op)
             }
-            Op::Pred(..) => todo!("expand_types for Op::Pred"),
-            Op::Rec(..) => todo!("expand_types for Op::Rec"),
+            Op::Pred(mut op) => {
+                op.inputs =
+                    op.inputs.into_iter().map(|t| t.expand_types(subs)).collect();
+                op.axioms =
+                    op.axioms.into_iter().map(|a| a.expand_types(subs)).collect();
+                Op::Pred(op)
+            }
+            Op::Rec(mut op) => {
+                op.inputs =
+                    op.inputs.into_iter().map(|t| t.expand_types(subs)).collect();
+                op.output = op.output.expand_types(subs);
+                op.axiom = op.axiom.expand_types(subs);
+                op.def = op.def.expand_types(subs);
+                Op::Rec(op)
+            }
             Op::Symbol(mut op) => {
                 op.inputs =
                     op.inputs.into_iter().map(|t| t.expand_types(subs)).collect();

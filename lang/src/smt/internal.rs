@@ -104,7 +104,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
 
     for code in relevant.ops() {
         let op_smt = code.render_smt();
-        println!("Declared {} as {}", code, op_smt);
+        // println!("Declared {} as {}", code, op_smt);
         match sig.get_applied_op(code).expect("relevant op should be defined") {
             Op::Const(p) => {
                 let sort = ctx.atom(format!(
@@ -115,6 +115,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                         .expect("const types must be base")
                         .render_smt(),
                 ));
+                println!("Declared {} as constant {}", code, op_smt);
                 ctx.declare_const(op_smt, sort)?;
             }
             Op::Symbol(p) => {
@@ -128,6 +129,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                         ctx.atom(format!("{}", s.render_smt()))
                     })
                     .collect();
+                println!("Declared {} as relation {}", code, op_smt);
                 ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
             }
             Op::Fun(p) => {
@@ -150,10 +152,11 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                         })
                         .collect();
                     ctx.declare_fun(
-                        op_smt,
+                        op_smt.clone(),
                         rel_type_atoms,
                         ctx.atom("Bool"),
                     )?;
+                    println!("Declared {} as absrel {}", code, op_smt);
 
                     let mut vgen = Gen::new();
                     let ixs = vgen.next_many(input_types.len());
@@ -231,6 +234,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                     ctx.assert(e[0])?;
                 }
             }
+            Op::Pred(..) => {}
             op => todo!("declare_sig for op {:?}", op),
         }
     }
@@ -295,31 +299,24 @@ pub fn check_sat_simple(
     term: &Comp,
     sig: &Sig,
 ) -> std::io::Result<Response> {
-    // See https://github.com/cvc5/cvc5/issues/6274
-    // for explanation of 3rd and 4th options.
-    //
-    // Without them, cvc5 will often return Unknown rather than Sat or
-    // Unsat.
-    let mut ctx = easy_smt::ContextBuilder::new()
-        .solver("cvc5", [
-            "--lang", "smt2",
-            "--full-saturate-quant",
-            "--finite-model-find",
-        ])
-        .build()?;
-    ctx.set_logic("ALL")?;
-    declare_sig(&mut ctx, sig, term)?;
-
-    // let term_normal = term.clone().normal_form(sig);
-    // // println!("Normal: {:?}", term_normal);
-    // let mut builder = Context::new(&mut ctx);
-    // let e = builder.smt(&term_normal)?;
-    // println!("SMT: {}", ctx.display(e[0]));
-    // ctx.assert(e[0])?;
-    // return ctx.check()
-
     let cases = term.clone().normal_form(sig);
+
     for (name,comp) in cases.into_iter() {
+        // See https://github.com/cvc5/cvc5/issues/6274
+        // for explanation of 3rd and 4th options.
+        //
+        // Without them, cvc5 will often return Unknown rather than Sat or
+        // Unsat.
+        let mut ctx = easy_smt::ContextBuilder::new()
+            .solver("cvc5", [
+                "--lang", "smt2",
+                "--full-saturate-quant",
+                "--finite-model-find",
+            ])
+            .build()?;
+        ctx.set_logic("ALL")?;
+        declare_sig(&mut ctx, sig, &comp)?;
+
         let mut builder = Context::new(&mut ctx);
         let e = builder.smt(&comp)?;
         println!("SMT case [{}]: {}", name.to_string(), ctx.display(e[0]));
@@ -411,15 +408,21 @@ impl <'a> Context<'a> {
 
     fn smt_val(&self, term: &Val) -> std::io::Result<SExpr> {
         match term {
-            // Normalized Vars do not have type args
-            Val::Var(n, _) => match self.get_assign(n) {
+            // Normalized Vars do not have type args, unless they are constants
+            Val::Var(n, types) => match self.get_assign(n) {
                 Some(Assignment::Defined(e)) =>
                     Ok(e.clone()),
                 Some(Assignment::Quantified) =>
                     Ok(self.ctx.atom(n.as_string())),
                 // Type-checking should have caught actual unbound
-                // variables.
-                None => panic!("Unbound var {:?}", n),
+                // variables.  This must be a constant.
+                None => {
+                    let code = OpCode {
+                        ident: n.clone().unwrap_manual(),
+                        types: types.clone(),
+                    };
+                    Ok(self.ctx.atom(code.render_smt()))
+                }
             }
             Val::Literal(Literal::LogTrue) =>
                 Ok(self.ctx.true_()),
