@@ -11,6 +11,16 @@ mod my_mod {
     }
 
     #[declare]
+    fn empty_poly<E: Eq + Hash>() -> HashSet<E> {
+        HashSet::new()
+    }
+
+    #[assume((HashSet<E>, E))]
+    fn empty_no_member<E: Eq + Hash>() -> bool {
+        forall(|e: E| !member_poly::<E>(e, empty_poly::<E>()))
+    }
+
+    #[declare]
     fn member_u32(e: u32, s: HashSet<u32>) -> bool {
         member_poly::<u32>(e,s)
     }
@@ -22,6 +32,16 @@ mod my_mod {
                 member_poly::<E>(e, s1)
                     != member_poly::<E>(e, s2)
             })
+        })
+    }
+
+    #[verify]
+    fn empty_eq() -> bool {
+        forall(|s: HashSet<u32>| {
+            implies(
+                forall(|e: u32| !member_poly::<u32>(e,s)),
+                s == empty_poly::<u32>(),
+            )
         })
     }
 
@@ -40,7 +60,7 @@ mod my_mod {
         forall(|e: u32, s1: HashSet<u32>, s2: HashSet<u32>| {
             implies(
                 s1 == s2 && member_poly::<u32>(e,s1),
-                !member_poly::<u32>(e,s2),
+                member_poly::<u32>(e,s2),
             )
         })
     }
