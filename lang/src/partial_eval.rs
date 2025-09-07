@@ -227,21 +227,26 @@ impl Comp {
                                         self = Comp::return1(ret_v);
                                     }
                                     Ok(Op::Fun(op)) => {
-                                        // First, we need to flatten the
-                                        // output type.
-                                        let ts = op.output.clone().flatten();
-                                        // We generate an ident for each
-                                        // atomic type.
-                                        let xs = gen.next_many(ts.len());
-                                        // Then make a pattern to bind each ident.
-                                        let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
-                                        // And a return value that gathers
-                                        // all of the bound idents into a
-                                        // tuple (with type matching the
-                                        // original output type).
-                                        let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                        anti_stack.push(Rebuild::Call(oc, vs, ps));
-                                        self = Comp::return1(ret_v);
+                                        if vs.len() == 0 {
+                                            let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            self = Comp::return1(ret_v);
+                                        } else {
+                                            // First, we need to flatten the
+                                            // output type.
+                                            let ts = op.output.clone().flatten();
+                                            // We generate an ident for each
+                                            // atomic type.
+                                            let xs = gen.next_many(ts.len());
+                                            // Then make a pattern to bind each ident.
+                                            let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
+                                            // And a return value that gathers
+                                            // all of the bound idents into a
+                                            // tuple (with type matching the
+                                            // original output type).
+                                            let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
+                                            anti_stack.push(Rebuild::Call(oc, vs, ps));
+                                            self = Comp::return1(ret_v);
+                                        }
                                     }
                                     Err(e) => panic!("Invalid OpCode '{}': {}", oc, e),
                                     // // If undefined, assume it is a
