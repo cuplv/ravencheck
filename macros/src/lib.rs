@@ -40,6 +40,7 @@ enum RvnAttr {
     Assume(Vec<(Type,Type)>),
     Declare,
     Define,
+    DefineRec,
     Verify,
 }
 
@@ -56,6 +57,7 @@ impl RvnAttr {
                     "assume" => Some(RvnAttr::Assume(Vec::new())),
                     "declare" => Some(RvnAttr::Declare),
                     "define" => Some(RvnAttr::Define),
+                    "define_rec" => Some(RvnAttr::DefineRec),
                     "verify" => Some(RvnAttr::Verify),
                     _ => None,
                 }
@@ -119,7 +121,7 @@ enum SigItem {
     Axiom(Block, Vec<Ident>, Vec<(Type,Type)>),
     Goal(Block),
     TypeAlias(Ident,Type),
-    DFun(Ident, Vec<PatType>, Type, Block),
+    DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block),
     Type(Ident, usize),
     UFun(String, Vec<Ident>, Vec<PatType>, Type),
 }
@@ -226,6 +228,16 @@ You must give a return type when using 'declare'"
                     }
                     Some(RvnAttr::Define) => {
                         let name = f.sig.ident.clone();
+
+                        let mut targs = Vec::new();
+                        for g in f.sig.generics.params.iter() {
+                            match g {
+                                GenericParam::Type(tp) =>
+                                    targs.push(tp.ident.clone()),
+                                _ => {}
+                            }
+                        }
+
                         let inputs = f.sig.inputs.iter().cloned().map(|arg| {
                             match arg {
                                 FnArg::Typed(a) => a,
@@ -243,7 +255,7 @@ You must give a return type when using 'define'"
                         let body = (*f.block).clone();
 
                         sig_items.push(
-                            SigItem::DFun(name, inputs, output, body)
+                            SigItem::DFun(name, targs, inputs, output, body)
                         );
                         true
                     }
@@ -264,7 +276,22 @@ You must give a return type when using 'define'"
             Item::Struct(i) => {
                 match pop_rvn_attr(&mut i.attrs) {
                     Some(RvnAttr::Declare) => {
-                        sig_items.push(SigItem::Type(i.ident.clone(), 0));
+                        let mut num_types = 0;
+                        for a in i.generics.params.iter() {
+                            match a {
+                                GenericParam::Lifetime(..) =>
+                                    panic!("Lifetime params on declared structs are not supported ({})", i.ident),
+                                GenericParam::Type(..) => {
+                                    num_types = num_types + 1;
+                                }
+                                GenericParam::Const(..) =>
+                                    panic!("Const params on declared structs are not supported ({})", i.ident),
+                            }
+                        }
+                        sig_items.push(SigItem::Type(
+                            i.ident.clone(),
+                            num_types,
+                        ));
                     }
                     Some(a) => panic!(
                         "attr {:?} cannot not be used on a struct definition",
@@ -374,13 +401,16 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.add_alias_from_string(#i_tks, #ty_tks);
                         }).into()).unwrap()
                     }
-                    SigItem::DFun(name, inputs, _output, body) => {
+                    SigItem::DFun(name, targs, inputs, _output, body) => {
                         let name_tk: String = format!("{}", name);
+                        let targs: Vec<String> = targs.into_iter().map(|i| {
+                            format!("{}", quote! { #i })
+                        }).collect();
                         let body_tk: String = format!("{}", quote! {
                             |#(#inputs),*| #body
                         });
                         syn::parse((quote! {
-                            sig.add_fun(#name_tk, #body_tk);
+                            sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
                         }).into()).unwrap()
                     }
                     SigItem::UFun(name, targs, inputs, output) => {

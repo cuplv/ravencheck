@@ -133,8 +133,10 @@ impl Sig {
             Some((tas, op)) if targs.len() == tas.len() => {
                 Ok(op.clone().expand_types_from_call(targs, tas).unwrap())
             }
-            Some(_) =>
-                Err(format!("Wrong number of type args for op '{}'", name)),
+            Some((tas, _)) => {
+                let targs_s: Vec<String> = targs.iter().map(|t| t.render()).collect();
+                Err(format!("Wrong number of type args ({:?}) for op '{}', expected {:?}", targs_s, name, tas))
+            }
             None => Err(format!("Op '{}' is undefined", name)),
         }
     }

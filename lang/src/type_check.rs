@@ -260,14 +260,14 @@ impl Pattern {
 }
 
 impl Sig {
-    fn get_type(&self, oc: &OpCode) -> Result<VType, TypeError> {
+    fn get_type(&self, oc: &OpCode, tas: Vec<String>) -> Result<VType, TypeError> {
         match self.get_applied_op(oc) {
             Ok(op) => match op {
                 Op::Const(op) => {
                     return Ok(op.vtype)
                 }
                 Op::Direct(m) => {
-                    match m.type_of(TypeContext::new(self.clone()))? {
+                    match m.type_of(TypeContext::new_types(self.clone(), tas))? {
                         CType::Return(t) => return Ok(t),
                         _ => return Err(format!(
                             "signature function \"{}\" did not have a computation type",
@@ -383,7 +383,7 @@ impl Val {
                                 ident: s.clone(),
                                 types: types.clone(),
                             };
-                            tc.sig.get_type(&oc)
+                            tc.sig.get_type(&oc, tc.type_bindings.clone())
                         }
                         VName::Auto(_n) => panic!("Unbound auto var {:?}", x),
                     }
