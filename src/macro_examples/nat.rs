@@ -1,0 +1,87 @@
+#[crate::check_module(crate)]
+#[declare_types(u32)]
+#[allow(dead_code)]
+mod my_mod {
+    use std::marker::PhantomData;
+
+    #[declare]
+    #[derive(Copy,Clone,PartialEq,Eq,Hash)]
+    struct Nat<T>{
+        value: usize,
+        tag: PhantomData<T>,
+    }
+
+    impl<T> Nat<T> {
+        pub fn new(n: usize) -> Nat<T> {
+            Nat { value: n, tag: PhantomData }
+        }
+    }
+
+    #[declare]
+    fn zero<T>() -> Nat<T> { Nat::new(0) }
+
+    #[declare]
+    fn le<T>(a: Nat<T>, b: Nat<T>) -> bool {
+        a.value <= b.value
+    }
+
+    #[define]
+    fn lt<T>(a: Nat<T>, b: Nat<T>) -> bool
+    where T: std::cmp::Eq + Copy
+    {
+        le::<T>(a,b) && a != b
+    }
+
+    #[define]
+    fn ge<T>(a: Nat<T>, b: Nat<T>) -> bool
+    {
+        le::<T>(b,a)
+    }
+
+    #[define]
+    fn gt<T>(a: Nat<T>, b: Nat<T>) -> bool
+    where T: std::cmp::Eq + Copy
+    {
+        ge::<T>(a,b) && a != b
+    }
+
+    #[declare]
+    fn dec<T>(a: Nat<T>) -> Nat<T> {
+        if a.value == 0 {
+            Nat::new(0)
+        } else {
+            Nat::new(a.value - 1)
+        }
+    }
+
+    #[declare]
+    fn inc<T>(a: Nat<T>) -> Nat<T> {
+        Nat::new(a.value + 1)
+    }
+
+    #[define_rec]
+    fn add<T>(a: Nat<T>, b: Nat<T>) -> Nat<T>
+    where T: std::cmp::Eq + Copy
+    {
+        if a == zero::<T>() {
+            b
+        } else {
+            add::<T>(dec::<T>(a), b)
+        }
+    }
+
+    #[annotate(add)]
+    fn add_monotonic<T>() -> bool {
+        |a: Nat<T>, b: Nat<T>|
+        |c: Nat<T>|
+        le::<T>(a,c) && le::<T>(a,b)
+    }
+
+    #[annotate(add)]
+    fn add_zeros<T>() -> bool {
+        |a: Nat<T>, b: Nat<T>|
+        |c: Nat<T>|
+        implies(a == zero::<T>(), b == c)
+        && implies(b == zero::<T>(), a == c)
+    }
+}
