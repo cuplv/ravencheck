@@ -130,6 +130,7 @@ enum SigItem {
     DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block, bool),
     Type(Ident, usize),
     UFun(String, Vec<Ident>, Vec<PatType>, Type),
+    UConst(String, Type),
 }
 
 fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
@@ -293,6 +294,15 @@ You must give a return type when using 'define'"
             }
             Item::Const(i) => {
                 match pop_rvn_attr(&mut i.attrs) {
+                    Some(RvnAttr::Declare) => {
+                        sig_items.push(
+                            SigItem::UConst(
+                                i.ident.to_string(),
+                                *(i.ty).clone()
+                            )
+                        );
+                        true
+                    }
                     _ => true,
                 }
             }
@@ -465,6 +475,13 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.declare_op(#name, [#(#targs),*], [#(#inputs),*], #output);
                         };
                         // println!("{}", tokens);
+                        syn::parse2(tokens).unwrap()
+                    }
+                    SigItem::UConst(name, ty) => {
+                        let output: String = format!("{}", quote! { #ty });
+                        let tokens = quote! {
+                            sig.declare_const(#name, #output);
+                        };
                         syn::parse2(tokens).unwrap()
                     }
                 }

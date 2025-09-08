@@ -152,6 +152,9 @@ Error in type-checking definition of \"{}\": {:?}",
     ) {
         self.0.declare_op(name, targs, inputs, output);
     }
+    pub fn declare_const(&mut self, name: &str, output: &str) {
+        self.0.declare_const(name, output);
+    }
     pub fn add_annotation(&mut self, name: &str, body: &str) {
         self.0.add_annotation(name, body);
     }

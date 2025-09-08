@@ -372,6 +372,10 @@ Type error in def of \"{}\": {:?}",
         self.ops.push((name.to_string(), targs, op));
     }
 
+    pub fn declare_const(&mut self, name: &str, output: &str) {
+        self.add_constant(name, output);
+    }
+
     pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, S4: ToString, const N1: usize, const N2: usize>(
         &mut self,
         name: S1,
