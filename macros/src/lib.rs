@@ -37,7 +37,7 @@ pub fn verify(input: TokenStream) -> TokenStream {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnAttr {
     Annotate(String),
-    Assume(Vec<(Type,Type)>),
+    Assume(Vec<(Type,Vec<Type>)>),
     AssumeFor(String),
     Declare,
     Define(bool),
@@ -73,8 +73,19 @@ impl RvnAttr {
                         match rule {
                             Type::Tuple(t) => {
                                 let a = t.elems[0].clone();
-                                let b = t.elems[1].clone();
-                                Some(RvnAttr::Assume(vec![(a,b)]))
+                                match t.elems[1].clone() {
+                                    Type::Tuple(bs) => {
+                                        Some(RvnAttr::Assume(vec![(
+                                            a,
+                                            bs.elems.iter().cloned().collect(),
+                                        )]))
+                                    }
+                                    b => {
+                                        Some(RvnAttr::Assume(vec![(a,vec![b])]))
+                                    }
+                                }
+                                // let b = t.elems[1].clone();
+                                // Some(RvnAttr::Assume(vec![(a,b)]))
                             }
                             t => todo!("Can't handle inst rule {:?}", t),
                         }
@@ -122,7 +133,7 @@ fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum SigItem {
     Annotation(String, String, Block),
-    Axiom(Block, Vec<Ident>, Vec<(Type,Type)>),
+    Axiom(Block, Vec<Ident>, Vec<(Type,Vec<Type>)>),
     FunctionAxiom(String, String, Block),
     Goal(String, Block),
     TypeAlias(Ident,Type),
@@ -411,8 +422,10 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                         let tas: Vec<String> = tas.into_iter().map(|i| {
                             format!("{}", quote! { #i })
                         }).collect();
-                        let rules: Vec<(String,String)> = rules.into_iter().map(|(a,b)| {
-                            (format!("{}", quote! { #a }), format!("{}", quote! { #b }))
+                        let rules: Vec<(String,_)> = rules.into_iter().map(|(a,bs)| {
+                            let bs: Vec<String> = bs.into_iter().map(|b| format!("{}", quote! { #b })).collect();
+                            (format!("{}", quote! { #a }),
+                             quote! { vec![#(#bs),*] })
                         }).collect();
                         let rules: Vec<_> = rules.into_iter().map(|(a,b)| {
                             quote! { (#a, #b) }

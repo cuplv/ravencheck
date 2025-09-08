@@ -44,8 +44,41 @@ impl Relevant {
         self.ops.insert(OpCode{ident,types});
         self
     }
-    pub fn add_oc(mut self, oc: OpCode) -> Self {
-        self.ops.insert(oc);
+    pub fn add_oc(mut self, oc: OpCode, sig: &Sig) -> Self {
+        self.ops.insert(oc.clone());
+        match sig.get_applied_op(&oc).unwrap() {
+            Op::Const(op) => {
+                self = self.add_base_type(op.vtype.unwrap_base().unwrap());
+            }
+            Op::Fun(op) => {
+                for i in op.inputs {
+                    for t in i.flatten() {
+                        self = self.add_base_type(t.unwrap_base().unwrap());
+                    }
+                }
+                for t in op.output.flatten() {
+                    self = self.add_base_type(t.unwrap_base().unwrap());
+                }
+            }
+            Op::Rec(op) => {
+                for i in op.inputs {
+                    for t in i.flatten() {
+                        self = self.add_base_type(t.unwrap_base().unwrap());
+                    }
+                }
+                for t in op.output.flatten() {
+                    self = self.add_base_type(t.unwrap_base().unwrap());
+                }
+            }
+            Op::Symbol(op) => {
+                for i in op.inputs {
+                    for t in i.flatten() {
+                        self = self.add_base_type(t.unwrap_base().unwrap());
+                    }
+                }
+            }
+            _ => {}
+        }
         self
     }
     pub fn base_types(&self) -> &HashSet<BType> {
@@ -79,7 +112,7 @@ impl Comp {
                             LogOpN::Or => {},
                             LogOpN::And => {},
                             LogOpN::Pred(code,_) => {
-                                rel = rel.add_oc(code.clone());
+                                rel = rel.add_oc(code.clone(), sig);
                             }
                         }
                     }
@@ -121,7 +154,7 @@ impl Val {
             Self::Literal(..) => {},
             Self::OpCode(om, oc) => match om {
                 OpMode::Const | OpMode::ZeroArgAsConst => {
-                    rel = rel.add_oc(oc.clone());
+                    rel = rel.add_oc(oc.clone(), sig);
                 }
                 OpMode::RelAbs => panic!("free RelAbs should be gone before checking 'relevant'"),
             }
@@ -145,7 +178,7 @@ impl Val {
                                         t.unwrap_base().unwrap()
                                     );
                                 }
-                                rel = rel.add_oc(code);
+                                rel = rel.add_oc(code, sig);
                             }
                             Ok(op) => panic!("Found {:?} as a free value after normalization", &op),
                             Err(..) => {},
@@ -210,7 +243,10 @@ impl Axiom {
                         }
                     }
                     let mut args = Vec::new();
-                    args.push(r.clone().expand_types(&matches));
+                    for t in r.clone() {
+                        args.push(t.expand_types(&matches));
+                    }
+                    // args.push(r.clone().expand_types(&matches));
                     println!("Subbing types {:?} for {:?}", &args, &self.tas);
                     let body = self.body.clone().expand_types_from_call(
                         &args,

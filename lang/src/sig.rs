@@ -442,7 +442,7 @@ pub enum Op {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Axiom {
     pub tas: Vec<String>,
-    pub inst_rules: Vec<(BType,VType)>,
+    pub inst_rules: Vec<(BType,Vec<VType>)>,
     pub body: Comp,
 }
 

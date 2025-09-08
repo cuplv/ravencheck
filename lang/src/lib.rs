@@ -146,7 +146,7 @@ impl Sig {
         def: S1,
     ) {
         let tas: [String; 0] = [];
-        let inst_rules: [(String,String); 0] = [];
+        let inst_rules: [(String,Vec<String>); 0] = [];
         self.add_axiom2(def, tas, inst_rules);
     }
 
@@ -154,7 +154,7 @@ impl Sig {
         &mut self,
         def: S1,
         tas: [S2; N1],
-        inst_rules: [(S3,S3); N2],
+        inst_rules: [(S3,Vec<S3>); N2],
     ) {
         let mut tas_parsed = Vec::new();
         for t in &tas {
@@ -162,10 +162,12 @@ impl Sig {
         }
 
         let mut inst_rules_parsed = Vec::new();
-        for (a,b) in &inst_rules {
+        for (a,bs) in &inst_rules {
             let a = BType::from_string(a.to_string()).unwrap();
-            let b = VType::from_string(b.to_string()).unwrap();
-            inst_rules_parsed.push((a,b));
+            let bs = bs.iter().map(|b| {
+                VType::from_string(b.to_string()).unwrap()
+            }).collect();
+            inst_rules_parsed.push((a,bs));
         }
 
         let axiom = match parse_str_cbpv(&def.to_string()) {

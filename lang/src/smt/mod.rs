@@ -89,7 +89,7 @@ impl CheckedSig {
         &mut self,
         def: &str,
         tas: [&str; N1],
-        inst_rules: [(&str,&str); N2],
+        inst_rules: [(&str,Vec<&str>); N2],
     ) {
         self.0.add_axiom2(def, tas, inst_rules)
     }
