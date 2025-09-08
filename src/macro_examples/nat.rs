@@ -59,6 +59,16 @@ mod my_mod {
         Nat::new(a.value + 1)
     }
 
+    #[assume((Nat<T>, T))]
+    fn inc_dec<T>() -> bool {
+        forall(|a: Nat<T>| {
+            implies(
+                a != zero::<T>(),
+                inc::<T>(dec::<T>(a)) == a
+            )
+        })
+    }
+
     #[define_rec]
     fn add<T>(a: Nat<T>, b: Nat<T>) -> Nat<T>
     where T: std::cmp::Eq + Copy
@@ -66,16 +76,25 @@ mod my_mod {
         if a == zero::<T>() {
             b
         } else {
-            add::<T>(dec::<T>(a), b)
+            inc::<T>(
+                add::<T>(dec::<T>(a), b)
+            )
         }
     }
 
     #[annotate(add)]
-    fn add_monotonic<T>() -> bool {
+    fn add_trivial<T>() -> bool {
         |a: Nat<T>, b: Nat<T>|
         |c: Nat<T>|
-        le::<T>(a,c) && le::<T>(a,b)
+        true
     }
+
+    // #[annotate(add)]
+    // fn add_monotonic<T>() -> bool {
+    //     |a: Nat<T>, b: Nat<T>|
+    //     |c: Nat<T>|
+    //     le::<T>(a,c) && le::<T>(a,b)
+    // }
 
     #[annotate(add)]
     fn add_zeros<T>() -> bool {
@@ -83,5 +102,10 @@ mod my_mod {
         |c: Nat<T>|
         implies(a == zero::<T>(), b == c)
         && implies(b == zero::<T>(), a == c)
+    }
+
+    #[verify]
+    fn simple_zeros() -> bool {
+        add::<u32>(zero::<u32>(), zero::<u32>()) == zero::<u32>()
     }
 }

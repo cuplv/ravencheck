@@ -55,7 +55,7 @@ pub mod my_mod {
         Set(s3)
     }
 
-    #[annotate(union)]
+    #[assume_for(union)]
     fn union_def() -> bool {
         |a: Set, b: Set|
         |c: Set|

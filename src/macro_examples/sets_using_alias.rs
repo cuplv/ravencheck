@@ -69,7 +69,7 @@ mod my_mod {
 
     // This is a special form of 'assume' that uses the function body
     // as an axiom on (a,b,c) that must be true when union(a,b) = c.
-    #[annotate(union)]
+    #[assume_for(union)]
     fn union_def() -> bool {
         // Function input arguments
         |a: MySet, b: MySet|
@@ -100,7 +100,7 @@ mod my_mod {
         s
     }
 
-    #[annotate(insert)]
+    #[assume_for(insert)]
     fn insert_def() -> bool {
         |e: u32, s1: MySet|
         |s2: MySet|

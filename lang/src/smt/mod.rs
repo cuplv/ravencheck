@@ -24,6 +24,9 @@ impl CheckedSig {
     pub fn assert_valid<T: ToString>(&self, s: T) {
         assert_valid_with(self, s)
     }
+    pub fn assert_valid_t<T: ToString>(&self, title: &str, s: T) {
+        assert_valid_with_t(self, title, s)
+    }
     pub fn assert_invalid<T: ToString>(&self, s: T) {
         assert_invalid_with(self, s)
     }
@@ -151,6 +154,77 @@ Error in type-checking definition of \"{}\": {:?}",
     }
     pub fn add_annotation(&mut self, name: &str, body: &str) {
         self.0.add_annotation(name, body);
+    }
+    pub fn add_checked_annotation(&mut self, title: &str, name: &str, body: &str) {
+        let mut potential_sig = self.0.clone();
+        potential_sig.add_annotation(name, body);
+
+        let (tas,op) = potential_sig
+            .ops_map()
+            .get(&name.to_string())
+            .unwrap()
+            .clone();
+
+        let op = match op {
+            Op::Rec(op) => op,
+            _ => panic!(
+                "Tried to add checked annotation to non-rec {}", name
+            ),
+        };
+
+        // Add uninterpreted types for each type abstraction
+        let mut v_sig = potential_sig.clone();
+        let mut type_args = Vec::new();
+        for t in &tas {
+            v_sig.add_sort(t);
+            type_args.push(VType::ui(t));
+        }
+
+        let mut gn = Gen::new();
+        op.def.advance_gen(&mut gn);
+        for a in &op.axioms {
+            a.advance_gen(&mut gn);
+        }
+        let mut input_args: Vec<Val> = Vec::new();
+        let mut q_sig: Vec<(VName, VType)> = Vec::new();
+        for i in op.inputs {
+            let x = gn.next();
+            input_args.push(x.clone().val());
+            q_sig.push((x, i.clone()))
+        }
+        let m =
+            Builder::lift(op.def.clone())
+            .apply_rt(input_args.clone())
+            .seq_gen(move |x| {
+                Builder::lift(op.axioms[op.axioms.len() - 1].clone())
+                    .apply_rt(input_args)
+                    .apply_rt(vec![x])
+            })
+            .quant(Quantifier::Forall, q_sig)
+            .build(&mut gn);
+
+        let v_sig = CheckedSig(v_sig);
+        match query_negative_c(m, &v_sig) {
+            Response::Unsat => {},
+            Response::Sat => {
+                panic!(
+                    "Annotation '{}' on recursive function '{}' is invalid",
+                    title,
+                    name.to_string(),
+                )
+            }
+            Response::Unknown => {
+                panic!(
+                    "Verification of '{}' for '{}' cannot proceed",
+                    title,
+                    name.to_string(),
+                )
+            }
+        }
+
+        self.0 = potential_sig;
+        
+        // todo!("add_checked_annotation")
     }
     pub fn add_op_pred<S1: ToString, S2: ToString>(
         &mut self,
@@ -348,6 +422,14 @@ verification conditions are not valid, counterexample was found"
         Response::Unknown => panic!("
 verification could not be completed (sort cycle?)"
         ),
+    }
+    // assert_eq!(query_negative(s, sig), Response::Unsat);
+}
+pub fn assert_valid_with_t<T: ToString>(sig: &CheckedSig, title: &str, s: T) {
+    match query_negative(s, sig) {
+        Response::Unsat => {},
+        Response::Sat => panic!("verification goal {} is invalid", title),
+        Response::Unknown => panic!("verification goal {} could not be checked (sort cycle?)", title),
     }
     // assert_eq!(query_negative(s, sig), Response::Unsat);
 }

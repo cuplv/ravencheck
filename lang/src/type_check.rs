@@ -365,7 +365,9 @@ impl Val {
                 Literal::LogTrue => Ok(VType::prop()),
                 Literal::LogFalse => Ok(VType::prop()),
             }
-            Self::OpCode(_om, _oc) => panic!("OpCode values should not exist at type-check time."),
+            Self::OpCode(om, oc) => panic!(
+                "OpCode values ({:?}, {:?}) should not exist at type-check time.", om, oc
+            ),
             Self::Thunk(m) => Ok(VType::Thunk(Box::new(m.type_of(tc)?))),
             Self::Tuple(vs) => {
                 let mut ts = Vec::new();

@@ -4,6 +4,7 @@ use crate::{
     Binder1,
     Builder,
     BType,
+    FunOp,
     LogOpN,
     Comp,
     Gen,
@@ -67,30 +68,127 @@ impl OpCode {
     }
 }
 
+fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: FunOp) -> std::io::Result<()> {
+    let op_smt = code.render_smt();
+    if p.inputs.len() == 0 {
+        let sort = ctx.atom(format!(
+            "{}",
+            p.output
+                .clone()
+                .unwrap_base()
+                .expect("declared zero-arg functions must have base output type")
+                .render_smt(),
+        ));
+        println!("Declared {} as constant (zero-arg conversion) {}", code, op_smt);
+        ctx.declare_const(op_smt, sort)?;
+        // todo!("Declare zero-arg fun");
+    } else {
+
+        // For now, if there are any higher-order arguments,
+        // we omit the functionality axiom.
+        if !p.inputs.iter().any(|i| i.contains_thunk()) {
+            let input_types: Vec<VType> =
+                VType::flatten_many(p.inputs.clone());
+            let output_types: Vec<VType> =
+                VType::flatten(p.output.clone());
+            let rel_type_atoms: Vec<SExpr> = input_types
+                .iter()
+                .chain(output_types.iter())
+                .map(|sort| {
+                    let s = sort
+                        .clone()
+                        .unwrap_base()
+                        .expect("sig types must be atoms");
+                    ctx.atom(format!("{}", s.render_smt()))
+                })
+                .collect();
+            ctx.declare_fun(
+                op_smt.clone(),
+                rel_type_atoms,
+                ctx.atom("Bool"),
+            )?;
+            println!("Declared {} as absrel {}", code, op_smt);
+    
+            let mut vgen = Gen::new();
+            let ixs = vgen.next_many(input_types.len());
+            let oxs1 = vgen.next_many(output_types.len());
+            let oxs2 = vgen.next_many(output_types.len());
+            let q_sig: Vec<(VName, VType)> = ixs
+                .iter()
+                .cloned()
+                .zip(input_types.iter().cloned())
+                .chain(
+                    oxs1
+                       .iter()
+                       .cloned()
+                       .zip(output_types.iter().cloned())
+                )
+                .chain(
+                    oxs2
+                       .iter()
+                       .cloned()
+                       .zip(output_types.iter().cloned())
+                )
+                .collect();
+    
+            let args1: Vec<Val> = ixs
+                .iter()
+                .cloned()
+                .chain(oxs1.iter().cloned())
+                .map(|i| i.val())
+                .collect();
+            let args2: Vec<Val> = ixs
+                .iter()
+                .cloned()
+                .chain(oxs2.iter().cloned())
+                .map(|i| i.val())
+                .collect();
+    
+            let otup1: Builder = Builder::tuple(
+                oxs1
+                    .iter()
+                    .cloned()
+                    .map(|x| Builder::return_(x.val()))
+                    .collect::<Vec<Builder>>()
+            );
+            let otup2: Builder = Builder::tuple(
+                oxs1
+                    .iter()
+                    .cloned()
+                    .map(|x| Builder::return_(x.val()))
+                    .collect::<Vec<Builder>>()
+            );
+    
+            let fun_axiom = Builder::log_op(
+                LogOpN::Or,
+                [
+                    Builder::log_op(
+                        LogOpN::And,
+                        [
+                            Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
+                                .apply_v(args1),
+                            Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
+                                .apply_v(args2),
+                        ]
+                    )
+                        .not(),
+                    otup1.eq_ne(true, otup2),
+                ]
+            )
+                .quant(Quantifier::Forall, q_sig)
+                .build(&mut vgen)
+                .normal_form_single_case(&sig, &mut vgen);
+    
+            let mut builder = Context::new(ctx);
+            let e = builder.smt(&fun_axiom)?;
+            println!("SMT Axiom [Rel]: {}", ctx.display(e[0]));
+            ctx.assert(e[0])?;
+        }
+    }
+    Ok(())
+}
+
 fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::Result<()> {
-    // let mut relevant = term.relevant(sig);
-
-    // let mut inst_axioms: Vec<Comp> = Vec::new();
-    // for a in &sig.axioms {
-    //     if a.tas.len() == 0 {
-    //         inst_axioms.push(a.body.clone());
-    //     } else {
-    //         for t in relevant.base_types() {
-    //             match a.inst_for(t) {
-    //                 Some(a) => {
-    //                     inst_axioms.push(a);
-    //                 }
-    //                 None => {}
-    //             }
-    //         }
-    //     }
-    // }
-
-    // // Add relevant items from axioms
-    // for a in &inst_axioms {
-    //     relevant = relevant.union(a.relevant(sig));
-    // }
-
     let (relevant, inst_axioms) = sig.relevant_with_axioms(term);
 
     for t in relevant.base_types() {
@@ -104,7 +202,6 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
 
     for code in relevant.ops() {
         let op_smt = code.render_smt();
-        // println!("Declared {} as {}", code, op_smt);
         match sig.get_applied_op(code).expect("relevant op should be defined") {
             Op::Const(p) => {
                 let sort = ctx.atom(format!(
@@ -133,123 +230,14 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                 ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
             }
             Op::Fun(p) => {
-                if p.inputs.len() == 0 {
-                    let sort = ctx.atom(format!(
-                        "{}",
-                        p.output
-                            .clone()
-                            .unwrap_base()
-                            .expect("declared zero-arg functions must have base output type")
-                            .render_smt(),
-                    ));
-                    println!("Declared {} as constant (zero-arg conversion) {}", code, op_smt);
-                    ctx.declare_const(op_smt, sort)?;
-                    // todo!("Declare zero-arg fun");
-                } else {
-
-                    // For now, if there are any higher-order arguments,
-                    // we omit the functionality axiom.
-                    if !p.inputs.iter().any(|i| i.contains_thunk()) {
-                        let input_types: Vec<VType> =
-                            VType::flatten_many(p.inputs.clone());
-                        let output_types: Vec<VType> =
-                            VType::flatten(p.output.clone());
-                        let rel_type_atoms: Vec<SExpr> = input_types
-                            .iter()
-                            .chain(output_types.iter())
-                            .map(|sort| {
-                                let s = sort
-                                    .clone()
-                                    .unwrap_base()
-                                    .expect("sig types must be atoms");
-                                ctx.atom(format!("{}", s.render_smt()))
-                            })
-                            .collect();
-                        ctx.declare_fun(
-                            op_smt.clone(),
-                            rel_type_atoms,
-                            ctx.atom("Bool"),
-                        )?;
-                        println!("Declared {} as absrel {}", code, op_smt);
-    
-                        let mut vgen = Gen::new();
-                        let ixs = vgen.next_many(input_types.len());
-                        let oxs1 = vgen.next_many(output_types.len());
-                        let oxs2 = vgen.next_many(output_types.len());
-                        let q_sig: Vec<(VName, VType)> = ixs
-                            .iter()
-                            .cloned()
-                            .zip(input_types.iter().cloned())
-                            .chain(
-                                oxs1
-                                   .iter()
-                                   .cloned()
-                                   .zip(output_types.iter().cloned())
-                            )
-                            .chain(
-                                oxs2
-                                   .iter()
-                                   .cloned()
-                                   .zip(output_types.iter().cloned())
-                            )
-                            .collect();
-    
-                        let args1: Vec<Val> = ixs
-                            .iter()
-                            .cloned()
-                            .chain(oxs1.iter().cloned())
-                            .map(|i| i.val())
-                            .collect();
-                        let args2: Vec<Val> = ixs
-                            .iter()
-                            .cloned()
-                            .chain(oxs2.iter().cloned())
-                            .map(|i| i.val())
-                            .collect();
-    
-                        let otup1: Builder = Builder::tuple(
-                            oxs1
-                                .iter()
-                                .cloned()
-                                .map(|x| Builder::return_(x.val()))
-                                .collect::<Vec<Builder>>()
-                        );
-                        let otup2: Builder = Builder::tuple(
-                            oxs1
-                                .iter()
-                                .cloned()
-                                .map(|x| Builder::return_(x.val()))
-                                .collect::<Vec<Builder>>()
-                        );
-    
-                        let fun_axiom = Builder::log_op(
-                            LogOpN::Or,
-                            [
-                                Builder::log_op(
-                                    LogOpN::And,
-                                    [
-                                        Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
-                                            .apply_v(args1),
-                                        Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
-                                            .apply_v(args2),
-                                    ]
-                                )
-                                    .not(),
-                                otup1.eq_ne(true, otup2),
-                            ]
-                        )
-                            .quant(Quantifier::Forall, q_sig)
-                            .build(&mut vgen)
-                            .normal_form_single_case(&sig, &mut vgen);
-    
-                        let mut builder = Context::new(ctx);
-                        let e = builder.smt(&fun_axiom)?;
-                        println!("SMT Axiom [Rel]: {}", ctx.display(e[0]));
-                        ctx.assert(e[0])?;
-                    }
-                }
+                declare_uf(ctx, sig, code.clone(), p)?;
             }
-            Op::Pred(..) => {}
+            Op::Rec(p) => {
+                declare_uf(ctx, sig, code.clone(), p.as_fun_op())?;
+            }
+            Op::Pred(..) => {
+                panic!("Can't hanlde Pred ops");
+            }
             op => todo!("declare_sig for op {:?}", op),
         }
     }
@@ -260,26 +248,6 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
         println!("SMT Axiom: {}", ctx.display(e[0]));
         ctx.assert(e[0])?;
     }
-    // for a in &sig.axioms {
-    //     if a.tas.len() == 0 {
-    //         let mut builder = Context::new(ctx);
-    //         let e = builder.smt(&a.body)?;
-    //         println!("SMT Axiom: {}", ctx.display(e[0]));
-    //         ctx.assert(e[0])?;
-    //     } else {
-    //         for t in relevant.base_types() {
-    //             match a.inst_for(t) {
-    //                 Some(a) => {
-    //                     let mut builder = Context::new(ctx);
-    //                     let e = builder.smt(&a)?;
-    //                     println!("SMT Axiom: {}", ctx.display(e[0]));
-    //                     ctx.assert(e[0])?;
-    //                 }
-    //                 None => {}
-    //             }
-    //         }
-    //     }
-    // }
     Ok(())
 }
 

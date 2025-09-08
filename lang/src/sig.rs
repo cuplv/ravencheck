@@ -387,6 +387,16 @@ impl RecOp {
             axioms: self.axioms,
         }
     }
+
+    pub fn annotation_type(&self) -> CType {
+        CType::Return(VType::fun_v(
+            self.inputs.clone(),
+            VType::fun_v(
+                [self.output.clone()],
+                VType::prop(),
+            )
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

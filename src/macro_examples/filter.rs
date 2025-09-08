@@ -30,7 +30,7 @@ mod my_mod {
         out
     }
 
-    #[annotate(filter)]
+    #[assume_for(filter)]
     fn filter_def() -> bool {
         |f: fn(u32) -> bool, s1: MySet|
         |s2: MySet|

@@ -228,7 +228,6 @@ Type error in axiom \"{}\": {:?}",
         op_name: S1,
         def: S2,
     ) {
-        let sig_clone = self.clone();
         let mut found = false;
 
         // Parse the comp from def
@@ -241,14 +240,17 @@ Error parsing annotation: {}",
             ),
         };
 
-        for (name,_,op) in self.ops.iter_mut() {
+        let sig_clone = self.clone();
+        for (name,tas,op) in self.ops.iter_mut() {
             if &op_name.to_string() == name {
                 found = true;
+                let tc = TypeContext::new_types(sig_clone.clone(), tas.clone());
                 match op {
                     Op::Fun(op) => {
                         // Check the type of c against the inputs and
                         // outputs of op.
-                        match c.type_check(&op.annotation_type(), &sig_clone) {
+                        
+                        match c.type_check_r(&op.annotation_type(), tc) {
                             Ok(()) => {},
                             Err(e) =>
                                 panic!("Type error in annotation def: {}", e),
@@ -256,7 +258,18 @@ Error parsing annotation: {}",
 
                         op.axioms.push(c.clone());
                     }
-                    _ => panic!("Annotation added to '{}', which is a type of operation other than function.", op_name.to_string()),
+                    Op::Rec(op) => {
+                        // Check the type of c against the inputs and
+                        // outputs of op.
+                        match c.type_check_r(&op.annotation_type(), tc) {
+                            Ok(()) => {},
+                            Err(e) =>
+                                panic!("Type error in annotation def: {}", e),
+                        }
+
+                        op.axioms.push(c.clone());
+                    }                        
+                    _ => panic!("Annotation added to '{}', which is a type of operation other than function or rec.", op_name.to_string()),
                 }
             }
         }

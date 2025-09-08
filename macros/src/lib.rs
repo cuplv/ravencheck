@@ -38,6 +38,7 @@ pub fn verify(input: TokenStream) -> TokenStream {
 enum RvnAttr {
     Annotate(String),
     Assume(Vec<(Type,Type)>),
+    AssumeFor(String),
     Declare,
     Define(bool),
     Verify,
@@ -78,6 +79,10 @@ impl RvnAttr {
                             t => todo!("Can't handle inst rule {:?}", t),
                         }
                     }
+                    "assume_for" => {
+                        let fun_name: Ident = l.parse_args().unwrap();
+                        Some(RvnAttr::AssumeFor(fun_name.to_string()))
+                    }
                     _ => None,
                 }
             }
@@ -116,9 +121,10 @@ fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum SigItem {
-    Annotation(String, Block),
+    Annotation(String, String, Block),
     Axiom(Block, Vec<Ident>, Vec<(Type,Type)>),
-    Goal(Block),
+    FunctionAxiom(String, String, Block),
+    Goal(String, Block),
     TypeAlias(Ident,Type),
     // The final bool is true if this is a recursive def
     DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block, bool),
@@ -172,7 +178,21 @@ fn handle_items(items: &mut Vec<Item>, sig_items: &mut Vec<SigItem>) {
                 match pop_rvn_attr(&mut f.attrs) {
                     Some(RvnAttr::Annotate(fname)) => {
                         sig_items.push(
-                            SigItem::Annotation(fname, *(f.block).clone())
+                            SigItem::Annotation(
+                                f.sig.ident.to_string(),
+                                fname,
+                                *(f.block).clone(),
+                            )
+                        );
+                        false
+                    }
+                    Some(RvnAttr::AssumeFor(fname)) => {
+                        sig_items.push(
+                            SigItem::FunctionAxiom(
+                                f.sig.ident.to_string(),
+                                fname,
+                                *(f.block).clone(),
+                            )
                         );
                         false
                     }
@@ -264,7 +284,7 @@ You must give a return type when using 'define'"
                     // }
                     Some(RvnAttr::Verify) => {
                         sig_items.push(
-                            SigItem::Goal(*(f.block).clone())
+                            SigItem::Goal(f.sig.ident.to_string(), *(f.block).clone())
                         );
                         false
                     }
@@ -364,7 +384,13 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
             // Turn sig_items into statements (of type syn::Stmt)
             let stmts: Vec<Stmt> = sig_items.into_iter().map(|i| {
                 match i {
-                    SigItem::Annotation(f,b) => {
+                    SigItem::Annotation(title,f,b) => {
+                        let b_tks = format!("{}", quote! { #b });
+                        syn::parse((quote! {
+                            sig.add_checked_annotation(#title, #f, #b_tks);
+                        }).into()).unwrap()
+                    }
+                    SigItem::FunctionAxiom(_title,f,b) => {
                         let b_tks = format!("{}", quote! { #b });
                         syn::parse((quote! {
                             sig.add_annotation(#f, #b_tks);
@@ -385,10 +411,10 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.add_axiom2(#b_tks, [#(#tas),*], [#(#rules),*]);
                         }).into()).unwrap()
                     }
-                    SigItem::Goal(b) => {
+                    SigItem::Goal(title, b) => {
                         let b_tks = format!("{}", quote! { #b });
                         syn::parse((quote! {
-                            sig.assert_valid(#b_tks);
+                            sig.assert_valid_t(#title, #b_tks);
                         }).into()).unwrap()
                     }
                     SigItem::Type(name, arg_len) => {
