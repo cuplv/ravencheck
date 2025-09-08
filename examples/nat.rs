@@ -1,4 +1,4 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[declare_types(u32)]
 #[allow(dead_code)]
 mod my_mod {
@@ -109,4 +109,7 @@ mod my_mod {
     //     |c: u32|
     //     le(a,c) && le(a,b)
     // }
+}
+
+fn main() {
 }
