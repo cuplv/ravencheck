@@ -7,6 +7,7 @@ To perform a release to crates.io, do the following:
 * macros/Cargo.toml
 * Cargo.toml
 * README.md
+* CHANGELOG.md
 ```
 
 2. Create a release commit.
