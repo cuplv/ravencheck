@@ -189,7 +189,9 @@ Error in type-checking definition of \"{}\": {:?}",
         };
         let mut gn = Gen::new();
         op.def.advance_gen(&mut gn);
-        op.axiom.advance_gen(&mut gn);
+        for a in &op.axioms {
+            a.advance_gen(&mut gn);
+        }
         let mut input_args: Vec<Val> = Vec::new();
         let mut q_sig: Vec<(VName, VType)> = Vec::new();
         for i in op.inputs {
@@ -201,7 +203,7 @@ Error in type-checking definition of \"{}\": {:?}",
             Builder::lift(op.def.clone())
             .apply_rt(input_args.clone())
             .seq_gen(move |x| {
-                Builder::lift(op.axiom.clone())
+                Builder::lift(op.axioms[0].clone())
                     .apply_rt(input_args)
                     .apply_rt(vec![x])
             })
@@ -227,6 +229,58 @@ Error in type-checking definition of \"{}\": {:?}",
             }
         }
         // self.0.add_op_rec(name, axiom, def, term_arg, term_relation)
+    }
+
+    pub fn define_op_rec<S1: ToString + Clone, S2: ToString, S3: ToString, S4: ToString, const N1: usize, const N2: usize>(
+        &mut self,
+        name: S1,
+        tas: [&str; N1],
+        inputs: [S2; N2],
+        output: S3,
+        def: S4,
+    ) {
+        self.0.define_op_rec(name, tas, inputs, output, def);
+
+//         let tas: Vec<String> = tas.iter().map(|s| s.to_string()).collect();
+
+//         let mut unshadowed_aliases = self.0.type_aliases.clone();
+//         for a in tas.iter() {
+//             unshadowed_aliases.remove(a);
+//         }
+
+//         let def = match parse_str_cbpv(&def.to_string()) {
+//             Ok(m) => m.expand_types(&unshadowed_aliases),
+//             Err(e) => panic!(
+//                 "
+// Error in parsing definition of \"{}\": {:?}",
+//                 name.to_string(),
+//                 e,
+//             ),
+//         };
+//         let self_op = Op::Fun(FunOp{
+//             inputs: inputs.clone()
+//         });
+
+//         let tc = TypeContext::new_types(self.0.clone(), tas.clone());
+//         match def.type_of(tc) {
+//             Ok(ct) => match ct.clone().unwrap_fun_v() {
+//                 Some(_) => {},
+//                 None => panic!(
+//                     "
+// Error in type-checking definition of \"{}\":
+// should have had a function type, instead had {:?}",
+//                     name.to_string(),
+//                     ct,
+//                 ),
+//             }
+//             Err(e) => panic!(
+//                 "
+// Error in type-checking definition of \"{}\": {:?}",
+//                 name.to_string(),
+//                 e,
+//             ),
+//         }
+
     }
 }
 

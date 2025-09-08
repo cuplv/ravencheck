@@ -71,16 +71,16 @@ impl Comp {
         if t == &inferred {
             Ok(())
         } else {
-            Err(format!("Expected type {:?}, got {:?}", t, inferred))
+            Err(format!("Expected type {}, got {}", t.render(), inferred.render()))
         }
     }
-    fn type_check_r(&self, t: &CType, tc: TypeContext) -> Result<(), TypeError>
+    pub fn type_check_r(&self, t: &CType, tc: TypeContext) -> Result<(), TypeError>
     {
         let ct = self.type_of(tc)?;
         if t == &ct {
             Ok(())
         } else {
-            Err(format!("Expected type {:?}, got {:?}", t, ct))
+            Err(format!("Expected type {}, got {}", t.render(), ct.render()))
         }
     }
     pub fn type_of(&self, mut tc: TypeContext) -> Result<CType, TypeError> {

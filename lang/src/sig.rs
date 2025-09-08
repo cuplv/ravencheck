@@ -225,7 +225,7 @@ impl VType {
                 out.push_str(")");
                 out
             }
-            VType::Thunk(..) => format!("{{thunk}}"),
+            VType::Thunk(c) => format!("Thunk({})", c.render()),
         }
     }
     pub fn contains_thunk(&self) -> bool {
@@ -314,6 +314,25 @@ pub enum CType {
 }
 
 impl CType {
+    pub fn render(&self) -> String {
+        match self {
+            Self::Fun(vs, c) => {
+                let mut s: String = format!("Fn(");
+                let mut first = true;
+                for t in vs {
+                    if first {
+                        s.push_str(&format!("{}", t.render()));
+                        first = false;
+                    } else {
+                        s.push_str(&format!(",{}", t.render()));
+                    }
+                }
+                s.push_str(&format!(") -> {}", c.render()));
+                s
+            }
+            Self::Return(vt) => format!("Return({})", vt.render()),
+        }
+    }
     pub fn return_prop() -> Self {
         Self::Return(VType::prop())
     }
@@ -356,7 +375,7 @@ pub struct ConstOp {
 pub struct RecOp {
     pub inputs: Vec<VType>,
     pub output: VType,
-    pub axiom: Comp,
+    pub axioms: Vec<Comp>,
     pub def: Comp,
 }
 
@@ -365,7 +384,7 @@ impl RecOp {
         FunOp {
             inputs: self.inputs,
             output: self.output,
-            axioms: vec![self.axiom],
+            axioms: self.axioms,
         }
     }
 }

@@ -39,8 +39,7 @@ enum RvnAttr {
     Annotate(String),
     Assume(Vec<(Type,Type)>),
     Declare,
-    Define,
-    DefineRec,
+    Define(bool),
     Verify,
 }
 
@@ -56,8 +55,8 @@ impl RvnAttr {
                 match path_to_one_str(p).as_str() {
                     "assume" => Some(RvnAttr::Assume(Vec::new())),
                     "declare" => Some(RvnAttr::Declare),
-                    "define" => Some(RvnAttr::Define),
-                    "define_rec" => Some(RvnAttr::DefineRec),
+                    "define" => Some(RvnAttr::Define(false)),
+                    "define_rec" => Some(RvnAttr::Define(true)),
                     "verify" => Some(RvnAttr::Verify),
                     _ => None,
                 }
@@ -121,7 +120,8 @@ enum SigItem {
     Axiom(Block, Vec<Ident>, Vec<(Type,Type)>),
     Goal(Block),
     TypeAlias(Ident,Type),
-    DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block),
+    // The final bool is true if this is a recursive def
+    DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block, bool),
     Type(Ident, usize),
     UFun(String, Vec<Ident>, Vec<PatType>, Type),
 }
@@ -226,7 +226,7 @@ You must give a return type when using 'declare'"
 
                         true
                     }
-                    Some(RvnAttr::Define) => {
+                    Some(RvnAttr::Define(is_rec)) => {
                         let name = f.sig.ident.clone();
 
                         let mut targs = Vec::new();
@@ -255,17 +255,20 @@ You must give a return type when using 'define'"
                         let body = (*f.block).clone();
 
                         sig_items.push(
-                            SigItem::DFun(name, targs, inputs, output, body)
+                            SigItem::DFun(name, targs, inputs, output, body, is_rec)
                         );
                         true
                     }
+                    // Some(RvnAttr::DefineRec) => {
+                    //     todo!("Handle #[define_rec] for fn");
+                    // }
                     Some(RvnAttr::Verify) => {
                         sig_items.push(
                             SigItem::Goal(*(f.block).clone())
                         );
                         false
                     }
-                    _ => true,
+                    None => true,
                 }
             }
             Item::Const(i) => {
@@ -306,7 +309,7 @@ You must give a return type when using 'define'"
                     Some(RvnAttr::Declare) => {
                         sig_items.push(SigItem::Type(i.ident.clone(), 0));
                     }
-                    Some(RvnAttr::Define) => {
+                    Some(RvnAttr::Define(_is_rec)) => {
                         sig_items.push(SigItem::TypeAlias(
                             i.ident.clone(),
                             *(i.ty).clone(),
@@ -401,7 +404,7 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                             sig.add_alias_from_string(#i_tks, #ty_tks);
                         }).into()).unwrap()
                     }
-                    SigItem::DFun(name, targs, inputs, _output, body) => {
+                    SigItem::DFun(name, targs, inputs, output, body, is_rec) => {
                         let name_tk: String = format!("{}", name);
                         let targs: Vec<String> = targs.into_iter().map(|i| {
                             format!("{}", quote! { #i })
@@ -409,9 +412,19 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
                         let body_tk: String = format!("{}", quote! {
                             |#(#inputs),*| #body
                         });
-                        syn::parse((quote! {
-                            sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
-                        }).into()).unwrap()
+                        let inputs: Vec<String> = inputs.into_iter().map(|i| {
+                            format!("{}", quote! { #i })
+                        }).collect();
+                        let output: String = format!("{}", quote! { #output });
+                        if !is_rec {
+                            syn::parse((quote! {
+                                sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
+                            }).into()).unwrap()
+                        } else {
+                            syn::parse((quote! {
+                                sig.define_op_rec(#name_tk, [#(#targs),*], [#(#inputs),*], #output, #body_tk);
+                            }).into()).unwrap()
+                        }
                     }
                     SigItem::UFun(name, targs, inputs, output) => {
                         let name: String = format!("{}", name);

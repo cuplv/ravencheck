@@ -221,7 +221,8 @@ impl Op {
                 op.inputs =
                     op.inputs.into_iter().map(|t| t.expand_types(subs)).collect();
                 op.output = op.output.expand_types(subs);
-                op.axiom = op.axiom.expand_types(subs);
+                op.axioms =
+                    op.axioms.into_iter().map(|a| a.expand_types(subs)).collect();
                 op.def = op.def.expand_types(subs);
                 Op::Rec(op)
             }

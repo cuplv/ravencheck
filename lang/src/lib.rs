@@ -307,6 +307,58 @@ Type error in def of \"{}\": {:?}",
         self.ops.push((name.to_string(), Vec::new(), op));
     }
 
+    fn relabs_axiom(code: OpCode, inputs: Vec<VType>, output: VType) -> Comp {
+        let rel_abs = Val::OpCode(OpMode::RelAbs, code);
+
+        // let output_clone = output.clone();
+        Builder::ret_thunk(
+            Builder::fun_many_gen(inputs, |in_xs| {
+                Builder::ret_thunk(
+                    Builder::fun_gen(output, |out_x| {
+                        let mut args = in_xs;
+                        args.push(out_x);
+                        Builder::force(rel_abs).apply_v(args)
+                    })
+                )
+            })
+        ).build(&mut Gen::new())
+    }
+
+    pub fn declare_op_parsed(&mut self, name: String, targs: Vec<String>, inputs: Vec<VType>, output: VType) {
+        let op = if !inputs.iter().any(|i| i.contains_thunk()) {
+            if output == VType::prop() {
+                Op::Symbol(PredSymbol{inputs})
+            } else {
+                // Add an annotation that links the op to its
+                // relational abstraction.
+
+                let code_args = targs.iter().cloned().map(VType::ui).collect();
+                let code = OpCode { ident: name.to_string(), types: code_args };
+                let axiom = Self::relabs_axiom(
+                    code,
+                    inputs.clone(),
+                    output.clone()
+                );
+                Op::Fun(FunOp{
+                    inputs,
+                    output,
+                    axioms: vec![axiom],
+                })
+            }
+        } else {
+            if output == VType::prop() {
+                todo!("Handle higher-order relations")
+            } else {
+                Op::Fun(FunOp{
+                    inputs,
+                    output,
+                    axioms: Vec::new(),
+                })
+            }
+        };
+        self.ops.push((name.to_string(), targs, op));
+    }
+
     pub fn declare_op<S1: ToString, S2: ToString, S3: ToString, S4: ToString, const N1: usize, const N2: usize>(
         &mut self,
         name: S1,
@@ -323,51 +375,92 @@ Type error in def of \"{}\": {:?}",
         }).collect();
         let output: VType = VType::from_string(output)
             .expect("should be able to parse an input argument type as a VType")
-            .expand_aliases(&self.type_aliases);        
+            .expand_aliases(&self.type_aliases);
 
-        let op = if !inputs.iter().any(|i| i.contains_thunk()) {
-            if output == VType::prop() {
-                Op::Symbol(PredSymbol{inputs})
-            } else {
-                // Add an annotation that links the op to its
-                // relational abstraction.
+        self.declare_op_parsed(name.to_string(), targs, inputs, output)
+    }
 
-                let code_args = targs.iter().cloned().map(VType::ui).collect();
-                let code = OpCode { ident: name.to_string(), types: code_args };
-                // let rel_abs = VName::new(rel_abs_name(name.to_string())).val();
-                let rel_abs = Val::OpCode(OpMode::RelAbs, code);
+    pub fn define_op_rec<S1: ToString + Clone, S2: ToString, S3: ToString, S4: ToString, const N1: usize, const N2: usize>(
+        &mut self,
+        name: S1,
+        tas: [&str; N1],
+        inputs: [S2; N2],
+        output: S3,
+        def: S4,
+    ) {
+        // First, parse everything
+        let tas: Vec<String> =
+            tas.into_iter().map(|s| s.to_string()).collect();
+        let inputs: Vec<VType> = inputs.into_iter().map(|i| {
+            let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
+            t.expand_aliases(&self.type_aliases)
+        }).collect();
+        let output: VType = VType::from_string(output)
+            .expect("should be able to parse an input argument type as a VType")
+            .expand_aliases(&self.type_aliases);
 
-                let output_clone = output.clone();
-                let anno =
-                    Builder::ret_thunk(
-                        Builder::fun_many_gen(inputs.clone(), |in_xs| {
-                            Builder::ret_thunk(
-                                Builder::fun_gen(output_clone, |out_x| {
-                                    let mut args = in_xs;
-                                    args.push(out_x);
-                                    Builder::force(rel_abs).apply_v(args)
-                            })
-                            )
-                        })
-                    ).build(&mut Gen::new());
-                Op::Fun(FunOp{
-                    inputs,
-                    output,
-                    axioms: vec![anno.clone()],
-                })
-            }
-        } else {
-            if output == VType::prop() {
-                todo!("Handle higher-order relations")
-            } else {
-                Op::Fun(FunOp{
-                    inputs,
-                    output,
-                    axioms: Vec::new(),
-                })
-            }
+        let mut unshadowed_aliases = self.type_aliases.clone();
+        for a in tas.iter() {
+            unshadowed_aliases.remove(a);
+        }
+
+        let def = match parse_str_cbpv(&def.to_string()) {
+            Ok(m) => m.expand_types(&unshadowed_aliases),
+            Err(e) => panic!(
+                "
+Error in parsing definition of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
         };
-        self.ops.push((name.to_string(), targs, op));
+
+        // Need to typecheck def against intputs+output, while letting
+        // 'tas' shadow any aliases, and assuming that the recursive
+        // call already has the given type.
+
+        // Define a copy of the sig in which recursive call is an
+        // uninterpreted function.
+        let mut rec_sig = self.clone();
+        rec_sig.declare_op_parsed(name.to_string(), tas.clone(), inputs.clone(), output.clone());
+
+        // Type-check, using rec_sig, against inputs+outputs
+        let d_type =
+            CType::Return(
+                VType::Thunk(
+                    Box::new(
+                        CType::fun(
+                            inputs.clone(),
+                            CType::Return(output.clone())
+                        )
+                    )
+                )
+            );
+        let tc = TypeContext::new_types(rec_sig, tas.clone());
+        match def.type_check_r(&d_type, tc) {
+            Ok(()) => {},
+            Err(e) => panic!(
+                "
+Error in type-checking definition of \"{}\": {:?}",
+                name.to_string(),
+                e,
+            ),
+        }
+
+        let code_args = tas.iter().cloned().map(VType::ui).collect();
+        let code = OpCode { ident: name.to_string(), types: code_args };
+        let axiom = Self::relabs_axiom(
+            code,
+            inputs.clone(),
+            output.clone()
+        );
+        let op = Op::Rec(RecOp{
+            inputs,
+            output,
+            axioms: vec![axiom],
+            def,
+        });
+        self.ops.push((name.to_string(), tas, op));
+        // todo!("define_op_rec");
     }
 
     pub fn add_op_fun<S1: ToString, S2: ToString>(
@@ -518,7 +611,7 @@ Type error in definition of \"{}\": {:?}",
         let op = Op::Rec(RecOp{
             inputs,
             output: fun_output,
-            axiom,
+            axioms: vec![axiom],
             def,
         });
         self.ops.push((name.to_string(), Vec::new(), op));
