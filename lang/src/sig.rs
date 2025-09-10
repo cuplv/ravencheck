@@ -503,7 +503,11 @@ impl Sig {
             "Recursive type alias \"{}\" is not allowed",
             s,
         );
-        assert!(t.validate(self, &Vec::new()) == Ok(()));
+        assert!(
+            t.validate(self, &Vec::new()) == Ok(()),
+            "right side {} of type alias is not valid",
+            t.render(),
+        );
         self.type_aliases.insert(s, t);
     }
     pub fn add_constant<S1: ToString, S2: ToString>(
