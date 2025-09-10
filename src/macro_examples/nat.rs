@@ -1,12 +1,12 @@
-#[crate::check_module(crate)]
+#[crate::export_module(crate)]
 #[declare_types(u32)]
 #[allow(dead_code)]
-mod my_mod {
+pub mod my_nat_mod {
     use std::marker::PhantomData;
 
     #[declare]
     #[derive(Copy,Clone,PartialEq,Eq,Hash)]
-    struct Nat<T>{
+    pub struct Nat<T>{
         value: usize,
         tag: PhantomData<T>,
     }
@@ -18,35 +18,40 @@ mod my_mod {
     }
 
     #[declare]
-    fn zero<T>() -> Nat<T> { Nat::new(0) }
+    pub fn zero<T>() -> Nat<T> { Nat::new(0) }
 
     #[declare]
-    fn le<T>(a: Nat<T>, b: Nat<T>) -> bool {
+    pub fn le<T>(a: Nat<T>, b: Nat<T>) -> bool {
         a.value <= b.value
     }
 
+    #[assume((Nat<T>, T))]
+    fn le_refl<T>() -> bool {
+        forall(|x: Nat<T>| le::<T>(x,x))
+    }
+
     #[define]
-    fn lt<T>(a: Nat<T>, b: Nat<T>) -> bool
+    pub fn lt<T>(a: Nat<T>, b: Nat<T>) -> bool
     where T: std::cmp::Eq + Copy
     {
         le::<T>(a,b) && a != b
     }
 
     #[define]
-    fn ge<T>(a: Nat<T>, b: Nat<T>) -> bool
+    pub fn ge<T>(a: Nat<T>, b: Nat<T>) -> bool
     {
         le::<T>(b,a)
     }
 
     #[define]
-    fn gt<T>(a: Nat<T>, b: Nat<T>) -> bool
+    pub fn gt<T>(a: Nat<T>, b: Nat<T>) -> bool
     where T: std::cmp::Eq + Copy
     {
         ge::<T>(a,b) && a != b
     }
 
     #[declare]
-    fn dec<T>(a: Nat<T>) -> Nat<T> {
+    pub fn dec<T>(a: Nat<T>) -> Nat<T> {
         if a.value == 0 {
             Nat::new(0)
         } else {
@@ -55,7 +60,7 @@ mod my_mod {
     }
 
     #[declare]
-    fn inc<T>(a: Nat<T>) -> Nat<T> {
+    pub fn inc<T>(a: Nat<T>) -> Nat<T> {
         Nat::new(a.value + 1)
     }
 
@@ -70,7 +75,7 @@ mod my_mod {
     }
 
     #[define_rec]
-    fn add<T>(a: Nat<T>, b: Nat<T>) -> Nat<T>
+    pub fn add<T>(a: Nat<T>, b: Nat<T>) -> Nat<T>
     where T: std::cmp::Eq + Copy
     {
         if a == zero::<T>() {

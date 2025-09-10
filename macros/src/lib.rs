@@ -17,9 +17,12 @@ use syn::{
     PatType,
     Path,
     PathArguments,
+    PathSegment,
     ReturnType,
     Stmt,
+    Token,
     Type,
+    UseTree,
 };
 
 
@@ -41,7 +44,8 @@ enum RvnAttr {
     AssumeFor(String),
     Declare,
     Define(bool),
-    Verify,
+    Import,
+    Verify(bool),
 }
 
 fn path_to_one_str(p: &Path) -> String {
@@ -58,7 +62,9 @@ impl RvnAttr {
                     "declare" => Some(RvnAttr::Declare),
                     "define" => Some(RvnAttr::Define(false)),
                     "define_rec" => Some(RvnAttr::Define(true)),
-                    "verify" => Some(RvnAttr::Verify),
+                    "falsify" => Some(RvnAttr::Verify(false)),
+                    "import" => Some(RvnAttr::Import),
+                    "verify" => Some(RvnAttr::Verify(true)),
                     _ => None,
                 }
             }
@@ -135,13 +141,131 @@ enum SigItem {
     Annotation(String, String, Block),
     Axiom(Block, Vec<Ident>, Vec<(Type,Vec<Type>)>),
     FunctionAxiom(String, String, Block),
-    Goal(String, Block),
+    Goal(String, Block, bool),
+    Import(Path),
     TypeAlias(Ident,Type),
     // The final bool is true if this is a recursive def
     DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block, bool),
     Type(Ident, usize),
     UFun(String, Vec<Ident>, Vec<PatType>, Type),
     UConst(String, Type),
+}
+
+impl SigItem {
+    fn is_export(&self) -> bool {
+        match self {
+            Self::Goal(..) => false,
+            _ => true,
+        }
+    }
+    fn into_stmt(self) -> Stmt {
+        match self {
+            SigItem::Annotation(title,f,b) => {
+                let b_tks = format!("{}", quote! { #b });
+                syn::parse((quote! {
+                    sig.add_checked_annotation(#title, #f, #b_tks);
+                }).into()).unwrap()
+            }
+            SigItem::FunctionAxiom(_title,f,b) => {
+                let b_tks = format!("{}", quote! { #b });
+                syn::parse((quote! {
+                    sig.add_annotation(#f, #b_tks);
+                }).into()).unwrap()
+            }
+            SigItem::Axiom(b,tas,rules) => {
+                let b_tks = format!("{}", quote! { #b });
+                let tas: Vec<String> = tas.into_iter().map(|i| {
+                    format!("{}", quote! { #i })
+                }).collect();
+                let rules: Vec<(String,_)> = rules.into_iter().map(|(a,bs)| {
+                    let bs: Vec<String> = bs.into_iter().map(|b| format!("{}", quote! { #b })).collect();
+                    (format!("{}", quote! { #a }),
+                     quote! { vec![#(#bs),*] })
+                }).collect();
+                let rules: Vec<_> = rules.into_iter().map(|(a,b)| {
+                    quote! { (#a, #b) }
+                }).collect();
+                syn::parse((quote! {
+                    sig.add_axiom2(#b_tks, [#(#tas),*], [#(#rules),*]);
+                }).into()).unwrap()
+            }
+            SigItem::Goal(title, b, should_be_valid) => {
+                let b_tks = format!("{}", quote! { #b });
+                if should_be_valid {
+                    syn::parse((quote! {
+                        sig.assert_valid_t(#title, #b_tks);
+                    }).into()).unwrap()
+                } else {
+                    syn::parse((quote! {
+                        sig.assert_invalid_t(#title, #b_tks);
+                    }).into()).unwrap()
+                }
+            }
+            SigItem::Import(path) => {
+                syn::parse((quote! {
+                    #path::ravencheck_exports::apply_exports(&mut sig);
+                }).into()).unwrap()
+                // todo!("turn import into stmt")
+            }
+            SigItem::Type(name, arg_len) => {
+                let s = name.to_string();
+                syn::parse((quote! {
+                    sig.add_type_con(#s, #arg_len);
+                }).into()).unwrap()
+            }
+            SigItem::TypeAlias(i, ty) => {
+                let i_tks = format!("{}", i);
+                let ty_tks = format!("{}", quote! { #ty });
+                syn::parse((quote! {
+                    sig.add_alias_from_string(#i_tks, #ty_tks);
+                }).into()).unwrap()
+            }
+            SigItem::DFun(name, targs, inputs, output, body, is_rec) => {
+                let name_tk: String = format!("{}", name);
+                let targs: Vec<String> = targs.into_iter().map(|i| {
+                    format!("{}", quote! { #i })
+                }).collect();
+                let body_tk: String = format!("{}", quote! {
+                    |#(#inputs),*| #body
+                });
+                let inputs: Vec<String> = inputs.into_iter().map(|i| {
+                    format!("{}", quote! { #i })
+                }).collect();
+                let output: String = format!("{}", quote! { #output });
+                if !is_rec {
+                    syn::parse((quote! {
+                        sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
+                    }).into()).unwrap()
+                } else {
+                    syn::parse((quote! {
+                        sig.define_op_rec(#name_tk, [#(#targs),*], [#(#inputs),*], #output, #body_tk);
+                    }).into()).unwrap()
+                }
+            }
+            SigItem::UFun(name, targs, inputs, output) => {
+                let name: String = format!("{}", name);
+                let targs: Vec<String> = targs.into_iter().map(|i| {
+                    format!("{}", quote! { #i })
+                }).collect();
+                let inputs: Vec<String> = inputs.into_iter().map(|i| {
+                    format!("{}", quote! { #i })
+                }).collect();
+                let output: String = format!("{}", quote! { #output });
+                let tokens = quote! {
+                    sig.declare_op(#name, [#(#targs),*], [#(#inputs),*], #output);
+                };
+                // println!("{}", tokens);
+                syn::parse2(tokens).unwrap()
+            }
+            SigItem::UConst(name, ty) => {
+                let output: String = format!("{}", quote! { #ty });
+                let tokens = quote! {
+                    sig.declare_const(#name, #output);
+                };
+                syn::parse2(tokens).unwrap()
+            }
+        }
+    }
 }
 
 fn handle_top_level(attrs: &mut Vec<Attribute>, sig_items: &mut Vec<SigItem>) {
@@ -291,12 +415,19 @@ You must give a return type when using 'define'"
                         );
                         true
                     }
+                    Some(RvnAttr::Import) => {
+                        panic!("#[import] can only be applied to a 'use' statement")
+                    }
                     // Some(RvnAttr::DefineRec) => {
                     //     todo!("Handle #[define_rec] for fn");
                     // }
-                    Some(RvnAttr::Verify) => {
+                    Some(RvnAttr::Verify(b)) => {
                         sig_items.push(
-                            SigItem::Goal(f.sig.ident.to_string(), *(f.block).clone())
+                            SigItem::Goal(
+                                f.sig.ident.to_string(),
+                                *(f.block).clone(),
+                                b,
+                            )
                         );
                         false
                     }
@@ -364,13 +495,67 @@ You must give a return type when using 'define'"
                 }
                 true
             }
+            Item::Use(i) => {
+                match pop_rvn_attr(&mut i.attrs) {
+                    Some(RvnAttr::Import) => {
+                        let segs = use_tree_to_path(i.tree.clone());
+                        let mut punct =
+                            Punctuated::<PathSegment, Token![::]>::new();
+                        for s in segs {
+                            punct.push(s);
+                        }
+                        let path = Path {
+                            leading_colon: None,
+                            segments: punct,
+                        };
+                        sig_items.push(SigItem::Import(path));
+                    }
+                    Some(a) => panic!(
+                        "attr {:?} cannot be applied to a 'use' statement",
+                        a,
+                    ),
+                    None => {}
+                }
+                true
+            }
             _ => true,
         }
     });
 }
 
+fn use_tree_to_path(t: UseTree) -> Vec<PathSegment> {
+    match t {
+        UseTree::Path(p) => {
+            let i = p.ident.clone();
+            let mut rest = use_tree_to_path(*p.tree);
+            rest.insert(0, PathSegment{
+                ident: i,
+                arguments: PathArguments::None,
+            });
+            rest
+        },
+        UseTree::Glob(..) => Vec::new(),
+        UseTree::Group(..) => Vec::new(),
+        UseTree::Name(..) => Vec::new(),
+        t => panic!("cannot #[import] use-tree with {:?} node in it", t),
+    }
+}
+
+#[proc_macro_attribute]
+pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    process_module(attrs, input, true)
+}
+
 #[proc_macro_attribute]
 pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    process_module(attrs, input, false)
+}
+
+fn process_module(
+    attrs: TokenStream,
+    input: TokenStream,
+    export: bool,
+) -> TokenStream {
 
     // The macro needs to name the crate that CheckedSig comes from,
     // and that will be different depending on the context that
@@ -403,109 +588,16 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
             handle_items(items, &mut sig_items);
 
             // Turn sig_items into statements (of type syn::Stmt)
-            let stmts: Vec<Stmt> = sig_items.into_iter().map(|i| {
-                match i {
-                    SigItem::Annotation(title,f,b) => {
-                        let b_tks = format!("{}", quote! { #b });
-                        syn::parse((quote! {
-                            sig.add_checked_annotation(#title, #f, #b_tks);
-                        }).into()).unwrap()
-                    }
-                    SigItem::FunctionAxiom(_title,f,b) => {
-                        let b_tks = format!("{}", quote! { #b });
-                        syn::parse((quote! {
-                            sig.add_annotation(#f, #b_tks);
-                        }).into()).unwrap()
-                    }
-                    SigItem::Axiom(b,tas,rules) => {
-                        let b_tks = format!("{}", quote! { #b });
-                        let tas: Vec<String> = tas.into_iter().map(|i| {
-                            format!("{}", quote! { #i })
-                        }).collect();
-                        let rules: Vec<(String,_)> = rules.into_iter().map(|(a,bs)| {
-                            let bs: Vec<String> = bs.into_iter().map(|b| format!("{}", quote! { #b })).collect();
-                            (format!("{}", quote! { #a }),
-                             quote! { vec![#(#bs),*] })
-                        }).collect();
-                        let rules: Vec<_> = rules.into_iter().map(|(a,b)| {
-                            quote! { (#a, #b) }
-                        }).collect();
-                        syn::parse((quote! {
-                            sig.add_axiom2(#b_tks, [#(#tas),*], [#(#rules),*]);
-                        }).into()).unwrap()
-                    }
-                    SigItem::Goal(title, b) => {
-                        let b_tks = format!("{}", quote! { #b });
-                        syn::parse((quote! {
-                            sig.assert_valid_t(#title, #b_tks);
-                        }).into()).unwrap()
-                    }
-                    SigItem::Type(name, arg_len) => {
-                        let s = name.to_string();
-                        syn::parse((quote! {
-                            sig.add_type_con(#s, #arg_len);
-                        }).into()).unwrap()
-                    }
-                    SigItem::TypeAlias(i, ty) => {
-                        let i_tks = format!("{}", i);
-                        let ty_tks = format!("{}", quote! { #ty });
-                        syn::parse((quote! {
-                            sig.add_alias_from_string(#i_tks, #ty_tks);
-                        }).into()).unwrap()
-                    }
-                    SigItem::DFun(name, targs, inputs, output, body, is_rec) => {
-                        let name_tk: String = format!("{}", name);
-                        let targs: Vec<String> = targs.into_iter().map(|i| {
-                            format!("{}", quote! { #i })
-                        }).collect();
-                        let body_tk: String = format!("{}", quote! {
-                            |#(#inputs),*| #body
-                        });
-                        let inputs: Vec<String> = inputs.into_iter().map(|i| {
-                            format!("{}", quote! { #i })
-                        }).collect();
-                        let output: String = format!("{}", quote! { #output });
-                        if !is_rec {
-                            syn::parse((quote! {
-                                sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
-                            }).into()).unwrap()
-                        } else {
-                            syn::parse((quote! {
-                                sig.define_op_rec(#name_tk, [#(#targs),*], [#(#inputs),*], #output, #body_tk);
-                            }).into()).unwrap()
-                        }
-                    }
-                    SigItem::UFun(name, targs, inputs, output) => {
-                        let name: String = format!("{}", name);
-                        let targs: Vec<String> = targs.into_iter().map(|i| {
-                            format!("{}", quote! { #i })
-                        }).collect();
-                        let inputs: Vec<String> = inputs.into_iter().map(|i| {
-                            format!("{}", quote! { #i })
-                        }).collect();
-                        let output: String = format!("{}", quote! { #output });
-                        let tokens = quote! {
-                            sig.declare_op(#name, [#(#targs),*], [#(#inputs),*], #output);
-                        };
-                        // println!("{}", tokens);
-                        syn::parse2(tokens).unwrap()
-                    }
-                    SigItem::UConst(name, ty) => {
-                        let output: String = format!("{}", quote! { #ty });
-                        let tokens = quote! {
-                            sig.declare_const(#name, #output);
-                        };
-                        syn::parse2(tokens).unwrap()
-                    }
-                }
-            }).collect();
+            let test_stmts: Vec<Stmt> = sig_items.iter()
+                .map(|i| i.clone().into_stmt())
+                .collect();
             let test: ItemFn = syn::parse((quote! {
                 #[test]
                 fn check_properties() {
                     let mut sig = CheckedSig::empty();
 
                     // Interpolate 'stmts' here
-                    #(#stmts)*
+                    #(#test_stmts)*
                 }
             }).into()).unwrap();
 
@@ -521,6 +613,26 @@ pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
             };
 
             items.push(syn::parse(test_mod.into()).expect("parse test mod"));
+
+            if export {
+                let export_stmts: Vec<Stmt> = sig_items.into_iter()
+                    .filter(|i| i.is_export())
+                    .map(|i| i.into_stmt())
+                    .collect();
+
+                let export_mod = quote! {
+                    pub mod ravencheck_exports {
+                        use #cratename::CheckedSig;
+
+                        pub fn apply_exports(sig: &mut CheckedSig) {
+                            #(#export_stmts)*
+                        }
+                    }
+                };
+
+                // println!("{}", export_mod);
+                items.push(syn::parse(export_mod.into()).expect("parse export mod"));
+            }
         }
         None => {}
     }

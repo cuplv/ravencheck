@@ -27,6 +27,9 @@ impl CheckedSig {
     pub fn assert_valid_t<T: ToString>(&self, title: &str, s: T) {
         assert_valid_with_t(self, title, s)
     }
+    pub fn assert_invalid_t<T: ToString>(&self, title: &str, s: T) {
+        assert_invalid_with_t(self, title, s)
+    }
     pub fn assert_invalid<T: ToString>(&self, s: T) {
         assert_invalid_with(self, s)
     }
@@ -435,6 +438,14 @@ pub fn assert_valid_with_t<T: ToString>(sig: &CheckedSig, title: &str, s: T) {
         Response::Unknown => panic!("verification goal {} could not be checked (sort cycle?)", title),
     }
     // assert_eq!(query_negative(s, sig), Response::Unsat);
+}
+
+pub fn assert_invalid_with_t<T: ToString>(sig: &CheckedSig, title: &str, s: T) {
+    match query_negative(s, sig) {
+        Response::Unsat => panic!("falsification goal {} is actually valid", title),
+        Response::Sat => {},
+        Response::Unknown => panic!("falsification goal {} could not be checked (sort cycle?)", title),
+    }
 }
 
 pub fn assert_invalid_with<T: ToString>(sig: &CheckedSig, s: T) {
