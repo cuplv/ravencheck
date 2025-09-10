@@ -43,7 +43,8 @@ enum RvnAttr {
     Assume(Vec<(Type,Vec<Type>)>),
     AssumeFor(String),
     Declare,
-    Define(bool),
+    // (is_recursive, is_phantom)
+    Define(bool,bool),
     Import,
     Verify(bool),
 }
@@ -60,8 +61,9 @@ impl RvnAttr {
                 match path_to_one_str(p).as_str() {
                     "assume" => Some(RvnAttr::Assume(Vec::new())),
                     "declare" => Some(RvnAttr::Declare),
-                    "define" => Some(RvnAttr::Define(false)),
-                    "define_rec" => Some(RvnAttr::Define(true)),
+                    "define" => Some(RvnAttr::Define(false,false)),
+                    "define_rec" => Some(RvnAttr::Define(true,false)),
+                    "phantom" => Some(RvnAttr::Define(false,true)),
                     "falsify" => Some(RvnAttr::Verify(false)),
                     "import" => Some(RvnAttr::Import),
                     "verify" => Some(RvnAttr::Verify(true)),
@@ -382,7 +384,7 @@ You must give a return type when using 'declare'"
 
                         true
                     }
-                    Some(RvnAttr::Define(is_rec)) => {
+                    Some(RvnAttr::Define(is_rec,is_phantom)) => {
                         let name = f.sig.ident.clone();
 
                         let mut targs = Vec::new();
@@ -413,7 +415,7 @@ You must give a return type when using 'define'"
                         sig_items.push(
                             SigItem::DFun(name, targs, inputs, output, body, is_rec)
                         );
-                        true
+                        !is_phantom
                     }
                     Some(RvnAttr::Import) => {
                         panic!("#[import] can only be applied to a 'use' statement")
@@ -481,7 +483,7 @@ You must give a return type when using 'define'"
                     Some(RvnAttr::Declare) => {
                         sig_items.push(SigItem::Type(i.ident.clone(), 0));
                     }
-                    Some(RvnAttr::Define(_is_rec)) => {
+                    Some(RvnAttr::Define(_is_rec,_is_phantom)) => {
                         sig_items.push(SigItem::TypeAlias(
                             i.ident.clone(),
                             *(i.ty).clone(),
