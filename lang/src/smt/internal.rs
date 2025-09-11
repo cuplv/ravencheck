@@ -152,7 +152,7 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: FunOp) ->
                     .collect::<Vec<Builder>>()
             );
             let otup2: Builder = Builder::tuple(
-                oxs1
+                oxs2
                     .iter()
                     .cloned()
                     .map(|x| Builder::return_(x.val()))
