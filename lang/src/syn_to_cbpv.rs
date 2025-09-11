@@ -438,6 +438,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             let b = syn_to_builder(*expr)?;
             match op {
                 UnOp::Not(_) => Ok(b.not()),
+                UnOp::Deref(_) => Ok(b),
                 op => Err(format!("Unhandled unary op {:?}", op)),
             }
         }
