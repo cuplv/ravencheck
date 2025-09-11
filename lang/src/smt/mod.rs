@@ -101,20 +101,28 @@ impl CheckedSig {
         name: S1,
         def: S2,
     ) {
-        self.add_fun_tas(name, [], def);
+        self.add_fun_tas(name, [], None, def);
     }
     pub fn add_fun_tas<S1: ToString, S2: ToString, const N1: usize>(
         &mut self,
         name: S1,
         tas: [&str; N1],
+        output: Option<&str>,
         def: S2,
     ) {
         let tas: Vec<String> = tas.iter().map(|s| s.to_string()).collect();
+        // let inputs: Vec<VType> = inputs.into_iter().map(|i| {
+        //     let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
+        //     t.expand_aliases(&self.0.type_aliases)
+        // }).collect();
 
         let mut unshadowed_aliases = self.0.type_aliases.clone();
         for a in tas.iter() {
             unshadowed_aliases.remove(a);
         }
+        // let output: VType = VType::from_string(output)
+        //     .expect("should be able to parse an input argument type as a VType")
+        //     .expand_aliases(&unshadowed_aliases);
 
         let fun = match parse_str_cbpv(&def.to_string()) {
             Ok(m) => m.expand_types(&unshadowed_aliases),
@@ -128,7 +136,23 @@ Error in parsing definition of \"{}\": {:?}",
         let tc = TypeContext::new_types(self.0.clone(), tas.clone());
         match fun.type_of(tc) {
             Ok(ct) => match ct.clone().unwrap_fun_v() {
-                Some(_) => {},
+                Some((_,out)) => match output {
+                    Some(output) => {
+                        let output: VType = VType::from_string(output)
+                            .expect("should be able to parse an input argument type as a VType")
+                            .expand_aliases(&unshadowed_aliases);
+                        assert!(
+                            output == out,
+                            "
+Error in type-checking definition of '{}':
+output type should be '{}', but body had type '{}'",
+                            name.to_string(),
+                            output.render(),
+                            out.render(),
+                        );
+                    }
+                    None => {}
+                }
                 None => panic!(
                     "
 Error in type-checking definition of \"{}\":

@@ -236,7 +236,7 @@ impl SigItem {
                 let output: String = format!("{}", quote! { #output });
                 if !is_rec {
                     syn::parse((quote! {
-                        sig.add_fun_tas(#name_tk, [#(#targs),*], #body_tk);
+                        sig.add_fun_tas(#name_tk, [#(#targs),*], Some(#output), #body_tk);
                     }).into()).unwrap()
                 } else {
                     syn::parse((quote! {
