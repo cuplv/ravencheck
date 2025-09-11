@@ -437,7 +437,11 @@ impl <'a> Context<'a> {
                         props.push(self.ctx.distinct(a,b));
                     }
                 }
-                Ok(self.ctx.and_many(props))
+                if *pos {
+                    Ok(self.ctx.and_many(props))
+                } else {
+                    Ok(self.ctx.or_many(props))
+                }
             }
             Binder1::LogQuantifier(q,xs,m) => {
                 let body = self.with_quantify(xs, |ctx| ctx.smt_comp(m))?;
