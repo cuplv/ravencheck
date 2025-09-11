@@ -8,11 +8,13 @@ use syn::{
     ExprIf,
     ExprLit,
     ExprMacro,
+    ExprMethodCall,
     ExprParen,
     ExprUnary,
     GenericArgument,
     Lit,
     LitBool,
+    ParenthesizedGenericArguments,
     Pat,
     PatIdent,
     PatType,
@@ -22,6 +24,8 @@ use syn::{
     ReturnType,
     Stmt,
     Type,
+    TypeImplTrait,
+    TypeParamBound,
     UnOp,
 };
 use crate::{
@@ -89,6 +93,39 @@ impl BType {
     }
 }
 
+fn get_fn_from_impl(mut t: TypeImplTrait) -> Option<(Vec<VType>, VType)> {
+    if t.bounds.len() != 1 {
+        return None;
+    }
+    match t.bounds.pop().unwrap().into_value() {
+        TypeParamBound::Trait(mut t) => {
+            if t.path.segments.len() != 1 {
+                return None;
+            }
+            let seg = t.path.segments.pop().unwrap().into_value();
+            match seg.ident.to_string().as_str() {
+                "Fn" | "FnMut" | "FnOnce" => match seg.arguments {
+                    PathArguments::Parenthesized(ParenthesizedGenericArguments{inputs, output: ReturnType::Type(_, output), ..}) => {
+                        let inputs = inputs
+                            .into_pairs()
+                            .map(|i| VType::from_syn(i.into_value()).unwrap())
+                            .collect();
+                        match VType::from_syn(*output) {
+                            Ok(output) => Some((inputs, output)),
+                            Err(_) => None,
+                        }
+
+                    }
+                    _ => None
+                }
+                _ => None
+            }
+        }
+        _ => None
+    }
+
+}
+
 impl VType {
     pub fn from_pat_type<S: ToString>(s: S) -> Result<Self, Error> {
         let pt: PatType = match syn::parse_str(&s.to_string()) {
@@ -125,6 +162,16 @@ impl VType {
                 };
                 Ok(VType::fun_v(input_types, output_type))
             }
+            Type::ImplTrait(t) => {
+                match get_fn_from_impl(t.clone()) {
+                    Some((inputs, output)) =>
+                        Ok(VType::fun_v(inputs, output)),
+                    None => panic!(
+                        "impl should be a closure trait with output: {:?}",
+                        t,
+                    ),
+                }
+            }
             Type::Path(mut p) => {
                 if p.path.segments.len() == 1 {
                     let seg = p.path.segments.pop().unwrap().into_value();
@@ -153,6 +200,7 @@ impl VType {
                     Err(format!("Can't handle type path {:?}, since it does not have exactly 1 segment.", p))
                 }
             }
+            Type::Reference(t) => Self::from_syn(*t.elem),
             Type::Tuple(p) => {
                 let mut ts = Vec::new();
                 for t in p.elems.into_iter() {
@@ -225,6 +273,13 @@ fn q_body(quantifier: Quantifier, expr: Expr) -> Result<Builder, Error> {
     }
 }
 
+fn get_cloned_expr(e: ExprMethodCall) -> Result<Expr, Error> {
+    match e.method.to_string().as_str() {
+        "clone" => Ok(*e.receiver),
+        m => Err(format!("only 'clone' should be used as a method call, found '{}'", m)),
+    }
+}
+
 pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
     match e {
         Expr::Binary(ExprBinary{ left, op, right, .. }) => {
@@ -268,6 +323,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             }
             lit => mk_err(format!("Unhandled lit: {:?}", lit)),
         }
+        Expr::MethodCall(e) => syn_to_builder(get_cloned_expr(e)?),
         Expr::Call(ExprCall{ func, mut args, .. }) => {
             match *func {
                 Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "forall" => {
@@ -368,6 +424,8 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                 Ok(Builder::return_(Val::Var(VName::new(ident), types)))
             }
         }
+
+        Expr::Reference(e) => syn_to_builder(*e.expr),
 
         Expr::Tuple(t) => {
             let mut bs = Vec::new();
