@@ -199,18 +199,19 @@ Type error in axiom \"{}\": {:?}",
             ),
         }
 
-        let mut cases = axiom.normal_form(self);
-        assert!(
-            cases.len() == 1,
-            "Axiom comp should have 1 case, had {} cases instead",
-            cases.len(),
-        );
-        let axiom = Axiom {
+        // let mut cases = axiom.normal_form(self);
+        // assert!(
+        //     cases.len() == 1,
+        //     "Axiom comp should have 1 case, had {} cases instead",
+        //     cases.len(),
+        // );
+        let axiom_a = Axiom {
             tas: tas.into_iter().map(|s| s.to_string()).collect(),
             inst_rules: inst_rules_parsed,
-            body: cases.pop().unwrap().1,
+            // body: cases.pop().unwrap().1,
+            body: axiom,
         };
-        self.axioms.push(axiom);
+        self.axioms.push(axiom_a);
     }
 
     pub fn add_alias_from_string<S1: ToString, S2: ToString>(
