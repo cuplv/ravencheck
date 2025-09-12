@@ -416,7 +416,7 @@ impl BType {
                     None if args.len() == 0 && type_bindings.contains(name) => {
                         Ok(())
                     }
-                    None => Err(format!("Type '{}' has not been declared in {:?} + {:?}", name, sig, type_bindings)),
+                    None => Err(format!("Type '{}' has not been declared", name)),
                 }
             }
         }

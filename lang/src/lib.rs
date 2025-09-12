@@ -221,8 +221,14 @@ Type error in axiom \"{}\": {:?}",
         let ty = VType::from_syn(
             syn::parse_str(&ty_string.to_string()).unwrap()
         ).unwrap();
-        println!("Adding alias: {} = {:?}", alias.to_string(), ty);
-        self.add_alias(alias, ty);
+        let ty2 = ty.clone().expand_aliases(&self.type_aliases);
+        println!(
+            "Adding alias: {} = {} => {}",
+            alias.to_string(),
+            ty.render(),
+            ty2.render(),
+        );
+        self.add_alias(alias, ty2);
     }
 
     pub fn add_annotation<S1: ToString, S2: ToString>(
