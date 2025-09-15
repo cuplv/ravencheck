@@ -1,5 +1,6 @@
 use syn::{
     BinOp,
+    Block,
     Expr,
     ExprBinary,
     ExprBlock,
@@ -11,7 +12,10 @@ use syn::{
     ExprMethodCall,
     ExprParen,
     ExprUnary,
+    FnArg,
+    ItemFn,
     GenericArgument,
+    GenericParam,
     Lit,
     LitBool,
     ParenthesizedGenericArguments,
@@ -22,6 +26,7 @@ use syn::{
     PathSegment,
     Macro,
     ReturnType,
+    Signature,
     Stmt,
     Type,
     TypeImplTrait,
@@ -45,7 +50,16 @@ fn mk_err<A,T: ToString>(s: T) -> Result<A,Error> {
     Err(s.to_string())
 }
 
-fn block_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
+pub fn block_to_builder(block: Block) -> Result<Builder, Error> {
+    let mut stmts = block.stmts;
+    stmts.reverse();
+    match stmts.pop() {
+        Some(s) => stmts_to_builder(s, stmts),
+        None => mk_err("Empty block"),
+    }
+}
+
+fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
     match stmt {
         Stmt::Local(l) => {
             let x = pat_to_vname(l.pat)?.0;
@@ -57,7 +71,7 @@ fn block_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
 
             match rem.pop() {
                 Some(next) => {
-                    let n = block_to_builder(next,rem)?;
+                    let n = stmts_to_builder(next,rem)?;
                     Ok(m.seq_pat(n)(x))
                 }
                 None => mk_err("terminating let-binding in block"),
@@ -213,6 +227,16 @@ impl VType {
     }
 }
 
+impl Pattern {
+    pub fn from_pat(p: Pat) -> Result<(Self, Option<VType>), Error> {
+        pat_to_vname(p)
+    }
+    pub fn from_pat_type(pt: PatType) -> Result<(Self, VType), Error> {
+        let (p,t) = pat_to_vname(Pat::Type(pt))?;
+        Ok((p, t.unwrap()))
+    }
+}
+
 fn pat_to_vname(p: Pat) -> Result<(Pattern, Option<VType>), Error> {
     match p {
         Pat::Ident(p) => Ok((Pattern::Atom(p.into()), None)),
@@ -297,14 +321,14 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             let mut stmts = block.stmts;
             stmts.reverse();
             match stmts.pop() {
-                Some(s) => block_to_builder(s, stmts),
+                Some(s) => stmts_to_builder(s, stmts),
                 None => mk_err("Empty block"),
             }
         }
         Expr::If(ExprIf{ cond, mut then_branch, else_branch, .. }) => {
             let cond = syn_to_builder(*cond)?;
             let then_branch = match then_branch.stmts.pop() {
-                Some(s) => block_to_builder(s, then_branch.stmts)?,
+                Some(s) => stmts_to_builder(s, then_branch.stmts)?,
                 None => Builder::return_(Val::unit()),
             };
             let else_branch = match else_branch {
@@ -444,5 +468,40 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         }
 
         e => mk_err(format!("Unhandled expr: {:?}", e)),
+    }
+}
+
+pub struct RirFnSig {
+    pub ident: String,
+    pub tas: Vec<String>,
+    pub inputs: Vec<(Pattern, VType)>,
+    pub output: VType,
+}
+
+impl RirFnSig {
+    pub fn from_syn(
+        ItemFn{sig, block, ..}: ItemFn,
+    ) -> Result<(Self, Block), Error> {
+        let Signature{ident, generics, inputs, output, ..} = sig;
+        let ident = ident.to_string();
+        let tas = generics.params
+            .into_pairs()
+            .filter_map(|p| match p.into_value() {
+                GenericParam::Type(tp) => Some(tp.ident.to_string()),
+                _ => None,
+            })
+            .collect();
+        let inputs = inputs
+            .into_pairs()
+            .map(|p| match p.into_value() {
+                FnArg::Typed(pt) => Pattern::from_pat_type(pt),
+                FnArg::Receiver(_) => Err(format!("function '{}' should not take a 'self' input", &ident)),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let output = match output {
+            ReturnType::Default => Err(format!("function '{}' has unspecified return type", &ident)),
+            ReturnType::Type(_, t) => VType::from_syn(*t),
+        }?;
+        Ok((RirFnSig{ident, tas, inputs, output}, *block))
     }
 }

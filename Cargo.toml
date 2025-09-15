@@ -19,6 +19,7 @@ Decidable verification of Rust code using relational abstraction.
 [dependencies]
 ravencheck-macros = { path = "./macros", version = "0.2.0" }
 ravenlang = { path = "./lang", version = "0.2.0" }
+syn = { version = "2.0", features = ["full","extra-traits"] }
 
 [[example]]
 name = "sets"

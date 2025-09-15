@@ -18,9 +18,27 @@ use easy_smt::Response;
 #[cfg(test)]
 mod tests; 
 
-pub struct CheckedSig(Sig);
+pub struct CheckedSig(pub Sig);
 
 impl CheckedSig {
+    pub fn assert_valid_comp(&self, c: Comp) -> Result<(), String> {
+        match query_negative_c(c, self) {
+            Response::Unsat => Ok(()),
+            Response::Sat =>
+                Err(format!("Solver found counterexample")),
+            Response::Unknown =>
+                Err(format!("Query could not be completed (sort cycle?)")),
+        }
+    }
+    pub fn assert_invalid_comp(&self, c: Comp) -> Result<(), String> {
+        match query_negative_c(c, self) {
+            Response::Unsat =>
+                Err(format!("Solver did not find counterexample")),
+            Response::Sat => Ok(()),
+            Response::Unknown =>
+                Err(format!("Query could not be completed (sort cycle?)")),
+        }
+    }
     pub fn assert_valid<T: ToString>(&self, s: T) {
         assert_valid_with(self, s)
     }

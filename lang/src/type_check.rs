@@ -481,4 +481,16 @@ impl VType {
         //     }
         // }
     }
+
+    /// Check if one type matches the other, after expanding aliases
+    /// (ignoring any shadowed by type abstractions) on the first
+    /// type.
+    pub fn type_match(self, other: &Self, sig: &Sig, tas: &Vec<String>) -> bool {
+        let mut unshadowed_aliases: HashMap<String, VType> = sig.type_aliases
+            .iter()
+            .filter(|(s,t)| !tas.contains(&s))
+            .map(|(s,t)| (s.clone(), t.clone()))
+            .collect();
+        &self.expand_types(&unshadowed_aliases) == other
+    }
 }

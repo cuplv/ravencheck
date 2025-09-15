@@ -6,3 +6,5 @@ pub use ravencheck_macros::{
     export_module,
 };
 pub use ravenlang::CheckedSig;
+mod rcc;
+pub use rcc::Rcc;

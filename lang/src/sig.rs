@@ -439,10 +439,12 @@ pub enum Op {
     Symbol(PredSymbol),
 }
 
+pub type InstRule = (BType, Vec<VType>);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Axiom {
     pub tas: Vec<String>,
-    pub inst_rules: Vec<(BType,Vec<VType>)>,
+    pub inst_rules: Vec<InstRule>,
     pub body: Comp,
 }
 

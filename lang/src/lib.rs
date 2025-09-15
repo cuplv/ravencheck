@@ -25,6 +25,7 @@ pub mod prop;
 pub use prop::Prop;
 mod rebuild;
 pub use rebuild::Rebuild;
+mod register;
 mod relevant;
 mod rename;
 mod sig;
@@ -41,6 +42,8 @@ pub use sig::{
     Sig,
     VType
 };
+mod simple_syn;
+use simple_syn::SimpleFn;
 mod smt;
 pub use smt::CheckedSig;
 mod substitute;
@@ -54,6 +57,8 @@ pub use gen::Gen;
 mod syn_to_cbpv;
 pub use syn_to_cbpv::{
     syn_to_builder,
+    block_to_builder,
+    RirFnSig,
 };
 
 pub fn parse_str_syn<T: syn::parse::Parse>(input: &str) -> syn::Result<T> {
