@@ -11,16 +11,17 @@ use syn::{
 use crate::{
     Axiom,
     CType,
+    InstRule,
     Gen,
     Sig,
     sig::{
         FunOp,
-        InstRule,
         PredSymbol,
         Op,
         OpCode,
     },
     syn_to_cbpv::{
+        InstRuleSyntax,
         RirFnSig,
         block_to_builder,
     },
@@ -32,11 +33,16 @@ impl Sig {
     pub fn reg_fn_assume(
         &mut self,
         f: ItemFn,
-        inst_rules: Vec<InstRule>,
+        inst_rules: Vec<InstRuleSyntax>,
     ) -> Result<(), String> {
         // Parse the signature into Rir types, and keep the body.
         let (RirFnSig{ident, tas, inputs, output}, body) =
             RirFnSig::from_syn(f)?;
+
+        let inst_rules = inst_rules
+            .into_iter()
+            .map(InstRule::from_syn)
+            .collect::<Result<Vec<_>, _>>()?;
 
         // For now, don't allow inputs
         if inputs.len() != 0 {
@@ -69,7 +75,8 @@ impl Sig {
                 "Type error in '{}': {}", ident, e
             )),
         }
-        let axiom = Axiom { tas, inst_rules, body };
+        let axiom = Axiom { tas, inst_rules: inst_rules.clone(), body };
+        println!("Pushing axiom with rules {:?}", inst_rules);
         self.axioms.push(axiom);
         Ok(())
     }

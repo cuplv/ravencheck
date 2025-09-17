@@ -10,13 +10,13 @@ pub mod my_mod {
         s.contains(&e)
     }
 
-    // #[assume]
-    // #[for_type(HashSet<E> => <E>)]
-    // fn equal_or_distinguisher<E: Eq + Hash>() -> bool {
-    //     forall(|a:HashSet<E>,b:HashSet<E>| {
-    //         a == b || exists(|e:E| member::<E>(e,a) !=  member::<E>(e,b))
-    //     })
-    // }
+    #[assume]
+    #[for_type(HashSet<E> => <E>)]
+    fn equal_or_distinguisher<E: Eq + Hash>() -> bool {
+        forall(|a:HashSet<E>,b:HashSet<E>| {
+            a == b || exists(|e:E| member::<E>(e,a) !=  member::<E>(e,b))
+        })
+    }
 
     #[falsify]
     fn prop1<E: Eq + Hash>() -> bool {
@@ -34,10 +34,11 @@ pub mod my_mod {
                 || s1 == s2
         })
     }
-    #[verify]
+    #[falsify]
     fn prop4<E: Eq + Hash>() -> bool {
         forall(|s1: HashSet<E>, s2: HashSet<E>| {
-            s1 == s2
+            (exists(|e:E| member::<E>(e,s1) != member::<E>(e,s2)))
+                && s1 == s2
         })
     }
 }

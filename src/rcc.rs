@@ -9,6 +9,7 @@ use ravenlang::{
     Gen,
     Goal,
     RirFnSig,
+    InstRuleSyntax,
     TypeContext,
     VType,
     block_to_builder,
@@ -68,22 +69,24 @@ impl Rcc {
         &mut self,
         target_name: &str,
         inputs: [&str; N],
-        item: &str,
+        item_fn: &str,
     ) {
         todo!()
     }
 
-    pub fn reg_item_assume<const N: usize>(
+    pub fn reg_fn_assume<const N: usize>(
         &mut self,
-        _inst_rules: [&str; N],
-        item: &str,
+        inst_rules: [&str; N],
+        item_fn: &str,
     ) {
-        let inst_rules = Vec::new();
-
-        match syn::parse_str(item).unwrap() {
-            Item::Fn(i) => self.sig.0.reg_fn_assume(i, inst_rules).unwrap(),
-            _ => todo!(),
+        
+        let mut inst_rules_parsed: Vec<InstRuleSyntax> = Vec::new();
+        for s in inst_rules {
+            inst_rules_parsed.push(syn::parse_str(s).unwrap());
         }
+
+        let item_fn = syn::parse_str(item_fn).unwrap();
+        self.sig.0.reg_fn_assume(item_fn, inst_rules_parsed).unwrap();
     }
 
     pub fn reg_item_declare(&mut self, item: &str) {
@@ -107,57 +110,53 @@ impl Rcc {
         todo!()
     }
 
-    pub fn reg_item_verify(&mut self, item: &str, should_be_valid: bool) {
-        match syn::parse_str(item).unwrap() {
-            Item::Fn(i) => {
-                // Parse the signature into Rir types, and keep the body.
-                let (RirFnSig{ident, tas, inputs, output}, body) =
-                    RirFnSig::from_syn(i).unwrap();
+    pub fn reg_fn_goal(&mut self, should_be_valid: bool, item_fn: &str) {
+        let i = syn::parse_str(item_fn).unwrap();
+        // Parse the signature into Rir types, and keep the body.
+        let (RirFnSig{ident, tas, inputs, output}, body) =
+            RirFnSig::from_syn(i).unwrap();
 
-                // For now, don't allow inputs
-                if inputs.len() != 0 {
-                    panic!(
-                        "#[verify] items should have zero inputs, but '{}' has {} inputs.",
-                        ident,
-                        inputs.len()
-                    );
-                }
-
-                // Declared output must be bool. Consider type aliases and
-                // type abstractions when checking.
-                if !output.clone().type_match(&VType::prop(), &self.sig.0, &tas) {
-                    panic!(
-                        "#[assume] items must have bool output, but '{}' has '{}' output.",
-                        ident,
-                        output.render(),
-                    );
-                }
-
-                // Body must also type-check as bool
-                let body = match block_to_builder(body) {
-                    Ok(b) => b.build(&mut Gen::new()),
-                    Err(e) => panic!("{}", e),
-                };
-                let tc = TypeContext::new_types(self.sig.0.clone(), tas.clone());
-                match body.type_check_r(&CType::Return(VType::prop()), tc) {
-                    Ok(()) => {},
-                    Err(e) => panic!(
-                        "Type error in '{}': {}", ident, e
-                    ),
-                }
-
-                let goal = Goal {
-                    title: ident.to_string(),
-                    tas,
-                    condition: body,
-                    should_be_valid,
-                    
-                };
-
-                self.goals.push(goal);
-            }
-            _ => panic!("Can't use #[verify] on '{}'", item),
+        // For now, don't allow inputs
+        if inputs.len() != 0 {
+            panic!(
+                "#[verify] items should have zero inputs, but '{}' has {} inputs.",
+                ident,
+                inputs.len()
+            );
         }
+
+        // Declared output must be bool. Consider type aliases and
+        // type abstractions when checking.
+        if !output.clone().type_match(&VType::prop(), &self.sig.0, &tas) {
+            panic!(
+                "#[assume] items must have bool output, but '{}' has '{}' output.",
+                ident,
+                output.render(),
+            );
+        }
+
+        // Body must also type-check as bool
+        let body = match block_to_builder(body) {
+            Ok(b) => b.build(&mut Gen::new()),
+            Err(e) => panic!("{}", e),
+        };
+        let tc = TypeContext::new_types(self.sig.0.clone(), tas.clone());
+        match body.type_check_r(&CType::Return(VType::prop()), tc) {
+            Ok(()) => {},
+            Err(e) => panic!(
+                "Type error in '{}': {}", ident, e
+            ),
+        }
+
+        let goal = Goal {
+            title: ident.to_string(),
+            tas,
+            condition: body,
+            should_be_valid,
+            
+        };
+
+        self.goals.push(goal);
     }
 
     pub fn check_goals(self) {

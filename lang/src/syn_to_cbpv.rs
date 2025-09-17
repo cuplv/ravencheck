@@ -1,4 +1,5 @@
 use syn::{
+    AngleBracketedGenericArguments,
     BinOp,
     Block,
     Expr,
@@ -28,14 +29,19 @@ use syn::{
     ReturnType,
     Signature,
     Stmt,
+    Token,
     Type,
     TypeImplTrait,
     TypeParamBound,
     UnOp,
 };
+use syn::parse::{Parse, ParseStream, Parser};
+use syn::punctuated::Punctuated;
+
 use crate::{
     Builder,
     BType,
+    InstRule,
     LogOpN,
     Pattern,
     Quantifier,
@@ -48,6 +54,45 @@ type Error = String;
 
 fn mk_err<A,T: ToString>(s: T) -> Result<A,Error> {
     Err(s.to_string())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InstRuleSyntax {
+    pub left: Type,
+    pub arrow: Token![=>],
+    pub right: AngleBracketedGenericArguments,
+}
+
+impl Parse for InstRuleSyntax {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            left: input.parse()?,
+            arrow: input.parse()?,
+            right: input.parse()?,
+        })
+    }
+}
+
+impl InstRule {
+    pub fn from_syn(
+        InstRuleSyntax{left,right,..}: InstRuleSyntax
+    ) -> Result<Self, Error> {
+        let left = match VType::from_syn(left)?.unwrap_base() {
+            Ok(bt) => Ok(bt),
+            Err(vt) => Err(format!("inst rule left-side should be a base type, but it was '{}'", vt.render())),
+        }?;
+        let right: Vec<VType> = right
+            .args
+            .into_pairs()
+            .map(|p| p.into_value())
+            .map(|ga| match ga {
+                GenericArgument::Type(t) => t,
+                ga => panic!("Can't handle type argument of form {:?}", ga),
+            })
+            .map(|t| VType::from_syn(t))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(InstRule{left, right})
+    }
 }
 
 pub fn block_to_builder(block: Block) -> Result<Builder, Error> {

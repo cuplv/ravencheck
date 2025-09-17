@@ -34,6 +34,7 @@ pub use sig::{
     BType,
     CType,
     FunOp,
+    InstRule,
     PredOp,
     PredSymbol,
     Op,
@@ -56,9 +57,10 @@ pub use gen::Gen;
 
 mod syn_to_cbpv;
 pub use syn_to_cbpv::{
+    InstRuleSyntax,
+    RirFnSig,
     syn_to_builder,
     block_to_builder,
-    RirFnSig,
 };
 
 pub struct Goal {
@@ -179,7 +181,7 @@ impl Sig {
             let bs = bs.iter().map(|b| {
                 VType::from_string(b.to_string()).unwrap()
             }).collect();
-            inst_rules_parsed.push((a,bs));
+            inst_rules_parsed.push(InstRule{left: a, right: bs});
         }
 
         let axiom = match parse_str_cbpv(&def.to_string()) {

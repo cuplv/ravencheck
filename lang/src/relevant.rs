@@ -4,6 +4,7 @@ use crate::{
     BinderN,
     BType,
     Comp,
+    InstRule,
     LogOpN,
     Op,
     OpCode,
@@ -233,7 +234,9 @@ impl Sig {
 impl Axiom {
     /// Instantiate for the given BType, if it triggers a rule.
     pub fn inst_for(&self, b: &BType) -> Option<Comp> {
-        for (l,r) in &self.inst_rules {
+        for InstRule{left,right} in &self.inst_rules {
+            let l = left;
+            let r = right;
             match (l,b) {
                 (BType::UI(name_l, args_l), BType::UI(name, args)) if name_l == name => {
                     println!("Matching {} with {}", l, b);
