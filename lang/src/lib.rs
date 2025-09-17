@@ -61,6 +61,13 @@ pub use syn_to_cbpv::{
     RirFnSig,
 };
 
+pub struct Goal {
+    pub title: String,
+    pub tas: Vec<String>,
+    pub condition: Comp,
+    pub should_be_valid: bool,
+}
+
 pub fn parse_str_syn<T: syn::parse::Parse>(input: &str) -> syn::Result<T> {
     syn::parse_str(input)
 }

@@ -7,17 +7,12 @@ use ravenlang::{
     Comp,
     CheckedSig,
     Gen,
+    Goal,
     RirFnSig,
     TypeContext,
     VType,
     block_to_builder,
 };
-
-struct Goal {
-    title: String,
-    condition: Comp,
-    should_be_valid: bool,
-}
 
 /// The Ravencheck context, which collects definitions, declarations,
 /// and verification goals from the user's code.
@@ -35,7 +30,7 @@ impl Rcc {
     }
 
     pub fn reg_toplevel_type(&mut self, ident: &str, arity: usize) {
-        todo!()
+        self.sig.0.sorts.insert(ident.to_string(), arity);
     }
 
     /// Register a function (`fn`) item as a checked annotation.
@@ -153,6 +148,7 @@ impl Rcc {
 
                 let goal = Goal {
                     title: ident.to_string(),
+                    tas,
                     condition: body,
                     should_be_valid,
                     
@@ -164,21 +160,27 @@ impl Rcc {
         }
     }
 
-    pub fn check_goals(&self) {
-        for goal in self.goals.iter() {
-            if goal.should_be_valid {
-                match self.sig.assert_valid_comp(goal.condition.clone()) {
-                    Ok(()) => {},
-                    Err(e) => panic!(
-                        "Failed to verify '{}': {}", goal.title, e),
-                }
-            } else {
-                match self.sig.assert_invalid_comp(goal.condition.clone()) {
-                    Ok(()) => {},
-                    Err(e) => panic!(
-                        "Failed to falsify '{}': {}", goal.title, e),
-                }
+    pub fn check_goals(self) {
+        let Rcc{sig, goals, ..} = self;
+        let mut failures = Vec::new();
+        for goal in goals.into_iter() {
+            match sig.check_goal(goal) {
+                Ok(()) => {},
+                Err(e) => failures.push(e),
             }
+        }
+        if failures.len() > 0 {
+            let mut s = String::new();
+            s.push_str("\n");
+            s.push_str("#########[ verification failed ]#########\n");
+            s.push_str("##\n");
+            for e in failures {
+                s.push_str(&format!("## > {}\n", e));
+                s.push_str("##\n");
+            }
+            s.push_str("#########################################\n");
+
+            panic!("{}", s);
         }
     }
 }

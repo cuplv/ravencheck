@@ -5,6 +5,7 @@ use crate::{
     Builder,
     Comp,
     Gen,
+    Goal,
     Op,
     Quantifier,
     Sig,
@@ -18,27 +19,44 @@ use easy_smt::Response;
 #[cfg(test)]
 mod tests; 
 
+#[derive(Clone)]
 pub struct CheckedSig(pub Sig);
 
 impl CheckedSig {
-    pub fn assert_valid_comp(&self, c: Comp) -> Result<(), String> {
-        match query_negative_c(c, self) {
-            Response::Unsat => Ok(()),
-            Response::Sat =>
-                Err(format!("Solver found counterexample")),
-            Response::Unknown =>
-                Err(format!("Query could not be completed (sort cycle?)")),
-        }
-    }
-    pub fn assert_invalid_comp(&self, c: Comp) -> Result<(), String> {
-        match query_negative_c(c, self) {
+    pub fn check_goal(&self, goal: Goal) -> Result<(), String> {
+        let Goal{title, tas, condition, should_be_valid} = goal;
+        match query_negative_c(condition, self, tas) {
+            Response::Unsat if should_be_valid => Ok(()),
             Response::Unsat =>
-                Err(format!("Solver did not find counterexample")),
-            Response::Sat => Ok(()),
+                Err(format!("Failed to falisfy '{}': solver did not find counterexample", title)),
+            Response::Sat if !should_be_valid => Ok(()),
+            Response::Sat =>
+                Err(format!("Failed to verify '{}': solver found counterexample", title)),
+            Response::Unknown if should_be_valid =>
+                Err(format!("Failed to verify '{}': query could not be completed (sort cycle?)", title)),
             Response::Unknown =>
-                Err(format!("Query could not be completed (sort cycle?)")),
+                Err(format!("Failed to falsify '{}': query could not be completed (sort cycle?)", title)),
         }
     }
+
+    // pub fn assert_valid_comp(&self, c: Comp) -> Result<(), String> {
+    //     match query_negative_c(c, self) {
+    //         Response::Unsat => Ok(()),
+    //         Response::Sat =>
+    //             Err(format!("Solver found counterexample")),
+    //         Response::Unknown =>
+    //             Err(format!("Query could not be completed (sort cycle?)")),
+    //     }
+    // }
+    // pub fn assert_invalid_comp(&self, c: Comp) -> Result<(), String> {
+    //     match query_negative_c(c, self) {
+    //         Response::Unsat =>
+    //             Err(format!("Solver did not find counterexample")),
+    //         Response::Sat => Ok(()),
+    //         Response::Unknown =>
+    //             Err(format!("Query could not be completed (sort cycle?)")),
+    //     }
+    // }
     pub fn assert_valid<T: ToString>(&self, s: T) {
         assert_valid_with(self, s)
     }
@@ -252,7 +270,7 @@ Error in type-checking definition of \"{}\": {:?}",
             .build(&mut gn);
 
         let v_sig = CheckedSig(v_sig);
-        match query_negative_c(m, &v_sig) {
+        match query_negative_c(m, &v_sig, Vec::new()) {
             Response::Unsat => {},
             Response::Sat => {
                 panic!(
@@ -335,7 +353,7 @@ Error in type-checking definition of \"{}\": {:?}",
         // get the output, and then check that the inputs and output
         // are related by the annotation.
         self.0 = potential_sig;
-        match query_negative_c(m, &self) {
+        match query_negative_c(m, &self, Vec::new()) {
             Response::Unsat => {},
             Response::Sat => {
                 panic!(
@@ -409,16 +427,18 @@ Error in type-checking definition of \"{}\": {:?}",
 
 fn query_negative<T: ToString>(s: T, sig: &CheckedSig) -> Response {
     match parse_str_cbpv(&s.to_string()) {
-        Ok(c) => query_negative_c(c, sig),
+        Ok(c) => query_negative_c(c, sig, Vec::new()),
         Err(e) => panic!("Parse error: {}", e),
     }
 }
 
-fn query_negative_c(c: Comp, sig: &CheckedSig) -> Response {
-    // let mut p = match Prop::parse(&s.to_string(), sig.inner_sig()) {
-    //     Ok(p) => p,
-    //     Err(e) => panic!("{}", e),
-    // };
+fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> Response {
+    let mut sig = sig.clone();
+    // Declare all type abstraction arguments as zero-arity
+    // uninterpreted sorts.
+    for s in tas {
+        sig.0.sorts.insert(s, 0);
+    }
     let mut p = match c.as_prop(sig.inner_sig()) {
         Ok(p) => p,
         Err(e) => panic!("{}", e),
@@ -426,10 +446,7 @@ fn query_negative_c(c: Comp, sig: &CheckedSig) -> Response {
     println!("Checking {} cases...", p.cases.len());
     assert!(p.is_single_case(), "Should only be single-case props so far.");
     p.negate(sig.inner_sig());
-    // let sig_graph = sig.inner_sig().sort_graph();
     for (name, case) in p.cases {
-        //let mut g = sig_graph.clone();
-        // g.append(case.sort_graph());
         let g = sig.inner_sig().sort_graph_combined(&case);
         let cycles = g.get_cycles();
         if cycles.len() > 0 {

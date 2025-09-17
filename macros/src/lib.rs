@@ -513,8 +513,13 @@ fn process_module(
             
             extract_items(items, &mut rcc_items);
 
-            let test_stmts: Vec<Stmt> =
+            let mut test_stmts: Vec<Stmt> =
                 generate_stmts(&rcc_items, GenMode::Check);
+            test_stmts.push(
+                syn::parse2(quote!{
+                    rcc.check_goals();
+                }).unwrap()
+            );
 
             let test: ItemFn = syn::parse((quote! {
                 #[test]

@@ -1,6 +1,7 @@
 mod filter;
 mod import_test;
 mod minimal;
+mod minimal_polymorphic;
 mod nat;
 mod nat_u32;
 mod sets;
