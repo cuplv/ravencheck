@@ -1,5 +1,6 @@
 use syn::{
     Item,
+    ItemFn,
 };
 
 use ravenlang::{
@@ -8,12 +9,15 @@ use ravenlang::{
     CheckedSig,
     Gen,
     Goal,
+    HypotheticalCallSyntax,
     RirFnSig,
     InstRuleSyntax,
     TypeContext,
     VType,
     block_to_builder,
 };
+
+use std::str::FromStr;
 
 /// The Ravencheck context, which collects definitions, declarations,
 /// and verification goals from the user's code.
@@ -65,15 +69,6 @@ impl Rcc {
         todo!()
     }
 
-    pub fn reg_item_assume_for<const N: usize>(
-        &mut self,
-        target_name: &str,
-        inputs: [&str; N],
-        item_fn: &str,
-    ) {
-        todo!()
-    }
-
     pub fn reg_fn_assume<const N: usize>(
         &mut self,
         inst_rules: [&str; N],
@@ -87,6 +82,16 @@ impl Rcc {
 
         let item_fn = syn::parse_str(item_fn).unwrap();
         self.sig.0.reg_fn_assume(item_fn, inst_rules_parsed).unwrap();
+    }
+
+    pub fn reg_fn_assume_for(
+        &mut self,
+        call: &str,
+        item_fn: &str,
+    ) {
+        let call: HypotheticalCallSyntax = syn::parse_str(call).unwrap();
+        let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
+        self.sig.0.reg_fn_assume_for(item_fn, call).unwrap();
     }
 
     pub fn reg_item_declare(&mut self, item: &str) {

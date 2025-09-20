@@ -2,6 +2,7 @@
 // mod import_test;
 mod minimal;
 mod minimal_polymorphic;
+mod minimal_filter;
 // mod nat;
 // mod nat_u32;
 // mod sets;

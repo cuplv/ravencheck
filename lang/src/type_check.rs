@@ -39,11 +39,11 @@ impl TypeContext {
             sig,
         }
     }
-    fn plus(mut self, x: VName, t: VType) -> Self {
+    pub fn plus(mut self, x: VName, t: VType) -> Self {
         self.bindings.insert(x,t);
         self
     }
-    fn append(mut self, c: Vec<(VName,VType)>) -> Self {
+    pub fn append(mut self, c: Vec<(VName,VType)>) -> Self {
         self.bindings.extend(c.into_iter());
         self
     }

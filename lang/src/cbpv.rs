@@ -70,6 +70,13 @@ impl From<VName> for Val {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HypotheticalCall {
+    pub code: OpCode,
+    pub inputs: Vec<String>,
+    pub output: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
     NoBind,
     Atom(VName),

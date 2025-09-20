@@ -33,9 +33,9 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnItemAttr {
-    Annotate(ExprCall, Ident),
+    Annotate(String),
     Assume,
-    AssumeFor(ExprCall, Ident),
+    AssumeFor(String),
     Declare,
     Define,
     Falsify,
@@ -73,34 +73,10 @@ impl RvnItemAttr {
             }
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
-                    Some("annotate") => {
-                        todo!("parse #[annotate(..)] attributes")
-                        // let fun_name: Ident = l.parse_args().unwrap();
-                        // Some(RvnAttr::Annotate(fun_name.to_string()))
-                    }
-                    Some("assume") => {
-                        todo!("parse #[assume(..)] attributes")
-                        // let rule: Type = l.parse_args().unwrap();
-                        // match rule {
-                        //     Type::Tuple(t) => {
-                        //         let a = t.elems[0].clone();
-                        //         match t.elems[1].clone() {
-                        //             Type::Tuple(bs) => {
-                        //                 Some(RvnAttr::Assume(vec![(
-                        //                     a,
-                        //                     bs.elems.iter().cloned().collect(),
-                        //                 )]))
-                        //             }
-                        //             b => {
-                        //                 Some(RvnAttr::Assume(vec![(a,vec![b])]))
-                        //             }
-                        //         }
-                        //         // let b = t.elems[1].clone();
-                        //         // Some(RvnAttr::Assume(vec![(a,b)]))
-                        //     }
-                        //     t => todo!("Can't handle inst rule {:?}", t),
-                        // }
-                    }
+                    Some("annotate") =>
+                        Some(RvnItemAttr::Annotate(l.tokens.to_string())),
+                    Some("assume") =>
+                        Some(RvnItemAttr::AssumeFor(l.tokens.to_string())),
                     Some("assume_for") => {
                         panic!("#[assume_for(..)] has been replaced by #[assume(..)]")
                         // let fun_name: Ident = l.parse_args().unwrap();
@@ -144,9 +120,9 @@ impl RvnItemAttr {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
-    Annotate(ExprCall, Ident, ItemFn),
+    Annotate(String, ItemFn),
     Assume(Vec<String>, ItemFn),
-    AssumeFor(ExprCall, Ident, ItemFn),
+    AssumeFor(String, ItemFn),
     /// The boolean is `true` if this is a phantom declaration.
     Declare(Item, bool),
     DeclareType(Ident, usize),
@@ -224,7 +200,7 @@ impl RccCommand {
         }
         let mut ras = VecDeque::from(ras);
         match ras.pop_front().unwrap() {
-            Annotate(_call, _x_out) => todo!("from_item for RvnItemAttr::Annotate"),
+            Annotate(_) => todo!("from_item for RvnItemAttr::Annotate"),
             Assume => match item {
                 Item::Fn(i) => {
                     let mut rules = Vec::new();
@@ -241,7 +217,13 @@ impl RccCommand {
                 }
                 item => panic!("Can't use #[assume] on {:?}", item),
             }
-            AssumeFor(_call, _x_out) => todo!("from_item for AssumeFor"),
+            AssumeFor(call) => match item {
+                Item::Fn(i) => {
+                    let c = RccCommand::AssumeFor(call, i);
+                    (Some(c), None)
+                }
+                item => panic!("Can't use #[assume_for] on {:?}", item),
+            }
             Declare => Self::mk_declare_define(Vec::from(ras), item, false),
             Define => Self::mk_declare_define(Vec::from(ras), item, true),
             Falsify => Self::mk_goal(Vec::from(ras), item, false),
@@ -591,7 +573,7 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             // RccItem::AttrItem(attr, item) => {
             //     let item_str = quote!{ #item }.to_string();
             //     match (attr,mode) {
-            RccCommand::Annotate(_call, _x_out, fn_item) =>
+            RccCommand::Annotate(line, fn_item) =>
                 todo!("generate_stmts for Annotate"),
             //         (RvnAttr::Annotate(fname), _mode) => {
             //             let s: Stmt = syn::parse2(quote! {
@@ -603,6 +585,13 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_assume([#(#rules),*], #item_str);
+                }).unwrap();
+                out.push(s);
+            }
+            RccCommand::AssumeFor(call_str, item_fn) => {
+                let item_str = quote!{ #item_fn }.to_string();
+                let s: Stmt = syn::parse2(quote! {
+                    rcc.reg_fn_assume_for(#call_str, #item_str);
                 }).unwrap();
                 out.push(s);
             }

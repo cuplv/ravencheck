@@ -7,6 +7,7 @@ pub use cbpv::{
     CaseName,
     Cases,
     Comp,
+    HypotheticalCall,
     Literal,
     LogOpN,
     OpMode,
@@ -58,6 +59,7 @@ pub use gen::Gen;
 mod syn_to_cbpv;
 pub use syn_to_cbpv::{
     InstRuleSyntax,
+    HypotheticalCallSyntax,
     RirFnSig,
     syn_to_builder,
     block_to_builder,

@@ -14,6 +14,7 @@ use syn::{
     ExprParen,
     ExprUnary,
     FnArg,
+    Ident,
     ItemFn,
     GenericArgument,
     GenericParam,
@@ -42,7 +43,9 @@ use crate::{
     Builder,
     BType,
     InstRule,
+    HypotheticalCall,
     LogOpN,
+    OpCode,
     Pattern,
     Quantifier,
     Val,
@@ -54,6 +57,76 @@ type Error = String;
 
 fn mk_err<A,T: ToString>(s: T) -> Result<A,Error> {
     Err(s.to_string())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HypotheticalCallSyntax {
+    pub call: ExprCall,
+    pub arrow: Token![=>],
+    pub output: Ident,
+}
+
+impl Parse for HypotheticalCallSyntax {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            call: match input.parse() {
+                Ok(c) => c,
+                Err(e) => panic!("Error parsing call: {}", e),
+            },
+            arrow: input.parse()?,
+            output: match input.parse() {
+                Ok(o) => o,
+                Err(e) => panic!("Error parsing output: {}", e),
+            },
+        })
+    }
+}
+
+impl HypotheticalCallSyntax {
+    pub fn into_rir(self) -> Result<HypotheticalCall, Error> {
+        let HypotheticalCallSyntax {call, output, ..} = self;
+        let ExprCall{func, args, ..} = call;
+        match *func {
+            Expr::Path(p) => {
+                assert!(p.path.segments.len() == 1);
+                let PathSegment{ident, arguments} =
+                    p.path.segments.first().unwrap().clone();
+                let types = match arguments {
+                    PathArguments::None => Vec::new(),
+                    PathArguments::AngleBracketed(a) => {
+                        a.args.into_pairs().map(|pr| {
+                            match pr.into_value() {
+                                GenericArgument::Type(t) =>
+                                    VType::from_syn(t).unwrap(),
+                                a => panic!("Can't handle this generic argument: {:?}", a),
+                            }
+                        }).collect()
+                    }
+                    PathArguments::Parenthesized(args) => {
+                        panic!("Can't handle parenthesized path arguments: {:?}", args)
+                    }
+                };
+                let ident = ident.to_string();
+                let code = OpCode{ident, types};
+                let inputs = args
+                    .iter()
+                    .map(|i| match i {
+                        Expr::Path(p) => {
+                            p.path.segments
+                                .first()
+                                .unwrap()
+                                .clone()
+                                .ident.to_string()
+                        }
+                        _ => panic!("Inputs must be simple identifiers"),
+                    })
+                    .collect();
+                let output = output.to_string();
+                Ok(HypotheticalCall{code, inputs, output})
+            }
+            _ => Err(format!("In #[assume_for(..)], called function must be by name, not an arbitrary expression.")),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
