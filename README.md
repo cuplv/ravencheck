@@ -11,16 +11,16 @@ dev environment.
 Then, you can add `ravencheck` as a dependency in your Cargo.toml
 file, in three different ways:
 
-### Depend on crates.io package (v0.2.0)
+### Depend on crates.io package (v0.3.0)
 
 Add the following to your Cargo.toml:
 
 ```
 [dependencies]
-ravencheck = "0.1.2"
+ravencheck = "0.3"
 ```
 
-This gives you the latest published version (v0.2.0).
+This gives you the latest published version (v0.3.0).
 
 ### Depend on the GitHub repo's latest commit
 

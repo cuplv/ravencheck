@@ -1,5 +1,7 @@
 mod filter;
 mod import_test;
+mod main_example_nat;
+mod main_example_set;
 mod minimal;
 mod minimal_polymorphic;
 mod minimal_filter;
