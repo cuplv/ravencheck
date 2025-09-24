@@ -101,8 +101,16 @@ impl HypotheticalCallSyntax {
                         panic!("Can't handle parenthesized path arguments: {:?}", args)
                     }
                 };
+                let types: Vec<String> = types
+                    .into_iter()
+                    .map(|t| match t.unwrap_base() {
+                        Ok(BType::UI(s, ts)) if ts.len() == 0 => Ok(s),
+                        Ok(b) => Err(format!("type args in #[assume(..)] or #[assert(..)] must be simple identifiers, instead got {}", b)),
+                        Err(t) => Err(format!("type args in #[assume(..)] or #[assert(..)] must be simple identifiers, instead got {}", t.render())),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
                 let ident = ident.to_string();
-                let code = OpCode{ident, types};
                 let inputs = args
                     .iter()
                     .map(|i| match i {
@@ -117,7 +125,7 @@ impl HypotheticalCallSyntax {
                     })
                     .collect();
                 let output = output.to_string();
-                Ok(HypotheticalCall{code, inputs, output})
+                Ok(HypotheticalCall{ident, tas: types, inputs, output})
             }
             _ => Err(format!("In #[assume_for(..)], called function must be by name, not an arbitrary expression.")),
         }
@@ -615,6 +623,9 @@ impl RirFnSig {
             ReturnType::Type(_, t) => VType::from_syn(*t),
         }?;
         Ok(RirFnSig{ident, tas, inputs, output})
+    }
+    pub fn input_types(&self) -> Vec<VType> {
+        self.inputs.iter().map(|(_,t)| t.clone()).collect()
     }
 }
 

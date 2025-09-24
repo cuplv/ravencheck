@@ -71,9 +71,18 @@ impl From<VName> for Val {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HypotheticalCall {
-    pub code: OpCode,
+    pub ident: String,
+    pub tas: Vec<String>,
     pub inputs: Vec<String>,
     pub output: String,
+}
+
+impl HypotheticalCall {
+    pub fn code(&self) -> OpCode {
+        let ident = self.ident.clone();
+        let types = self.tas.clone().into_iter().map(VType::ui).collect();
+        OpCode{ ident, types }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

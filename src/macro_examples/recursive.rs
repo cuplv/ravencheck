@@ -56,19 +56,26 @@ mod rvn {
         }
     }
 
-    // #[annotate(concat::<T>(e, l1, l2) => l3)]
-    // fn left_empty() -> bool {
-    //     implies(
-    //         l1 == empty_list::<E>(),
-    //         l3 == l2,
-    //     )
-    // }
+    #[annotate(concat::<T>(e, l1, l2) => l3)]
+    fn left_empty() -> bool {
+        implies(
+            l1 == empty_list::<T>(),
+            l3 == l2,
+        )
+    }
 
-    // #[annotate(concat::<T>(e, l1, l2) => l3)]
-    // fn right_empty() -> bool {
-    //     implies(
-    //         l2 == empty_list::<E>(),
-    //         l3 == l1,
-    //     )
-    // }
+    #[verify]
+    fn from_left_empty<E>() -> bool {
+        forall(|e_def: E, l2: List<E>| {
+            concat::<E>(e_def, empty_list::<E>(), l2) == l2
+        })
+    }
+
+    #[annotate(concat::<T>(e, l1, l2) => l3)]
+    fn right_empty() -> bool {
+        implies(
+            l2 == empty_list::<T>(),
+            l3 == l1,
+        )
+    }
 }

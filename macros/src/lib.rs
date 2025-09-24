@@ -580,8 +580,13 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             // RccItem::AttrItem(attr, item) => {
             //     let item_str = quote!{ #item }.to_string();
             //     match (attr,mode) {
-            RccCommand::Annotate(_line, _fn_item) =>
-                todo!("generate_stmts for Annotate"),
+            RccCommand::Annotate(call_str, item_fn) => {
+                let item_str = quote!{ #item_fn }.to_string();
+                let s: Stmt = syn::parse2(quote! {
+                    rcc.reg_fn_annotate(#call_str, #item_str).unwrap();
+                }).unwrap();
+                out.push(s);
+            }
             //         (RvnAttr::Annotate(fname), _mode) => {
             //             let s: Stmt = syn::parse2(quote! {
             //                 todo!("generate_stmts for Annotate");
@@ -770,8 +775,8 @@ fn process_module(
                 }
             };
 
-            // println!("Here is the test module content:");
-            // println!("{}", test_mod);
+            println!("Here is the test module content:");
+            println!("{}", test_mod);
 
             items.push(syn::parse(test_mod.into()).expect("parse test mod"));
 

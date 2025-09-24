@@ -486,6 +486,20 @@ impl Sig {
         }
         None
     }
+    pub fn get_tas(&self, s: &str) -> Option<&Vec<String>> {
+        for (name, tas, _) in self.ops.iter() {
+            if name == s {
+                return Some(tas);
+            }
+        }
+        None
+    }
+    pub fn get_op_input_types(&self, s: &str) -> Option<&Vec<VType>> {
+        match self.get_op(s)? {
+            (_, Op::Fun(op)) => Some(&op.inputs),
+            (_, op) => todo!("get_op_input_types for {:?}", op),
+        }
+    }
     pub fn sort_arity(&self, s: &str) -> Option<usize> {
         self.sorts.get(s).copied()
     }

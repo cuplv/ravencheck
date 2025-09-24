@@ -10,14 +10,17 @@ use ravenlang::{
     CheckedSig,
     Gen,
     Goal,
+    HypotheticalCall,
     HypotheticalCallSyntax,
     Op,
+    Quantifier,
     RirFn,
     RirFnSig,
     InstRuleSyntax,
     TypeContext,
     VName,
     VType,
+    Val,
     block_to_builder,
 };
 
@@ -37,6 +40,26 @@ impl Rcc {
             sig: CheckedSig::empty(),
             defs: HashMap::new(),
             goals: Vec::new(),
+        }
+    }
+
+    fn get_goal_by_title(&self, title: &str) -> Option<&Goal> {
+        for goal in &self.goals {
+            if &goal.title == title {
+                return Some(goal);
+            }
+        }
+        None
+    }
+
+    fn push_goal(&mut self, goal: Goal) -> Result<(), String> {
+        match self.get_goal_by_title(&goal.title) {
+            Some(_) =>
+                Err(format!("You tried to define '{}' twice", &goal.title)),
+            None => {
+                self.goals.push(goal);
+                Ok(())
+            }
         }
     }
 
@@ -66,12 +89,52 @@ impl Rcc {
     ///     "fn add_is monotonic<T>(output...",
     /// )
     /// ```
-    pub fn reg_item_annotate<const N: usize>(
+    pub fn reg_fn_annotate(
         &mut self,
         call: &str,
         item_fn: &str,
-    ) {
-        todo!()
+    ) -> Result<(), String> {
+        // Parse syn values from str
+        let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
+        let call: HypotheticalCallSyntax =
+            match syn::parse_str(call) {
+                Ok(call) => call,
+                Err(e) => panic!("Failed to parse #[annotate({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e),
+            };
+
+        // Parse the signature into Rir types, and keep the body.
+        let i = RirFn::from_syn(item_fn)?;
+        let prop_ident = i.sig.ident.clone();
+        let call = call.into_rir()?;
+        let call_ident = call.ident.clone();
+        // Apply type aliases
+        let i = i.expand_types(&self.sig.0.type_aliases);
+
+        // Assume the annotation in the signature.
+        let f_axiom = self.sig.0.build_function_axiom(i, call)?;
+        self.sig.0.install_function_axiom(&call_ident, f_axiom.clone())?;
+
+        // Build the verification condition to check the annotation.
+        let op_tas = self.sig.0.get_tas(&call_ident).unwrap().clone();
+        let input_types = self.sig.0
+            .get_op_input_types(&call_ident).unwrap().clone();
+        let vc = self.build_annotate_vc(&call_ident, input_types, f_axiom)?;
+
+        // Sanity-check that the generated vc is well-formed
+        vc.type_check_r(
+            &CType::Return(VType::prop()),
+            TypeContext::new_types(
+                self.sig.0.clone(),
+                op_tas.clone()
+            )
+        ).expect("vc type error");
+        self.push_goal(Goal {
+            title: prop_ident.clone(),
+            tas: op_tas,
+            condition: vc,
+            should_be_valid: true,
+        })?;
+        Ok(())
     }
 
     pub fn reg_fn_assume<const N: usize>(
@@ -234,7 +297,7 @@ impl Rcc {
             
         };
 
-        self.goals.push(goal);
+        self.push_goal(goal).unwrap();
     }
 
     pub fn check_goals(self) {
@@ -259,5 +322,59 @@ impl Rcc {
 
             panic!("{}", s);
         }
+    }
+
+    fn build_annotate_vc(
+        &self,
+        ident: &str,
+        input_types: Vec<VType>,
+        f_axiom: Comp,
+    ) -> Result<Comp, String> {
+        let def = match self.defs.get(ident) {
+            Some(def) => Ok(def.clone()),
+            None => Err(format!("Cannot check annotation on '{}', because no definition found for '{}'. Did you forget to use #[recursive]?", ident, ident)),
+        }?;
+
+        let mut igen = def.get_gen();
+        f_axiom.advance_gen(&mut igen);
+
+        // Define a condition that...
+        //
+        // 1. Forall-quantifies the operation inputs.
+        //
+        // 2. Produces the output by applying the inputs to the
+        // operation's definition function.
+        //
+        // 3. Applies the inputs and the output to the function axiom.
+        //
+        // What about type abstractions? Use the operation's tas. The
+        // function axiom has already subbed those in.
+        let f_axiom = f_axiom.builder();
+        let input_count = input_types.len();
+        assert!(input_count == 3, "input count is wrong: {}", input_count);
+        let vc = def.builder().gen_many(
+            input_count,
+            |def| |xs| {
+                let input_vals: Vec<Val> = xs
+                    .clone()
+                    .into_iter()
+                    .map(|x| x.val())
+                    .collect();
+                let quant_sig = xs
+                    .into_iter()
+                    .zip(input_types)
+                    .collect::<Vec<_>>();
+                def
+                    .apply_rt(input_vals.clone())
+                    .seq_gen(|output| {
+                        f_axiom.apply_rt(input_vals).apply_rt(vec![output])
+                    })
+                    .quant(
+                        Quantifier::Forall,
+                        quant_sig,
+                    )
+            },
+        );
+        Ok(vc.build(&mut igen))
     }
 }

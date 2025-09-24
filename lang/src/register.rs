@@ -92,41 +92,30 @@ impl Sig {
         Ok(())
     }
 
-    pub fn reg_fn_assume_for(
+    pub fn build_function_axiom(
         &mut self,
-        i: ItemFn,
-        c: HypotheticalCallSyntax,
-    ) -> Result<(), String> {
-        // Parse the signature into Rir types, and keep the body.
-        let i = RirFn::from_syn(i)?;
-        // Apply type aliases
-        let i = i.expand_types(&self.type_aliases);
+        i: RirFn,
+        c: HypotheticalCall,
+    ) -> Result<Comp, String> {
+        // Assume that type aliases have already been applied.
+        // Unpack
         let RirFn{sig, body} = i;
         let RirFnSig{ident, mut tas, inputs, output} = sig;
-        // let (RirFnSig{ident, mut tas, inputs, output}, body) =
-        //     RirFnSig::from_syn(f)?;
-        let HypotheticalCall{code, inputs: c_inputs, output: c_output} =
-            c.into_rir()?;
+        let c_code = c.code();
+        let HypotheticalCall{
+            ident: c_ident,
+            tas: c_tas,
+            inputs: c_inputs,
+            output: c_output
+        } = c;
 
-        let applied_op = match self.get_applied_op(&code)? {
+        let applied_op = match self.get_applied_op(&c_code)? {
             Op::Fun(op) => op,
             op => return Err(format!("#[assume_for(..)] target must be FunOp, got {:?} instead", op)),
         };
 
-        let OpCode{ident: code_ident, types: code_types} = code.clone();
-
-        let code_types: Vec<String> = code_types
-            .into_iter()
-            .map(|t| match t.unwrap_base() {
-                Ok(BType::Prop) => Err(format!("Op can't have bool input")),
-                Ok(BType::UI(s, args)) if args.len() == 0 => Ok(s),
-                Ok(BType::UI(_, _)) => Err(format!("Type arg in #[assume_for] can't have its own arguments")),
-                Err(v) => Err(format!("Type arg {} not allowed in #[assume_for]", v.render())),
-            })
-            .collect::<Result<Vec<_>,_>>()?;
-
         if c_inputs.len() != applied_op.inputs.len() {
-            return Err(format!("#[assume_for({}(..))] declares {} inputs, while op was declared with {} inputs", code, c_inputs.len(), applied_op.inputs.len()));
+            return Err(format!("#[assume_for({}(..))] declares {} inputs, while op was declared with {} inputs", c_code, c_inputs.len(), applied_op.inputs.len()));
         }
 
         // For now, don't allow inputs
@@ -148,7 +137,7 @@ impl Sig {
         }
 
         // Add call type args to tas
-        tas.append(&mut code_types.clone());
+        tas.append(&mut c_tas.clone());
 
         // Declared output must be bool. Consider type aliases and
         // type abstractions when checking.
@@ -197,29 +186,64 @@ impl Sig {
                     .fun(f_inputs)
             ).build(&mut g);
 
-        for (op_name, op_tas, op) in self.ops.iter_mut() {
-            let op_tas_types = op_tas
-                .clone()
-                .into_iter()
-                .map(|s| VType::ui(s))
-                .collect();
-            if op_name == &code_ident {
+        // Replace hypothetical call type argument names with the
+        // declared operation's type argument names.
+        let op_tas_types = self
+            .get_tas(&c_ident)
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(VType::ui)
+            .collect();
+        let f_axiom = f_axiom
+            .expand_types_from_call(&op_tas_types, &c_tas)
+            .unwrap();
+
+        Ok(f_axiom)
+    }
+
+    pub fn reg_fn_assume_for(
+        &mut self,
+        i: ItemFn,
+        c: HypotheticalCallSyntax,
+    ) -> Result<(), String> {
+        // Parse the signature into Rir types, and keep the body.
+        let i = RirFn::from_syn(i)?;
+        // Apply type aliases
+        let i = i.expand_types(&self.type_aliases);
+        // Parse the hypothetical call
+        let c = c.into_rir()?;
+
+        let f_axiom = self.build_function_axiom(i, c.clone())?;
+
+        self.install_function_axiom(&c.ident, f_axiom)?;
+        Ok(())
+    }
+
+    pub fn install_function_axiom(
+        &mut self,
+        ident: &str,
+        f_axiom: Comp
+    ) -> Result<(), String> {
+        for (op_name, _, op) in self.ops.iter_mut() {
+            if op_name == ident {
                 match op {
                     Op::Fun(op) => {
-                        let f_axiom = f_axiom
-                            .expand_types_from_call(
-                                &op_tas_types,
-                                &code_types,
-                            )
-                            .unwrap();
                         op.axioms.push(f_axiom);
                         return Ok(())
                     }
-                    _ => unreachable!(),
+                    op => return Err(format!(
+                        "Function axiom can only be installed on Op::Fun, but {} is {:?}",
+                        ident,
+                        op,
+                    )),
                 }
             }
         }
-        unreachable!()
+        Err(format!(
+            "Function axiom could not be installed: {} not found",
+            ident,
+        ))
     }
 
     pub fn reg_fn_declare(&mut self, f: ItemFn) -> Result<(), String> {
