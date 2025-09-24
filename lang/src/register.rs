@@ -228,6 +228,12 @@ impl Sig {
         let sig = RirFnSig::from_syn(f.sig)?;
         // Apply type aliases
         let sig = sig.expand_types(&self.type_aliases);
+
+        self.rir_fn_declare(sig)
+    }
+
+    fn rir_fn_declare(&mut self, sig: RirFnSig) -> Result<(), String> {
+        // Assume type aliases are already applied
         let RirFnSig{ident, tas, inputs, output} = sig;
     
         // Throw away the input patterns, keep the types.
@@ -293,7 +299,7 @@ impl Sig {
         let i = i.expand_types(&self.type_aliases);
         // Unpack
         let RirFn{sig, body} = i;
-        let RirFnSig{ident, tas, inputs, output} = sig;
+        let RirFnSig{ident, tas, inputs, output} = sig.clone();
 
         // Simplify inputs to VNames (someday I'd like to support
         // patterns...)
@@ -323,7 +329,7 @@ impl Sig {
         body.type_check_r(&CType::Return(output.clone()), tc)?;
 
         if is_rec {
-            todo!("register an Op::Fun for a recursive definition")
+            self.rir_fn_declare(sig)
         } else {
             let inputs: Vec<(VName, Option<VType>)> = inputs
                 .into_iter()
@@ -337,8 +343,8 @@ impl Sig {
                 )
                 .build(&mut g);
             self.ops.push((ident, tas, Op::Direct(fun)));
+            Ok(())
         }
-        Ok(())
     }
 
     pub fn reg_struct_declare(&mut self, i: ItemStruct) -> Result<(), String> {

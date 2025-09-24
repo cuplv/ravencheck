@@ -590,6 +590,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
     }
 }
 
+#[derive(Clone)]
 pub struct RirFnSig {
     pub ident: String,
     pub tas: Vec<String>,
@@ -623,6 +624,7 @@ impl RirFnSig {
     }
 }
 
+#[derive(Clone)]
 pub struct RirFn {
     pub sig: RirFnSig,
     pub body: Comp,
