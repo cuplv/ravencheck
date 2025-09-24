@@ -15,7 +15,8 @@ mod my_mod {
         HashSet::new()
     }
 
-    #[assume((HashSet<E>, E))]
+    #[assume]
+    #[for_type(HashSet<E> => <E>)]
     fn empty_no_member<E: Eq + Hash>() -> bool {
         forall(|e: E| !member_poly::<E>(e, empty_poly::<E>()))
     }
@@ -25,7 +26,8 @@ mod my_mod {
         member_poly::<u32>(e,s)
     }
 
-    #[assume((HashSet<E>, E))]
+    #[assume]
+    #[for_type(HashSet<E> => <E>)]
     fn equal_or_dist<E: Eq + Hash>() -> bool {
         forall(|s1: HashSet<E>, s2: HashSet<E>| {
             s1 == s2 || exists(|e: E| {

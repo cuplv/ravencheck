@@ -69,12 +69,8 @@ mod my_mod {
 
     // This is a special form of 'assume' that uses the function body
     // as an axiom on (a,b,c) that must be true when union(a,b) = c.
-    #[assume_for(union)]
+    #[assume(union(a,b) => c)]
     fn union_def() -> bool {
-        // Function input arguments
-        |a: MySet, b: MySet|
-        // Function output
-        |c: MySet|
         // Condition that relates the inputs and output
         forall(|e: u32| {
             member(e,c) == (member(e,a) || member(e,b))
@@ -100,10 +96,8 @@ mod my_mod {
         s
     }
 
-    #[assume_for(insert)]
+    #[assume(insert(e,s1) => s2)]
     fn insert_def() -> bool {
-        |e: u32, s1: MySet|
-        |s2: MySet|
         forall(|x:u32| member(x,s2) == (member(x,s1) || x == e))
     }
 

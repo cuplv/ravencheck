@@ -55,10 +55,8 @@ pub mod my_mod {
         Set(s3)
     }
 
-    #[assume_for(union)]
+    #[assume(union(a,b) => c)]
     fn union_def() -> bool {
-        |a: Set, b: Set|
-        |c: Set|
         forall(|e: Elem| {
             member(e,c) == (member(e,a) || member(e,b))
         })

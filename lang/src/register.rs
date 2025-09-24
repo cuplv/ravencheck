@@ -425,7 +425,10 @@ impl Sig {
         Ok(())
     }
 
-    pub fn reg_type_define(&mut self, _i: ItemType) -> Result<(), String> {
-        todo!("reg_type_define")
+    pub fn reg_type_define(&mut self, i: ItemType) -> Result<(), String> {
+        let ItemType{ident, ty, ..} = i;
+        let right = VType::from_syn(*ty)?.expand_types(&self.type_aliases);
+        self.add_alias(ident, right);
+        Ok(())
     }
 }

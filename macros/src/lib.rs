@@ -63,6 +63,7 @@ impl RvnItemAttr {
                     Some("assume") => Some(RvnItemAttr::Assume),
                     Some("declare") => Some(RvnItemAttr::Declare),
                     Some("define") => Some(RvnItemAttr::Define),
+                    Some("define_rec") => panic!("#[define_rec] has been replaced by #[define] followed by #[recursive]"),
                     Some("falsify") => Some(RvnItemAttr::Falsify),
                     Some("import") => Some(RvnItemAttr::Import),
                     Some("phantom") => Some(RvnItemAttr::Phantom),
