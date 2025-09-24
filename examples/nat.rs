@@ -84,10 +84,8 @@ mod my_mod {
 
     // This annotation is verified with respect to the function body
     // of 'add'.
-    #[annotate(add)]
+    #[annotate(add(a, b) => c)]
     fn add_zeros() -> bool {
-        |a: u32, b: u32|
-        |c: u32|
         implies(a == ZERO, b == c)
         && implies(b == ZERO, a == c)
     }

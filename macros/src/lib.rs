@@ -110,6 +110,7 @@ impl RvnItemAttr {
         match item {
             Item::Const(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Fn(i) => Self::extract_from_attrs(&mut i.attrs),
+            Item::Mod(_) => Vec::new(),
             Item::Struct(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Type(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Use(i) => Self::extract_from_attrs(&mut i.attrs),
