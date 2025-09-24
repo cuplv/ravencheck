@@ -200,7 +200,13 @@ impl RccCommand {
         }
         let mut ras = VecDeque::from(ras);
         match ras.pop_front().unwrap() {
-            Annotate(_) => todo!("from_item for RvnItemAttr::Annotate"),
+            Annotate(call) => match item {
+                Item::Fn(i) => {
+                    let c = RccCommand::Annotate(call, i);
+                    (Some(c), None)
+                }
+                item => panic!("Can't use #[annotate(..)] on {:?}", item),
+            }
             Assume => match item {
                 Item::Fn(i) => {
                     let mut rules = Vec::new();
@@ -222,7 +228,7 @@ impl RccCommand {
                     let c = RccCommand::AssumeFor(call, i);
                     (Some(c), None)
                 }
-                item => panic!("Can't use #[assume_for] on {:?}", item),
+                item => panic!("Can't use #[assume(..)] on {:?}", item),
             }
             Declare => Self::mk_declare_define(Vec::from(ras), item, false),
             Define => Self::mk_declare_define(Vec::from(ras), item, true),
@@ -620,6 +626,13 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             //             }).unwrap();
             //             out.push(s);
             //         }
+            RccCommand::Define(item, _is_phantom, is_rec) => {
+                let item_str = quote!{ #item }.to_string();
+                let s: Stmt = syn::parse2(quote! {
+                    rcc.reg_item_define(#item_str, #is_rec);
+                }).unwrap();
+                out.push(s)
+            }
             //         (RvnAttr::Define(_is_recursive, _is_phantom), _) => {
             //             let s: Stmt = syn::parse2(quote! {
             //                 rcc.reg_item_define(#item_str);

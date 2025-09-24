@@ -100,12 +100,14 @@ impl Rcc {
         }
     }
 
-    pub fn reg_item_define(&mut self, _item: &str) {
-        todo!()
-    }
-
-    pub fn reg_item_define_rec(&mut self, _item: &str) {
-        todo!()
+    pub fn reg_item_define(&mut self, item: &str, is_rec: bool) {
+        match syn::parse_str(item).unwrap() {
+            Item::Fn(i) => self.sig.0.reg_fn_define(i, is_rec).unwrap(),
+            Item::Type(i) if !is_rec =>
+                self.sig.0.reg_type_define(i).unwrap(),
+            i if is_rec => panic!("Cannot recursive-define {:?}", i),
+            i => panic!("Cannot define {:?}", i),
+        }
     }
 
     pub fn reg_item_import(&mut self, _item: &str) {

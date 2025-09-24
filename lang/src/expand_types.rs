@@ -7,6 +7,8 @@ use crate::{
     LogOpN,
     Op,
     OpCode,
+    RirFn,
+    RirFnSig,
     Val,
     VName,
     VType,
@@ -232,5 +234,38 @@ impl Op {
                 Op::Symbol(op)
             }
         }
+    }
+}
+
+impl RirFn {
+    pub fn expand_types(mut self, subs: &HashMap<String,VType>) -> Self {
+        self.sig = self.sig.expand_types(subs);
+
+        // Remove any type aliases that are shadowed by the type
+        // abstractions.
+        let mut subs = subs.clone();
+        for a in self.sig.tas.iter() {
+            subs.remove(a);
+        }
+        self.body = self.body.expand_types(&subs);
+        self
+    }
+}
+
+impl RirFnSig {
+    pub fn expand_types(mut self, subs: &HashMap<String,VType>) -> Self {
+        // Remove any type aliases that are shadowed by the type
+        // abstractions.
+        let mut subs = subs.clone();
+        for a in self.tas.iter() {
+            subs.remove(a);
+        }
+
+        self.inputs = self.inputs
+            .into_iter()
+            .map(|(p,t)| (p, t.expand_types(&subs)))
+            .collect();
+        self.output = self.output.expand_types(&subs);
+        self
     }
 }

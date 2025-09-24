@@ -41,7 +41,9 @@ use syn::parse::{Parse, ParseStream};
 use crate::{
     Builder,
     BType,
+    Comp,
     InstRule,
+    Gen,
     HypotheticalCall,
     LogOpN,
     OpCode,
@@ -620,5 +622,21 @@ impl RirFnSig {
             ReturnType::Type(_, t) => VType::from_syn(*t),
         }?;
         Ok((RirFnSig{ident, tas, inputs, output}, *block))
+    }
+}
+
+pub struct RirFn {
+    pub sig: RirFnSig,
+    pub body: Comp,
+}
+
+impl RirFn {
+    pub fn from_syn(i: ItemFn) -> Result<Self, Error> {
+        let (sig, block) = RirFnSig::from_syn(i)?;
+        let body = match block_to_builder(block) {
+            Ok(b) => Ok(b.build(&mut Gen::new())),
+            Err(e) => Err(e),
+        }?;
+        Ok(RirFn{sig, body})
     }
 }

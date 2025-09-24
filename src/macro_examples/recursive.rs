@@ -14,6 +14,27 @@ mod rvn {
         l
     }
 
+    #[define]
+    fn cons_twice<E: Clone>(e: E, l: List<E>) -> List<E> {
+        cons::<E>(e.clone(), cons::<E>(e, l))
+    }
+
+    #[verify]
+    fn cons_twice_def<E>() -> bool {
+        forall(|e: E, l: List<E>| {
+            cons_twice::<E>(e, l)
+                == cons::<E>(e, cons::<E>(e, l))
+        })
+    }
+
+    #[falsify]
+    fn cons_twice_fal<E>() -> bool {
+        forall(|e: E, l: List<E>| {
+            cons_twice::<E>(e, l)
+                != cons::<E>(e, cons::<E>(e, l))
+        })
+    }
+
     #[declare]
     fn uncons<E>(e: E, mut l: List<E>) -> (E, List<E>) {
         match l.pop() {
@@ -31,23 +52,23 @@ mod rvn {
             l2
         } else {
             let (e, l1_tail) = uncons::<E>(e_def.clone(), l1);
-            cons(e, concat::<E>(e_def, l1_tail, l2))
+            cons::<E>(e, concat::<E>(e_def, l1_tail, l2))
         }
     }
 
-    #[annotate(concat::<T>(e, l1, l2) => l3)]
-    fn left_empty() -> bool {
-        implies(
-            l1 == empty_list::<E>(),
-            l3 == l2,
-        )
-    }
+    // #[annotate(concat::<T>(e, l1, l2) => l3)]
+    // fn left_empty() -> bool {
+    //     implies(
+    //         l1 == empty_list::<E>(),
+    //         l3 == l2,
+    //     )
+    // }
 
-    #[annotate(concat::<T>(e, l1, l2) => l3)]
-    fn right_empty() -> bool {
-        implies(
-            l2 == empty_list::<E>(),
-            l3 == l1,
-        )
-    }
+    // #[annotate(concat::<T>(e, l1, l2) => l3)]
+    // fn right_empty() -> bool {
+    //     implies(
+    //         l2 == empty_list::<E>(),
+    //         l3 == l1,
+    //     )
+    // }
 }

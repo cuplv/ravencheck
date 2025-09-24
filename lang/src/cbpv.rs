@@ -84,6 +84,12 @@ pub enum Pattern {
 }
 
 impl Pattern {
+    pub fn unwrap_vname(self) -> Result<VName, String> {
+        match self {
+            Pattern::Atom(x) => Ok(x),
+            p => Err(format!("Got complex pattern {:?} that should be a plain identifier", p)),
+        }
+    }
     pub fn unwrap_atom(self) -> Option<VName> {
         match self {
             Pattern::NoBind => None,

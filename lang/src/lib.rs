@@ -58,6 +58,7 @@ mod syn_to_cbpv;
 pub use syn_to_cbpv::{
     InstRuleSyntax,
     HypotheticalCallSyntax,
+    RirFn,
     RirFnSig,
     syn_to_builder,
     block_to_builder,
