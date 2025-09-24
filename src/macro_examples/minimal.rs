@@ -29,7 +29,7 @@ pub mod my_mod {
     }
 
     #[verify]
-    fn prop1() -> bool {
+    fn prop2() -> bool {
         forall(|e: Elem, s: Set| member(e,s) == member(e,s))
     }
 }

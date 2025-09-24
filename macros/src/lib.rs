@@ -775,8 +775,8 @@ fn process_module(
                 }
             };
 
-            println!("Here is the test module content:");
-            println!("{}", test_mod);
+            // println!("Here is the test module content:");
+            // println!("{}", test_mod);
 
             items.push(syn::parse(test_mod.into()).expect("parse test mod"));
 

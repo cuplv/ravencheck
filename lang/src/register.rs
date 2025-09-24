@@ -1,5 +1,6 @@
 use syn::{
     Ident,
+    ItemConst,
     ItemFn,
     ItemStruct,
     ItemType,
@@ -19,6 +20,7 @@ use crate::{
     HypotheticalCall,
     Sig,
     sig::{
+        ConstOp,
         FunOp,
         PredSymbol,
         Op,
@@ -37,6 +39,22 @@ use crate::{
 };
 
 impl Sig {
+    pub fn reg_const_declare(
+        &mut self,
+        i: ItemConst,
+    ) -> Result<(), String> {
+        let ItemConst{ident, ty, ..} = i;
+        let op = Op::Const(ConstOp{
+            vtype: VType::from_syn(*ty)?,
+        });
+        self.ops.push((
+            ident.to_string(),
+            Vec::new(),
+            op,
+        ));
+        Ok(())
+    }
+
     pub fn reg_fn_assume(
         &mut self,
         i: ItemFn,

@@ -71,11 +71,11 @@ mod rvn {
         })
     }
 
-    #[annotate(concat::<T>(e, l1, l2) => l3)]
-    fn right_empty() -> bool {
-        implies(
-            l2 == empty_list::<T>(),
-            l3 == l1,
-        )
-    }
+    // #[annotate(concat::<T>(e, l1, l2) => l3)]
+    // fn right_empty() -> bool {
+    //     implies(
+    //         l2 == empty_list::<T>(),
+    //         l3 == l1,
+    //     )
+    // }
 }

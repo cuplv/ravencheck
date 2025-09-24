@@ -30,10 +30,8 @@ mod my_mod {
         out
     }
 
-    #[assume(filter)]
+    #[assume(filter(f, s1) => s2)]
     fn filter_def() -> bool {
-        |f: fn(u32) -> bool, s1: MySet|
-        |s2: MySet|
         forall(|e: u32| {
             member(e,s2) == (member(e,s1) && f(e))
         })

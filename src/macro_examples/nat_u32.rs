@@ -70,7 +70,8 @@ mod my_mod {
     /// When 'add' is used in other verification conditions, the
     /// solver will treat it as uninterpreted and assume
     /// previously-verified annotations as axioms.
-    #[define_rec]
+    #[define]
+    #[recursive]
     fn add(a: u32, b: u32) -> u32
     {
         if a == ZERO {
@@ -84,10 +85,8 @@ mod my_mod {
 
     // This annotation is verified with respect to the function body
     // of 'add'.
-    #[annotate(add)]
+    #[annotate(add(a,b) => c)]
     fn add_zeros() -> bool {
-        |a: u32, b: u32|
-        |c: u32|
         implies(a == ZERO, b == c)
         && implies(b == ZERO, a == c)
     }

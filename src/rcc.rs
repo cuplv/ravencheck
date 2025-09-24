@@ -168,10 +168,11 @@ impl Rcc {
 
     pub fn reg_item_declare(&mut self, item: &str) {
         match syn::parse_str(item).unwrap() {
+            Item::Const(i) => self.sig.0.reg_const_declare(i).unwrap(),
             Item::Fn(i) => self.sig.0.reg_fn_declare(i).unwrap(),
             Item::Struct(i) => self.sig.0.reg_struct_declare(i).unwrap(),
             Item::Type(i) => self.sig.0.reg_type_declare(i).unwrap(),
-            _ => todo!(),
+            i => todo!("reg_item_declare for {:?}", i),
         }
     }
 
@@ -351,7 +352,6 @@ impl Rcc {
         // function axiom has already subbed those in.
         let f_axiom = f_axiom.builder();
         let input_count = input_types.len();
-        assert!(input_count == 3, "input count is wrong: {}", input_count);
         let vc = def.builder().gen_many(
             input_count,
             |def| |xs| {
