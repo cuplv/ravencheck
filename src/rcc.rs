@@ -4,23 +4,30 @@ use syn::{
 };
 
 use ravenlang::{
+    Builder,
+    Comp,
     CType,
     CheckedSig,
     Gen,
     Goal,
     HypotheticalCallSyntax,
+    Op,
     RirFn,
     RirFnSig,
     InstRuleSyntax,
     TypeContext,
+    VName,
     VType,
     block_to_builder,
 };
+
+use std::collections::HashMap;
 
 /// The Ravencheck context, which collects definitions, declarations,
 /// and verification goals from the user's code.
 pub struct Rcc {
     sig: CheckedSig,
+    defs: HashMap<String, Comp>,
     goals: Vec<Goal>,
 }
 
@@ -28,6 +35,7 @@ impl Rcc {
     pub fn new() -> Self {
         Rcc{
             sig: CheckedSig::empty(),
+            defs: HashMap::new(),
             goals: Vec::new(),
         }
     }
@@ -103,11 +111,73 @@ impl Rcc {
 
     pub fn reg_item_define(&mut self, item: &str, is_rec: bool) {
         match syn::parse_str(item).unwrap() {
-            Item::Fn(i) => self.sig.0.reg_fn_define(i, is_rec).unwrap(),
+            Item::Fn(i) => self.reg_fn_define(i, is_rec).unwrap(),
             Item::Type(i) if !is_rec =>
                 self.sig.0.reg_type_define(i).unwrap(),
             i if is_rec => panic!("Cannot recursive-define {:?}", i),
             i => panic!("Cannot define {:?}", i),
+        }
+    }
+
+    fn reg_fn_define(
+        &mut self,
+        i: ItemFn,
+        is_rec: bool,
+    ) -> Result<(), String>{
+        // Parse the signature into Rir types.
+        let i = RirFn::from_syn(i)?;
+        // Apply type aliases
+        let i = i.expand_types(&self.sig.0.type_aliases);
+        // Unpack
+        let RirFn{sig, body} = i;
+        let RirFnSig{ident, tas, inputs, output} = sig.clone();
+
+        // Simplify inputs to VNames (someday I'd like to support
+        // patterns...)
+        let inputs: Vec<(VName, VType)> = inputs
+            .into_iter()
+            .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
+            .collect::<Result<Vec<_>, String>>()?;
+
+        // Typecheck body, given typed inputs
+        let mut tc = TypeContext::new_types(self.sig.0.clone(), tas.clone());
+        for (x,t) in inputs.clone().into_iter() {
+            tc = tc.plus(x, t);
+        }
+
+        if is_rec {
+            let f_type = VType::fun_v(
+                inputs
+                    .clone()
+                    .into_iter()
+                    .map(|(_,t)| t)
+                    .collect::<Vec<_>>(),
+                output.clone(),
+            );
+            tc = tc.plus(VName::new(ident.clone()), f_type);
+        }
+
+        body.type_check_r(&CType::Return(output.clone()), tc)?;
+
+        let inputs: Vec<(VName, Option<VType>)> = inputs
+            .into_iter()
+            .map(|(x,t)| (x, Some(t)))
+            .collect();
+        // Construct function for given typed inputs
+        let mut g = body.get_gen();
+        let fun: Comp =
+            Builder::return_thunk(
+                Builder::lift(body).fun(inputs)
+            )
+            .build(&mut g);
+
+        if is_rec {
+            self.sig.0.reg_rir_declare(sig)?;
+            self.defs.insert(ident.clone(), fun);
+            Ok(())
+        } else {
+            self.sig.0.ops.push((ident, tas, Op::Direct(fun)));
+            Ok(())
         }
     }
 
