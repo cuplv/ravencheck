@@ -70,15 +70,9 @@ pub struct HypotheticalCallSyntax {
 impl Parse for HypotheticalCallSyntax {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Ok(Self {
-            call: match input.parse() {
-                Ok(c) => c,
-                Err(e) => panic!("Error parsing call: {}", e),
-            },
+            call: input.parse()?,
             arrow: input.parse()?,
-            output: match input.parse() {
-                Ok(o) => o,
-                Err(e) => panic!("Error parsing output: {}", e),
-            },
+            output: input.parse()?,
         })
     }
 }

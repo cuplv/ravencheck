@@ -51,7 +51,7 @@ impl Rcc {
     /// The following attribute and `fn` item ...
     ///
     /// ```ignore
-    /// #[annotate(add::<T>(a, b) ~> c)]
+    /// #[annotate(add::<T>(a, b) => c)]
     /// fn add_is_monotonic() -> bool {
     ///     le::<T>(a, output) && le::<T>(b, output)
     /// }
@@ -68,9 +68,8 @@ impl Rcc {
     /// ```
     pub fn reg_item_annotate<const N: usize>(
         &mut self,
-        _target_name: &str,
-        _inputs: [&str; N],
-        _item: &str,
+        call: &str,
+        item_fn: &str,
     ) {
         todo!()
     }
@@ -95,8 +94,12 @@ impl Rcc {
         call: &str,
         item_fn: &str,
     ) {
-        let call: HypotheticalCallSyntax = syn::parse_str(call).unwrap();
         let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
+        let call: HypotheticalCallSyntax =
+            match syn::parse_str(call) {
+                Ok(call) => call,
+                Err(e) => panic!("Failed to parse #[assume({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e),
+            };
         self.sig.0.reg_fn_assume_for(item_fn, call).unwrap();
     }
 
