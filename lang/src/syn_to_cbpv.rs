@@ -36,8 +36,7 @@ use syn::{
     TypeParamBound,
     UnOp,
 };
-use syn::parse::{Parse, ParseStream, Parser};
-use syn::punctuated::Punctuated;
+use syn::parse::{Parse, ParseStream};
 
 use crate::{
     Builder,

@@ -3,27 +3,27 @@ use proc_macro2::Span;
 use quote::quote;
 
 use syn::{
-    AngleBracketedGenericArguments,
+    // AngleBracketedGenericArguments,
     Attribute,
-    Block,
-    ExprCall,
-    FnArg,
-    GenericParam,
+    // Block,
+    // ExprCall,
+    // FnArg,
+    // GenericParam,
     Ident,
     Item,
     ItemFn,
     ItemMod,
     ItemUse,
     Meta,
-    PatType,
+    // PatType,
     Path,
     PathArguments,
     PathSegment,
     punctuated::Punctuated,
-    ReturnType,
+    // ReturnType,
     Stmt,
-    Token,
-    Type,
+    // Token,
+    // Type,
     UseTree,
 };
 use syn::ext::IdentExt;
@@ -153,7 +153,7 @@ impl RccCommand {
                 if define { "define"} else { "declare" },
             ),
         }}
-        let ret_item = if phantom {
+        let ret_item = if !phantom {
             Some(item.clone())
         } else {
             None
@@ -191,7 +191,7 @@ impl RccCommand {
     fn from_item(mut item: Item) -> (Option<RccCommand>, Option<Item>) {
         use RvnItemAttr::*;
 
-        let mut ras = RvnItemAttr::extract_from_item(&mut item);
+        let ras = RvnItemAttr::extract_from_item(&mut item);
 
         // If there are no Ravencheck attrs, return the item
         // unchanged.
@@ -573,7 +573,7 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             // RccItem::AttrItem(attr, item) => {
             //     let item_str = quote!{ #item }.to_string();
             //     match (attr,mode) {
-            RccCommand::Annotate(line, fn_item) =>
+            RccCommand::Annotate(_line, _fn_item) =>
                 todo!("generate_stmts for Annotate"),
             //         (RvnAttr::Annotate(fname), _mode) => {
             //             let s: Stmt = syn::parse2(quote! {
@@ -607,7 +607,7 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             //             }).unwrap();
             //             out.push(s);
             //         }
-            RccCommand::Declare(item, is_phantom) => {
+            RccCommand::Declare(item, _is_phantom) => {
                 let item_str = quote!{ #item }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_item_declare(#item_str);
@@ -633,11 +633,16 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
             //             out.push(s);
             //         }
             RccCommand::Goal(should_be_valid, item_fn) => {
-                let item_fn_str = quote!{ #item_fn }.to_string();
-                let s: Stmt = syn::parse2(quote! {
-                    rcc.reg_fn_goal(#should_be_valid, #item_fn_str);
-                }).unwrap();
-                out.push(s);
+                match mode {
+                    GenMode::Check => {
+                        let item_fn_str = quote!{ #item_fn }.to_string();
+                        let s: Stmt = syn::parse2(quote! {
+                            rcc.reg_fn_goal(#should_be_valid, #item_fn_str);
+                        }).unwrap();
+                        out.push(s);
+                    }
+                    GenMode::Export => {}
+                }
             }
             //         (RvnAttr::Verify(should_be_valid), _) => {
             //             let s: Stmt = syn::parse2(quote! {
@@ -751,8 +756,8 @@ fn process_module(
                 }
             };
 
-            println!("Here is the test module content:");
-            println!("{}", test_mod);
+            // println!("Here is the test module content:");
+            // println!("{}", test_mod);
 
             items.push(syn::parse(test_mod.into()).expect("parse test mod"));
 
@@ -770,8 +775,8 @@ fn process_module(
                     }
                 };
 
-                println!("Here is the export module content:");
-                println!("{}", export_mod);
+                // println!("Here is the export module content:");
+                // println!("{}", export_mod);
                 items.push(syn::parse(export_mod.into()).expect("parse export mod"));
             }
         }

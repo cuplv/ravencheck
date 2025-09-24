@@ -5,7 +5,6 @@ use syn::{
 
 use ravenlang::{
     CType,
-    Comp,
     CheckedSig,
     Gen,
     Goal,
@@ -16,8 +15,6 @@ use ravenlang::{
     VType,
     block_to_builder,
 };
-
-use std::str::FromStr;
 
 /// The Ravencheck context, which collects definitions, declarations,
 /// and verification goals from the user's code.
@@ -62,9 +59,9 @@ impl Rcc {
     /// ```
     pub fn reg_item_annotate<const N: usize>(
         &mut self,
-        target_name: &str,
-        inputs: [&str; N],
-        item: &str,
+        _target_name: &str,
+        _inputs: [&str; N],
+        _item: &str,
     ) {
         todo!()
     }
@@ -103,15 +100,15 @@ impl Rcc {
         }
     }
 
-    pub fn reg_item_define(&mut self, item: &str) {
+    pub fn reg_item_define(&mut self, _item: &str) {
         todo!()
     }
 
-    pub fn reg_item_define_rec(&mut self, item: &str) {
+    pub fn reg_item_define_rec(&mut self, _item: &str) {
         todo!()
     }
 
-    pub fn reg_item_import(&mut self, item: &str) {
+    pub fn reg_item_import(&mut self, _item: &str) {
         todo!()
     }
 

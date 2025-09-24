@@ -302,50 +302,6 @@ impl Sig {
             }
             Err(e) => Err(e),
         }
-//         for (name, _, op) in self.ops.clone() {
-//             if name == s {
-//                 match op {
-//                     Op::Const(op) => {
-//                         return Ok(op.vtype)
-//                     }
-//                     Op::Direct(m) => {
-//                         match m.type_of(TypeContext::new(self.clone()))? {
-//                             CType::Return(t) => return Ok(t),
-//                             _ => return Err(format!(
-//                                 "
-// signature function \"{}\" did not have a computation type",
-//                                 s,
-//                             )),
-//                         }
-//                     }
-//                     Op::Fun(op) => {
-//                         return Ok(VType::fun_v(
-//                             op.inputs,
-//                             op.output,
-//                         ))
-//                     },
-//                     Op::Pred(op) => {
-//                         return Ok(VType::fun_v(
-//                             op.inputs,
-//                             VType::prop(),
-//                         ))
-//                     },
-//                     Op::Rec(op) => {
-//                         return Ok(VType::fun_v(
-//                             op.inputs,
-//                             op.output,
-//                         ))
-//                     }
-//                     Op::Symbol(op) => {
-//                         return Ok(VType::fun_v(
-//                             op.inputs,
-//                             VType::prop(),
-//                         ))
-//                     },
-//                 }
-//             }
-//         }
-//         Err(format!("Identifier {:?} is not bound or declared as a primitive operation. The following operations are declared: {:?}", s, self.all_op_names()))
     }
 }
 
@@ -455,40 +411,15 @@ impl VType {
                 Ok(())
             }
         }
-        // match self {
-        //     Self::Atom(Sort::Prop) => Ok(()),
-        //     Self::Atom(Sort::UI(s)) => {
-        //         match sig.sort_arity(s) {
-        //             Some(0) => Ok(()),
-        //             Some(n) => Err(format!("Found {} with no type-args, should have {} type-args.", s, n)),
-        //             None if sig.is_abstract(s) => Ok(()),
-        //             None => {
-        //                 Err(format!("Sort {} is undeclared", s))
-        //             }
-        //         }
-        //     }
-        //     Self::Thunk(ct) => {
-        //         ct.validate(sig)
-        //     }
-        //     Self::Tuple(ts) => {
-        //         for t in ts {
-        //             match t.validate(sig) {
-        //                 Ok(()) => {},
-        //                 Err(e) => return Err(e),
-        //             }
-        //         }
-        //         Ok(())
-        //     }
-        // }
     }
 
     /// Check if one type matches the other, after expanding aliases
     /// (ignoring any shadowed by type abstractions) on the first
     /// type.
     pub fn type_match(self, other: &Self, sig: &Sig, tas: &Vec<String>) -> bool {
-        let mut unshadowed_aliases: HashMap<String, VType> = sig.type_aliases
+        let unshadowed_aliases: HashMap<String, VType> = sig.type_aliases
             .iter()
-            .filter(|(s,t)| !tas.contains(&s))
+            .filter(|(s,_t)| !tas.contains(&s))
             .map(|(s,t)| (s.clone(), t.clone()))
             .collect();
         &self.expand_types(&unshadowed_aliases) == other

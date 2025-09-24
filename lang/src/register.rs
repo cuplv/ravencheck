@@ -1,6 +1,5 @@
 use syn::{
     Ident,
-    Item,
     ItemFn,
     ItemStruct,
     ItemType,

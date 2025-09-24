@@ -44,8 +44,6 @@ pub use sig::{
     Sig,
     VType
 };
-mod simple_syn;
-use simple_syn::SimpleFn;
 mod smt;
 pub use smt::CheckedSig;
 mod substitute;
