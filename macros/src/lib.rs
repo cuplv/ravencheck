@@ -3,27 +3,19 @@ use proc_macro2::Span;
 use quote::quote;
 
 use syn::{
-    // AngleBracketedGenericArguments,
     Attribute,
-    // Block,
-    // ExprCall,
-    // FnArg,
-    // GenericParam,
     Ident,
     Item,
     ItemFn,
     ItemMod,
     ItemUse,
     Meta,
-    // PatType,
     Path,
     PathArguments,
     PathSegment,
     punctuated::Punctuated,
-    // ReturnType,
     Stmt,
     Token,
-    // Type,
     UseTree,
 };
 use syn::ext::IdentExt;
@@ -116,7 +108,10 @@ impl RvnItemAttr {
             Item::Struct(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Type(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Use(i) => Self::extract_from_attrs(&mut i.attrs),
-            item => todo!("RvnItemAttr::extract_from_item for {:?}", item),
+            // // item => todo!("RvnItemAttr::extract_from_item for {:?}", item),
+            // Assume anything we haven't listed here is something
+            // that we totally ignore.
+            _item => Vec::new(),
         }
     }
 }
@@ -315,258 +310,6 @@ impl RccCommand {
         commands
     }
 }
-
-// fn extract_rvn_attr(item: &mut Item) -> Option<RvnAttr> {
-//     match item {
-//         Item::Const(i) => pop_rvn_attr(&mut i.attrs),
-//         Item::Fn(i) => pop_rvn_attr(&mut i.attrs),
-//         Item::Struct(i) => pop_rvn_attr(&mut i.attrs),
-//         Item::Type(i) => pop_rvn_attr(&mut i.attrs),
-//         Item::Use(i) => pop_rvn_attr(&mut i.attrs),
-//         _ => None,
-//     }
-// }
-
-// fn pop_rvn_attr(attrs: &mut Vec<Attribute>) -> Option<RvnAttr> {
-//     let mut out = None;
-//     attrs.retain_mut(|attr| {
-//         match RvnAttr::try_from_attr(attr) {
-//             Some(ra) => {
-//                 match &out {
-//                     Some(other) => panic!(
-//                         "only one ravencheck command should be used per item, but both {:?} and {:?} were used together",
-//                         other,
-//                         ra,
-//                     ),
-//                     None => {}
-//                 }
-
-//                 out = Some(ra);
-
-//                 // Drop all ravencheck commands
-//                 false
-//             }
-
-//             // Don't drop anything that wasn't a ravencheck command
-//             None => true, 
-//         }
-//     });
-
-//     out
-// }
-
-// #[derive(Clone, Debug, Eq, PartialEq)]
-// enum SigItem {
-//     Annotation(String, String, Block),
-//     Axiom(Block, Vec<Ident>, Vec<(Type,Vec<Type>)>),
-//     FunctionAxiom(String, String, Block),
-//     Goal(String, Block, bool),
-//     Import(Path),
-//     TypeAlias(Ident,Type),
-//     // The final bool is true if this is a recursive def
-//     DFun(Ident, Vec<Ident>, Vec<PatType>, Type, Block, bool),
-//     Type(Ident, usize),
-//     UFun(String, Vec<Ident>, Vec<PatType>, Type),
-//     UConst(String, Type),
-// }
-
-// impl SigItem {
-//     fn is_export(&self) -> bool {
-//         match self {
-//             Self::Goal(..) => false,
-//             _ => true,
-//         }
-//     }
-//     fn into_stmt(self) -> Stmt {
-//         match self {
-//             SigItem::Annotation(title,f,b) => {
-//                 let b_tks = format!("{}", quote! { #b });
-//                 syn::parse((quote! {
-//                     sig.add_checked_annotation(#title, #f, #b_tks);
-//                 }).into()).unwrap()
-//             }
-//             SigItem::FunctionAxiom(_title,f,b) => {
-//                 let b_tks = format!("{}", quote! { #b });
-//                 syn::parse((quote! {
-//                     sig.add_annotation(#f, #b_tks);
-//                 }).into()).unwrap()
-//             }
-//             SigItem::Axiom(b,tas,rules) => {
-//                 let b_tks = format!("{}", quote! { #b });
-//                 let tas: Vec<String> = tas.into_iter().map(|i| {
-//                     format!("{}", quote! { #i })
-//                 }).collect();
-//                 let rules: Vec<(String,_)> = rules.into_iter().map(|(a,bs)| {
-//                     let bs: Vec<String> = bs.into_iter().map(|b| format!("{}", quote! { #b })).collect();
-//                     (format!("{}", quote! { #a }),
-//                      quote! { vec![#(#bs),*] })
-//                 }).collect();
-//                 let rules: Vec<_> = rules.into_iter().map(|(a,b)| {
-//                     quote! { (#a, #b) }
-//                 }).collect();
-//                 syn::parse((quote! {
-//                     sig.add_axiom2(#b_tks, [#(#tas),*], [#(#rules),*]);
-//                 }).into()).unwrap()
-//             }
-//             SigItem::Goal(title, b, should_be_valid) => {
-//                 let b_tks = format!("{}", quote! { #b });
-//                 if should_be_valid {
-//                     syn::parse((quote! {
-//                         sig.assert_valid_t(#title, #b_tks);
-//                     }).into()).unwrap()
-//                 } else {
-//                     syn::parse((quote! {
-//                         sig.assert_invalid_t(#title, #b_tks);
-//                     }).into()).unwrap()
-//                 }
-//             }
-//             SigItem::Import(path) => {
-//                 syn::parse((quote! {
-//                     #path::ravencheck_exports::apply_exports(&mut sig);
-//                 }).into()).unwrap()
-//                 // todo!("turn import into stmt")
-//             }
-//             SigItem::Type(name, arg_len) => {
-//                 let s = name.to_string();
-//                 syn::parse((quote! {
-//                     sig.add_type_con(#s, #arg_len);
-//                 }).into()).unwrap()
-//             }
-//             SigItem::TypeAlias(i, ty) => {
-//                 let i_tks = format!("{}", i);
-//                 let ty_tks = format!("{}", quote! { #ty });
-//                 syn::parse((quote! {
-//                     sig.add_alias_from_string(#i_tks, #ty_tks);
-//                 }).into()).unwrap()
-//             }
-//             SigItem::DFun(name, targs, inputs, output, body, is_rec) => {
-//                 let name_tk: String = format!("{}", name);
-//                 let targs: Vec<String> = targs.into_iter().map(|i| {
-//                     format!("{}", quote! { #i })
-//                 }).collect();
-//                 let body_tk: String = format!("{}", quote! {
-//                     |#(#inputs),*| #body
-//                 });
-//                 let inputs: Vec<String> = inputs.into_iter().map(|i| {
-//                     format!("{}", quote! { #i })
-//                 }).collect();
-//                 let output: String = format!("{}", quote! { #output });
-//                 if !is_rec {
-//                     syn::parse((quote! {
-//                         sig.add_fun_tas(#name_tk, [#(#targs),*], Some(#output), #body_tk);
-//                     }).into()).unwrap()
-//                 } else {
-//                     syn::parse((quote! {
-//                         sig.define_op_rec(#name_tk, [#(#targs),*], [#(#inputs),*], #output, #body_tk);
-//                     }).into()).unwrap()
-//                 }
-//             }
-//             SigItem::UFun(name, targs, inputs, output) => {
-//                 let name: String = format!("{}", name);
-//                 let targs: Vec<String> = targs.into_iter().map(|i| {
-//                     format!("{}", quote! { #i })
-//                 }).collect();
-//                 let inputs: Vec<String> = inputs.into_iter().map(|i| {
-//                     format!("{}", quote! { #i })
-//                 }).collect();
-//                 let output: String = format!("{}", quote! { #output });
-//                 let tokens = quote! {
-//                     sig.declare_op(#name, [#(#targs),*], [#(#inputs),*], #output);
-//                 };
-//                 // println!("{}", tokens);
-//                 syn::parse2(tokens).unwrap()
-//             }
-//             SigItem::UConst(name, ty) => {
-//                 let output: String = format!("{}", quote! { #ty });
-//                 let tokens = quote! {
-//                     sig.declare_const(#name, #output);
-//                 };
-//                 syn::parse2(tokens).unwrap()
-//             }
-//         }
-//     }
-// }
-
-// fn extract_top_level(
-//     attrs: &mut Vec<Attribute>,
-//     rcc_items: &mut Vec<RccCommand>)
-// {
-//     attrs.retain_mut(|attr| {
-//         match &attr.meta {
-//             Meta::List(l) if l.path.segments.len() == 1 => {
-//                 match l.path.segments.first().unwrap().ident.to_string().as_str() {
-//                     "declare_types" => {
-//                         let parser =
-//                             Punctuated
-//                             ::<Path,syn::Token![,]>
-//                             ::parse_separated_nonempty;
-//                         let types = parser
-//                             .parse2(l.tokens.clone())
-//                             .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
-
-//                         for mut p in types.into_iter() {
-//                             let seg = p.segments.pop().unwrap().into_value();
-//                             let arity = match seg.arguments {
-//                                 PathArguments::None => 0,
-//                                 PathArguments::AngleBracketed(a) => a.args.len(),
-//                                 PathArguments::Parenthesized(..) => panic!("declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
-//                             };
-
-//                             rcc_items.push(RccItem::DeclareType(seg.ident, arity));
-//                         }
-
-//                         // Don't keep
-//                         false
-//                     }
-
-//                     // Otherwise, do keep
-//                     _ => true,
-//                 }
-//             }
-
-//             // Otherwise, do keep
-//             _ => true,
-//         }
-//     })
-// }
-
-// #[proc_macro]
-// pub fn quote_into(s: TokenStream) -> TokenStream {
-//     let s: proc_macro2::TokenStream = s.into();
-//     quote! {
-//         syn::parse2(quote!{#s}).expect("input to quote_into should parse")
-//     }.into()
-// }
-
-// /// Manipulate a list of items, removing all Ravencheck-specific
-// /// attributes. Items are removed from the list entirely if they are
-// /// verification-specific.
-// ///
-// /// While doing so, collect the list of attribute-item pairs that are
-// /// relevant to Ravencheck.
-// fn extract_items(items: &mut Vec<Item>, rcc_items: &mut Vec<RccItem>) {
-//     items.retain_mut(|item| {
-
-//         // In cases that end with 'true', the item is passed on to the
-//         // Rust compiler. In cases that end with 'false', the item is
-//         // erased.
-//         match extract_rvn_attr(item) {
-//             Some(attr) => {
-//                 rcc_items.push(RccItem::AttrItem(attr.clone(), item.clone()));
-//                 match &attr {
-//                     RvnAttr::Annotate(_) => false,
-//                     RvnAttr::Assume(_) => false,
-//                     RvnAttr::AssumeFor(_) => false,
-//                     RvnAttr::Declare => true,
-//                     RvnAttr::Define(_, is_phantom) => !is_phantom,
-//                     RvnAttr::Import => true,
-//                     RvnAttr::Verify(_) => false,
-//                 }
-//             }
-//             None => true,
-//         }
-//     })
-// }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum GenMode {
