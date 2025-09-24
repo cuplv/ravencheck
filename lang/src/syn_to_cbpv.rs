@@ -598,9 +598,7 @@ pub struct RirFnSig {
 }
 
 impl RirFnSig {
-    pub fn from_syn(
-        ItemFn{sig, block, ..}: ItemFn,
-    ) -> Result<(Self, Block), Error> {
+    pub fn from_syn(sig: Signature) -> Result<Self, Error> {
         let Signature{ident, generics, inputs, output, ..} = sig;
         let ident = ident.to_string();
         let tas = generics.params
@@ -621,7 +619,7 @@ impl RirFnSig {
             ReturnType::Default => Err(format!("function '{}' has unspecified return type", &ident)),
             ReturnType::Type(_, t) => VType::from_syn(*t),
         }?;
-        Ok((RirFnSig{ident, tas, inputs, output}, *block))
+        Ok(RirFnSig{ident, tas, inputs, output})
     }
 }
 
@@ -631,9 +629,11 @@ pub struct RirFn {
 }
 
 impl RirFn {
-    pub fn from_syn(i: ItemFn) -> Result<Self, Error> {
-        let (sig, block) = RirFnSig::from_syn(i)?;
-        let body = match block_to_builder(block) {
+    pub fn from_syn(
+        ItemFn{sig, block, ..}: ItemFn,
+    ) -> Result<Self, Error> {
+        let sig = RirFnSig::from_syn(sig)?;
+        let body = match block_to_builder(*block) {
             Ok(b) => Ok(b.build(&mut Gen::new())),
             Err(e) => Err(e),
         }?;

@@ -38,12 +38,16 @@ use crate::{
 impl Sig {
     pub fn reg_fn_assume(
         &mut self,
-        f: ItemFn,
+        i: ItemFn,
         inst_rules: Vec<InstRuleSyntax>,
     ) -> Result<(), String> {
-        // Parse the signature into Rir types, and keep the body.
-        let (RirFnSig{ident, tas, inputs, output}, body) =
-            RirFnSig::from_syn(f)?;
+        // Parse the ItemFn into Rir types, and keep the body.
+        let i = RirFn::from_syn(i)?;
+        // Apply type aliases
+        let i = i.expand_types(&self.type_aliases);
+        // Unpack
+        let RirFn{sig, body} = i;
+        let RirFnSig{ident, tas, inputs, output} = sig;
 
         let inst_rules = inst_rules
             .into_iter()
@@ -70,10 +74,6 @@ impl Sig {
         }
 
         // Body must also type-check as bool
-        let body = match block_to_builder(body) {
-            Ok(b) => b.build(&mut Gen::new()),
-            Err(e) => return Err(e),
-        };
         let tc = TypeContext::new_types(self.clone(), tas.clone());
         match body.type_check_r(&CType::Return(VType::prop()), tc) {
             Ok(()) => {},
@@ -89,12 +89,17 @@ impl Sig {
 
     pub fn reg_fn_assume_for(
         &mut self,
-        f: ItemFn,
+        i: ItemFn,
         c: HypotheticalCallSyntax,
     ) -> Result<(), String> {
         // Parse the signature into Rir types, and keep the body.
-        let (RirFnSig{ident, mut tas, inputs, output}, body) =
-            RirFnSig::from_syn(f)?;
+        let i = RirFn::from_syn(i)?;
+        // Apply type aliases
+        let i = i.expand_types(&self.type_aliases);
+        let RirFn{sig, body} = i;
+        let RirFnSig{ident, mut tas, inputs, output} = sig;
+        // let (RirFnSig{ident, mut tas, inputs, output}, body) =
+        //     RirFnSig::from_syn(f)?;
         let HypotheticalCall{code, inputs: c_inputs, output: c_output} =
             c.into_rir()?;
 
@@ -152,10 +157,6 @@ impl Sig {
 
         // Body must also type-check as bool, after call inputs and
         // output are added to the context.
-        let body = match block_to_builder(body) {
-            Ok(b) => b.build(&mut Gen::new()),
-            Err(e) => return Err(e),
-        };
         let mut tc = TypeContext::new_types(self.clone(), tas.clone());
         // Add call inputs and output to the context.
         tc = tc.append(
@@ -200,7 +201,6 @@ impl Sig {
             if op_name == &code_ident {
                 match op {
                     Op::Fun(op) => {
-                        // todo!("Substitute type arg names");
                         let f_axiom = f_axiom
                             .expand_types_from_call(
                                 &op_tas_types,
@@ -220,8 +220,10 @@ impl Sig {
     pub fn reg_fn_declare(&mut self, f: ItemFn) -> Result<(), String> {
         // Parse the signature into Rir types, and throw away
         // the body.
-        let (RirFnSig{ident, tas, inputs, output},_) =
-            RirFnSig::from_syn(f)?;
+        let sig = RirFnSig::from_syn(f.sig)?;
+        // Apply type aliases
+        let sig = sig.expand_types(&self.type_aliases);
+        let RirFnSig{ident, tas, inputs, output} = sig;
     
         // Throw away the input patterns, keep the types.
         let inputs: Vec<VType> =

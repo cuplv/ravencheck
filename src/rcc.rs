@@ -9,6 +9,7 @@ use ravenlang::{
     Gen,
     Goal,
     HypotheticalCallSyntax,
+    RirFn,
     RirFnSig,
     InstRuleSyntax,
     TypeContext,
@@ -116,9 +117,13 @@ impl Rcc {
 
     pub fn reg_fn_goal(&mut self, should_be_valid: bool, item_fn: &str) {
         let i = syn::parse_str(item_fn).unwrap();
-        // Parse the signature into Rir types, and keep the body.
-        let (RirFnSig{ident, tas, inputs, output}, body) =
-            RirFnSig::from_syn(i).unwrap();
+        // Parse the ItemFn into Rir types, and keep the body.
+        let i = RirFn::from_syn(i).unwrap();
+        // Apply type aliases
+        let i = i.expand_types(&self.sig.0.type_aliases);
+        // Unpack
+        let RirFn{sig, body} = i;
+        let RirFnSig{ident, tas, inputs, output} = sig;
 
         // For now, don't allow inputs
         if inputs.len() != 0 {
@@ -140,10 +145,6 @@ impl Rcc {
         }
 
         // Body must also type-check as bool
-        let body = match block_to_builder(body) {
-            Ok(b) => b.build(&mut Gen::new()),
-            Err(e) => panic!("{}", e),
-        };
         let tc = TypeContext::new_types(self.sig.0.clone(), tas.clone());
         match body.type_check_r(&CType::Return(VType::prop()), tc) {
             Ok(()) => {},
