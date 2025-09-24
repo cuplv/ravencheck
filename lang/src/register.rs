@@ -10,13 +10,11 @@ use syn::{
 
 use crate::{
     Axiom,
-    BType,
     Builder,
     CType,
     Comp,
     InstMode,
     InstRule,
-    Gen,
     HypotheticalCall,
     Sig,
     sig::{
@@ -31,7 +29,6 @@ use crate::{
         HypotheticalCallSyntax,
         RirFn,
         RirFnSig,
-        block_to_builder,
     },
     type_check::TypeContext,
     VName,

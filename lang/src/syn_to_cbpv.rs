@@ -46,7 +46,6 @@ use crate::{
     Gen,
     HypotheticalCall,
     LogOpN,
-    OpCode,
     Pattern,
     Quantifier,
     Val,

@@ -8,9 +8,7 @@ use ravenlang::{
     Comp,
     CType,
     CheckedSig,
-    Gen,
     Goal,
-    HypotheticalCall,
     HypotheticalCallSyntax,
     Op,
     Quantifier,
@@ -21,10 +19,9 @@ use ravenlang::{
     VName,
     VType,
     Val,
-    block_to_builder,
 };
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The Ravencheck context, which collects definitions, declarations,
 /// and verification goals from the user's code.
@@ -32,6 +29,7 @@ pub struct Rcc {
     sig: CheckedSig,
     defs: HashMap<String, Comp>,
     goals: Vec<Goal>,
+    touched_paths: HashSet<String>,
 }
 
 impl Rcc {
@@ -40,6 +38,16 @@ impl Rcc {
             sig: CheckedSig::empty(),
             defs: HashMap::new(),
             goals: Vec::new(),
+            touched_paths: HashSet::new(),
+        }
+    }
+
+    pub fn touch_new_path(&mut self, path: &str) -> bool {
+        if self.touched_paths.contains(path) {
+            false
+        } else {
+            self.touched_paths.insert(path.to_string());
+            true
         }
     }
 

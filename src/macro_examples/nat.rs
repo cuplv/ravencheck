@@ -25,7 +25,8 @@ pub mod my_nat_mod {
         a.value <= b.value
     }
 
-    #[assume((Nat<T>, T))]
+    #[assume]
+    #[for_type(Nat<T> => <T>)]
     fn le_refl<T>() -> bool {
         forall(|x: Nat<T>| le::<T>(x,x))
     }
@@ -64,7 +65,8 @@ pub mod my_nat_mod {
         Nat::new(a.value + 1)
     }
 
-    #[assume((Nat<T>, T))]
+    #[assume]
+    #[for_type(Nat<T> => <T>)]
     fn inc_dec<T>() -> bool {
         forall(|a: Nat<T>| {
             implies(
@@ -74,7 +76,8 @@ pub mod my_nat_mod {
         })
     }
 
-    #[define_rec]
+    #[define]
+    #[recursive]
     pub fn add<T>(a: Nat<T>, b: Nat<T>) -> Nat<T>
     where T: std::cmp::Eq + Copy
     {
@@ -87,10 +90,8 @@ pub mod my_nat_mod {
         }
     }
 
-    #[annotate(add)]
-    fn add_trivial<T>() -> bool {
-        |a: Nat<T>, b: Nat<T>|
-        |c: Nat<T>|
+    #[annotate(add::<T>(a,b) => c)]
+    fn add_trivial() -> bool {
         true
     }
 
@@ -101,10 +102,8 @@ pub mod my_nat_mod {
     //     le::<T>(a,c) && le::<T>(a,b)
     // }
 
-    #[annotate(add)]
-    fn add_zeros<T>() -> bool {
-        |a: Nat<T>, b: Nat<T>|
-        |c: Nat<T>|
+    #[annotate(add::<T>(a,b) => c)]
+    fn add_zeros() -> bool {
         implies(a == zero::<T>(), b == c)
         && implies(b == zero::<T>(), a == c)
     }

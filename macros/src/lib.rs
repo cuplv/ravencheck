@@ -22,7 +22,7 @@ use syn::{
     punctuated::Punctuated,
     // ReturnType,
     Stmt,
-    // Token,
+    Token,
     // Type,
     UseTree,
 };
@@ -111,6 +111,7 @@ impl RvnItemAttr {
         match item {
             Item::Const(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Fn(i) => Self::extract_from_attrs(&mut i.attrs),
+            Item::Impl(_) => Vec::new(),
             Item::Mod(_) => Vec::new(),
             Item::Struct(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Type(i) => Self::extract_from_attrs(&mut i.attrs),
@@ -235,7 +236,13 @@ impl RccCommand {
             Declare => Self::mk_declare_define(Vec::from(ras), item, false),
             Define => Self::mk_declare_define(Vec::from(ras), item, true),
             Falsify => Self::mk_goal(Vec::from(ras), item, false),
-            Import => todo!("from_item for Import"),
+            Import => match item {
+                Item::Use(i) => {
+                    let c = RccCommand::Import(i.clone());
+                    (Some(c), Some(Item::Use(i)))
+                }
+                item => panic!("Can't use #[import] on {:?}", item),
+            }
             InstRule(_) =>
                 panic!("#[for_type(..)] should only appear under #[assume]"),
             Phantom =>
@@ -578,9 +585,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            // RccItem::AttrItem(attr, item) => {
-            //     let item_str = quote!{ #item }.to_string();
-            //     match (attr,mode) {
             RccCommand::Annotate(call_str, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
@@ -588,12 +592,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            //         (RvnAttr::Annotate(fname), _mode) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 todo!("generate_stmts for Annotate");
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
             RccCommand::Assume(rules, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
@@ -608,18 +606,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            //         (RvnAttr::Assume(_rules), _) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 rcc.reg_item_assume([], #item_str);
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
-            //         (RvnAttr::AssumeFor(fname), _mode) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 todo!("generate_stmts for AssumeFor");
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
             RccCommand::Declare(item, _is_phantom) => {
                 let item_str = quote!{ #item }.to_string();
                 let s: Stmt = syn::parse2(quote! {
@@ -627,12 +613,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s)
             }
-            //         (RvnAttr::Declare, _) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 rcc.reg_item_declare(#item_str);
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
             RccCommand::Define(item, _is_phantom, is_rec) => {
                 let item_str = quote!{ #item }.to_string();
                 let s: Stmt = syn::parse2(quote! {
@@ -640,18 +620,21 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s)
             }
-            //         (RvnAttr::Define(_is_recursive, _is_phantom), _) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 rcc.reg_item_define(#item_str);
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
-            //         (RvnAttr::Import, _) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 todo!("Import");
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
+            RccCommand::Import(item) => {
+                let segs = use_tree_to_path(item.tree.clone());
+                let mut punct = Punctuated::<PathSegment, Token![::]>::new();
+                for s in segs {
+                    punct.push(s);
+                }
+                let path = Path { leading_colon: None, segments: punct };
+                let path_str = quote!{ #path }.to_string();
+                let s: Stmt = syn::parse2(quote! {
+                    if rcc.touch_new_path(#path_str) {
+                        #path::ravencheck_exports::apply_exports(&mut rcc);
+                    }
+                }).unwrap();
+                out.push(s);
+            }
             RccCommand::Goal(should_be_valid, item_fn) => {
                 match mode {
                     GenMode::Check => {
@@ -664,16 +647,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                     GenMode::Export => {}
                 }
             }
-            //         (RvnAttr::Verify(should_be_valid), _) => {
-            //             let s: Stmt = syn::parse2(quote! {
-            //                 rcc.reg_item_verify(#item_str, #should_be_valid);
-            //             }).unwrap();
-            //             out.push(s);
-            //         }
-            //         a => todo!("generate_stmts for {:?}", a)
-            //     }
-            // }
-            c => todo!("generate_stmts for {:?}", c)
         }
     }
     out
