@@ -4,6 +4,7 @@ use crate::{
     BinderN,
     BType,
     Comp,
+    InstMode,
     InstRule,
     LogOpN,
     Op,
@@ -207,7 +208,17 @@ impl Sig {
                 inst_axioms.push(a);
             } else {
                 for t in relevant.base_types() {
-                    match a.inst_for(t) {
+                    match a.inst_for_type(t) {
+                        Some(a) => {
+                            let mut g = a.get_gen();
+                            let a = a.normal_form_single_case(self, &mut g);
+                            inst_axioms.push(a);
+                        }
+                        None => {}
+                    }
+                }
+                for c in relevant.ops() {
+                    match a.inst_for_code(c) {
                         Some(a) => {
                             let mut g = a.get_gen();
                             let a = a.normal_form_single_case(self, &mut g);
@@ -233,8 +244,12 @@ impl Sig {
 
 impl Axiom {
     /// Instantiate for the given BType, if it triggers a rule.
-    pub fn inst_for(&self, b: &BType) -> Option<Comp> {
-        for InstRule{left,right} in &self.inst_rules {
+    pub fn inst_for_type(&self, b: &BType) -> Option<Comp> {
+        let rules = match &self.inst_mode {
+            InstMode::Code(_) => return None,
+            InstMode::Rules(rules) => rules,
+        };
+        for InstRule{left,right} in rules {
             let l = left;
             let r = right;
             match (l,b) {
@@ -267,6 +282,10 @@ impl Axiom {
                 }
             }
         }
+        None
+    }
+    pub fn inst_for_code(&self, _code: &OpCode) -> Option<Comp> {
+        // todo: give this a non-trivial implementation
         None
     }
 }

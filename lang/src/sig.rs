@@ -446,9 +446,15 @@ pub struct InstRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstMode {
+    Code(String),
+    Rules(Vec<InstRule>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Axiom {
     pub tas: Vec<String>,
-    pub inst_rules: Vec<InstRule>,
+    pub inst_mode: InstMode,
     pub body: Comp,
 }
 

@@ -13,6 +13,7 @@ use crate::{
     Builder,
     CType,
     Comp,
+    InstMode,
     InstRule,
     Gen,
     HypotheticalCall,
@@ -81,7 +82,11 @@ impl Sig {
                 "Type error in '{}': {}", ident, e
             )),
         }
-        let axiom = Axiom { tas, inst_rules: inst_rules.clone(), body };
+        let axiom = Axiom {
+            tas,
+            inst_mode: InstMode::Rules(inst_rules.clone()),
+            body,
+        };
         println!("Pushing axiom with rules {:?}", inst_rules);
         self.axioms.push(axiom);
         Ok(())

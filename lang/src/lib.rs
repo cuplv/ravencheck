@@ -35,6 +35,7 @@ pub use sig::{
     BType,
     CType,
     FunOp,
+    InstMode,
     InstRule,
     PredOp,
     PredSymbol,
@@ -222,7 +223,7 @@ Type error in axiom \"{}\": {:?}",
         // );
         let axiom_a = Axiom {
             tas: tas.into_iter().map(|s| s.to_string()).collect(),
-            inst_rules: inst_rules_parsed,
+            inst_mode: InstMode::Rules(inst_rules_parsed),
             // body: cases.pop().unwrap().1,
             body: axiom,
         };
