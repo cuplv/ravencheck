@@ -116,7 +116,7 @@ impl Rcc {
         let call = call.into_rir()?;
         let call_ident = call.ident.clone();
         // Apply type aliases
-        let i = i.expand_types(&self.sig.0.type_aliases);
+        let i = i.expand_types(&self.sig.0.type_aliases());
 
         // Assume the annotation in the signature.
         let f_axiom = self.sig.0.build_function_axiom(i, call)?;
@@ -202,7 +202,7 @@ impl Rcc {
         // Parse the signature into Rir types.
         let i = RirFn::from_syn(i)?;
         // Apply type aliases
-        let i = i.expand_types(&self.sig.0.type_aliases);
+        let i = i.expand_types(&self.sig.0.type_aliases());
         // Unpack
         let RirFn{sig, body} = i;
         let RirFnSig{ident, tas, inputs, output} = sig.clone();
@@ -265,7 +265,7 @@ impl Rcc {
         // Parse the ItemFn into Rir types, and keep the body.
         let i = RirFn::from_syn(i).unwrap();
         // Apply type aliases
-        let i = i.expand_types(&self.sig.0.type_aliases);
+        let i = i.expand_types(&self.sig.0.type_aliases());
         // Unpack
         let RirFn{sig, body} = i;
         let RirFnSig{ident, tas, inputs, output} = sig;

@@ -417,7 +417,7 @@ impl VType {
     /// (ignoring any shadowed by type abstractions) on the first
     /// type.
     pub fn type_match(self, other: &Self, sig: &Sig, tas: &Vec<String>) -> bool {
-        let unshadowed_aliases: HashMap<String, VType> = sig.type_aliases
+        let unshadowed_aliases: HashMap<String, VType> = sig.type_aliases()
             .iter()
             .filter(|(s,_t)| !tas.contains(&s))
             .map(|(s,t)| (s.clone(), t.clone()))

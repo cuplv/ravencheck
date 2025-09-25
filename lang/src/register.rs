@@ -60,7 +60,7 @@ impl Sig {
         // Parse the ItemFn into Rir types, and keep the body.
         let i = RirFn::from_syn(i)?;
         // Apply type aliases
-        let i = i.expand_types(&self.type_aliases);
+        let i = i.expand_types(&self.type_aliases());
         // Unpack
         let RirFn{sig, body} = i;
         let RirFnSig{ident, tas, inputs, output} = sig;
@@ -225,7 +225,7 @@ impl Sig {
         // Parse the signature into Rir types, and keep the body.
         let i = RirFn::from_syn(i)?;
         // Apply type aliases
-        let i = i.expand_types(&self.type_aliases);
+        let i = i.expand_types(&self.type_aliases());
         // Parse the hypothetical call
         let c = c.into_rir()?;
 
@@ -266,7 +266,7 @@ impl Sig {
         // the body.
         let sig = RirFnSig::from_syn(f.sig)?;
         // Apply type aliases
-        let sig = sig.expand_types(&self.type_aliases);
+        let sig = sig.expand_types(&self.type_aliases());
 
         self.reg_rir_declare(sig)
     }
@@ -424,7 +424,7 @@ impl Sig {
 
     pub fn reg_type_define(&mut self, i: ItemType) -> Result<(), String> {
         let ItemType{ident, ty, ..} = i;
-        let right = VType::from_syn(*ty)?.expand_types(&self.type_aliases);
+        let right = VType::from_syn(*ty)?.expand_types(&self.type_aliases());
         self.add_alias(ident, right);
         Ok(())
     }

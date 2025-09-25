@@ -152,7 +152,7 @@ impl CheckedSig {
         //     t.expand_aliases(&self.0.type_aliases)
         // }).collect();
 
-        let mut unshadowed_aliases = self.0.type_aliases.clone();
+        let mut unshadowed_aliases = self.0.type_aliases();
         for a in tas.iter() {
             unshadowed_aliases.remove(a);
         }

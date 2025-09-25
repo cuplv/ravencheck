@@ -459,9 +459,21 @@ pub struct Axiom {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeSum {
+    tas: Vec<String>,
+    variants: HashMap<String, Vec<VType>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeDef {
+    Alias(VType),
+    Sum(TypeSum),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sig {
     pub sorts: HashMap<String,usize>,
-    pub type_aliases: HashMap<String,VType>,
+    pub type_defs: HashMap<String,TypeDef>,
     // The Vec<String> is the list of type parameters, which act as
     // aliases on the types in the Op.
     pub ops: Vec<(String, Vec<String>, Op)>,
@@ -473,9 +485,40 @@ impl Sig {
     pub fn empty() -> Sig {
         Sig {
             sorts: HashMap::new(),
-            type_aliases: HashMap::new(),
+            type_defs: HashMap::new(),
             ops: Vec::new(),
             axioms: Vec::new(),
+        }
+    }
+    pub fn type_aliases(&self) -> HashMap<String,VType> {
+        let mut aliases = HashMap::new();
+        for (name, d) in &self.type_defs {
+            match d {
+                TypeDef::Alias(t) => {
+                    aliases.insert(name.clone(), t.clone());
+                }
+                TypeDef::Sum(_) => {},
+            }
+        }
+        aliases
+    }
+    pub fn type_aliases_insert(&mut self, s: String, t: VType) {
+        assert!(
+            !self.sorts.contains_key(&s),
+            "You tried to define type {}, but it was already declared",
+            s,
+        );
+        assert!(
+            !self.type_defs.contains_key(&s),
+            "You tried to define type {}, but it was already defined",
+            s,
+        );
+        self.type_defs.insert(s, TypeDef::Alias(t));
+    }
+    pub fn type_aliases_get(&mut self, s: &str) -> Option<&VType> {
+        match self.type_defs.get(s) {
+            Some(TypeDef::Alias(t)) => Some(t),
+            _ => None,
         }
     }
     pub fn get_op(&self, s: &str) -> Option<(&Vec<String>, &Op)> {
@@ -537,7 +580,7 @@ impl Sig {
                 e,
             )
         }
-        self.type_aliases.insert(s, t);
+        self.type_aliases_insert(s, t);
     }
     pub fn add_constant<S1: ToString, S2: ToString>(
         &mut self,
@@ -561,7 +604,7 @@ impl Sig {
         for i in inputs.iter() {
             assert!(
                 self.sorts.contains_key(&i.to_string())
-                    || self.type_aliases.get(&i.to_string()).is_some(),
+                    || self.type_aliases_get(&i.to_string()).is_some(),
                 "{} is not a declared sort",
                 i.to_string(),
             );
@@ -569,7 +612,7 @@ impl Sig {
         let op = Op::Symbol(PredSymbol{
             inputs: inputs
                 .into_iter()
-                .map(|s| VType::ui(s).expand_aliases(&self.type_aliases))
+                .map(|s| VType::ui(s).expand_aliases(&self.type_aliases()))
                 .collect(),
         });
         self.ops.push((name.to_string(), Vec::new(), op));
@@ -585,7 +628,7 @@ impl Sig {
         let op = Op::Symbol(PredSymbol{
             inputs: inputs
                 .into_iter()
-                .map(|t| t.expand_aliases(&self.type_aliases))
+                .map(|t| t.expand_aliases(&self.type_aliases()))
                 .collect(),
         });
         self.ops.push((name.to_string(), Vec::new(), op));

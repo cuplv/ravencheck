@@ -187,7 +187,7 @@ impl Sig {
         }
 
         let axiom = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error in parsing axiom \"{}\": {:?}",
@@ -238,7 +238,7 @@ Type error in axiom \"{}\": {:?}",
         let ty = VType::from_syn(
             syn::parse_str(&ty_string.to_string()).unwrap()
         ).unwrap();
-        let ty2 = ty.clone().expand_aliases(&self.type_aliases);
+        let ty2 = ty.clone().expand_aliases(&self.type_aliases());
         println!(
             "Adding alias: {} = {} => {}",
             alias.to_string(),
@@ -257,7 +257,7 @@ Type error in axiom \"{}\": {:?}",
 
         // Parse the comp from def
         let c = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error parsing annotation: {}",
@@ -311,7 +311,7 @@ Error parsing annotation: {}",
         def: S2,
     ) {
         let axiom = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error in parsing def of \"{}\": {:?}",
@@ -413,11 +413,11 @@ Type error in def of \"{}\": {:?}",
 
         let inputs: Vec<VType> = inputs.into_iter().map(|i| {
             let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
-            t.expand_aliases(&self.type_aliases)
+            t.expand_aliases(&self.type_aliases())
         }).collect();
         let output: VType = VType::from_string(output)
             .expect("should be able to parse an input argument type as a VType")
-            .expand_aliases(&self.type_aliases);
+            .expand_aliases(&self.type_aliases());
 
         self.declare_op_parsed(name.to_string(), targs, inputs, output)
     }
@@ -435,13 +435,13 @@ Type error in def of \"{}\": {:?}",
             tas.into_iter().map(|s| s.to_string()).collect();
         let inputs: Vec<VType> = inputs.into_iter().map(|i| {
             let t = VType::from_pat_type(i).expect("should be able to parse an input argument type as a VType");
-            t.expand_aliases(&self.type_aliases)
+            t.expand_aliases(&self.type_aliases())
         }).collect();
         let output: VType = VType::from_string(output)
             .expect("should be able to parse an input argument type as a VType")
-            .expand_aliases(&self.type_aliases);
+            .expand_aliases(&self.type_aliases());
 
-        let mut unshadowed_aliases = self.type_aliases.clone();
+        let mut unshadowed_aliases = self.type_aliases();
         for a in tas.iter() {
             unshadowed_aliases.remove(a);
         }
@@ -511,7 +511,7 @@ Error in type-checking definition of \"{}\": {:?}",
         axiom: S2,
     ) {
         let axiom = match parse_str_cbpv(&axiom.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error in parsing axiom of \"{}\": {:?}",
@@ -567,7 +567,7 @@ Type error in axiom of \"{}\": {:?}",
         def: S3,
     ) {
         let axiom = match parse_str_cbpv(&axiom.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error in parsing axiom of \"{}\": {:?}",
@@ -609,7 +609,7 @@ Type error in axiom of \"{}\": {:?}",
         };
 
         let def = match parse_str_cbpv(&def.to_string()) {
-            Ok(m) => m.expand_types(&self.type_aliases),
+            Ok(m) => m.expand_types(&self.type_aliases()),
             Err(e) => panic!(
                 "
 Error in parsing definition of \"{}\": {:?}",
