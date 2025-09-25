@@ -136,6 +136,7 @@ impl Comp {
                     else_b.rename_r(gen),
                 )
             }
+            c => todo!("rename_r {:?}", c),
         }
     }
 }

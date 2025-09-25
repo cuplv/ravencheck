@@ -215,6 +215,7 @@ if-then-else has branches with mismatched types: {:?} vs. {:?}",
                     Err(format!("Multi-return {:?}", vs))
                 }
             }
+            c => todo!("type_of {:?}", c),
         }
     }
 }

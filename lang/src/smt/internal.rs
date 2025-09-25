@@ -528,6 +528,7 @@ impl <'a> Context<'a> {
                 }
                 Ok(args)
             }
+            c => todo!("smt_comp for {:?}", c),
         }
     }
 }

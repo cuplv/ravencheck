@@ -105,6 +105,7 @@ impl Comp {
                     else_b.substitute(x,v),
                 )
             }
+            c => todo!("substitute for {:?}", c)
         }
     }
     pub fn substitute_many(mut self, ss: &Vec<(VName,Val)>) -> Self {

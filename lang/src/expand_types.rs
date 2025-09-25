@@ -144,6 +144,7 @@ impl Comp {
             Self::Return(vs) => Self::Return(
                 vs.into_iter().map(|v| v.expand_types(subs)).collect()
             ),
+            c => todo!("expand_types {:?}", c),
         }
     }
 }

@@ -397,6 +397,7 @@ impl Comp {
                         )];
                     }
                 }
+                c => todo!("partial_eval loop {:?}", c),
             }
         }
     }

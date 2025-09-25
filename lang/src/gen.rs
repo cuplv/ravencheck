@@ -117,6 +117,7 @@ impl Comp {
                     v.advance_gen(gen);
                 }
             }
+            c => todo!("advance_gen {:?}", c),
         }
     }
     /// Returns a Gen that has advanced beyond any VName
