@@ -467,7 +467,7 @@ impl Sig {
         // only thing we record is the number of them.
         let arity = generics.params.len();
 
-        self.sorts.insert(ident.to_string(), arity);
+        self.sorts_insert(ident.to_string(), arity);
         Ok(())
     }
 

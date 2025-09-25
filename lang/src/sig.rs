@@ -459,21 +459,15 @@ pub struct Axiom {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypeSum {
-    tas: Vec<String>,
-    variants: HashMap<String, Vec<VType>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeDef {
     Alias(VType),
-    Sum(TypeSum),
+    Sum(HashMap<String, Vec<VType>>),
+    Uninterpreted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sig {
-    pub sorts: HashMap<String,usize>,
-    pub type_defs: HashMap<String,TypeDef>,
+    pub type_defs: HashMap<String,(Vec<String>, TypeDef)>,
     // The Vec<String> is the list of type parameters, which act as
     // aliases on the types in the Op.
     pub ops: Vec<(String, Vec<String>, Op)>,
@@ -484,40 +478,66 @@ pub struct Sig {
 impl Sig {
     pub fn empty() -> Sig {
         Sig {
-            sorts: HashMap::new(),
             type_defs: HashMap::new(),
             ops: Vec::new(),
             axioms: Vec::new(),
         }
     }
+    pub fn sorts(&self) -> HashMap<String,usize> {
+        let mut sorts = HashMap::new();
+        for (name, (tas, def)) in &self.type_defs {
+            match def {
+                TypeDef::Uninterpreted => {
+                    sorts.insert(name.clone(), tas.len());
+                }
+                _ => {},
+            }
+        }
+        sorts
+    }
     pub fn type_aliases(&self) -> HashMap<String,VType> {
         let mut aliases = HashMap::new();
-        for (name, d) in &self.type_defs {
-            match d {
+        // We ignore the type abstractions for now, since aliases are
+        // so-far not allowed to have any.
+        for (name, (_tas, def)) in &self.type_defs {
+            match def {
                 TypeDef::Alias(t) => {
                     aliases.insert(name.clone(), t.clone());
                 }
-                TypeDef::Sum(_) => {},
+                _ => {},
             }
         }
         aliases
     }
-    pub fn type_aliases_insert(&mut self, s: String, t: VType) {
-        assert!(
-            !self.sorts.contains_key(&s),
-            "You tried to define type {}, but it was already declared",
-            s,
-        );
+    pub fn sorts_insert(&mut self, s: String, arity: usize) {
         assert!(
             !self.type_defs.contains_key(&s),
             "You tried to define type {}, but it was already defined",
             s,
         );
-        self.type_defs.insert(s, TypeDef::Alias(t));
+        let mut tas = Vec::new();
+        for n in 0..arity {
+            tas.push(format!("T{}", n));
+        }
+        self.type_defs.insert(s, (tas, TypeDef::Uninterpreted));
+    }
+    pub fn sorts_get(&mut self, s: &str) -> Option<usize> {
+        match self.type_defs.get(s) {
+            Some((tas, TypeDef::Uninterpreted)) => Some(tas.len()),
+            _ => None,
+        }
+    }
+    pub fn type_aliases_insert(&mut self, s: String, t: VType) {
+        assert!(
+            !self.type_defs.contains_key(&s),
+            "You tried to define type {}, but it was already defined",
+            s,
+        );
+        self.type_defs.insert(s, (Vec::new(), TypeDef::Alias(t)));
     }
     pub fn type_aliases_get(&mut self, s: &str) -> Option<&VType> {
         match self.type_defs.get(s) {
-            Some(TypeDef::Alias(t)) => Some(t),
+            Some((_tas, TypeDef::Alias(t))) => Some(t),
             _ => None,
         }
     }
@@ -528,18 +548,13 @@ impl Sig {
         variants: HashMap<String, Vec<VType>>,
     ) {
         assert!(
-            !self.sorts.contains_key(&s),
-            "You tried to define type {}, but it was already declared",
-            s,
-        );
-        assert!(
             !self.type_defs.contains_key(&s),
             "You tried to define type {}, but it was already defined",
             s,
         );
-        let def = TypeDef::Sum(TypeSum{tas, variants});
-        println!("Defined sum {} as {:?}", &s, def);
-        self.type_defs.insert(s, def);
+        let def = TypeDef::Sum(variants);
+        println!("Defined sum {} with tas {:?} as {:?}", &s, tas, def);
+        self.type_defs.insert(s, (tas, def));
     }
     pub fn get_op(&self, s: &str) -> Option<(&Vec<String>, &Op)> {
         for (name, tas, op) in self.ops.iter() {
@@ -563,8 +578,14 @@ impl Sig {
             (_, op) => todo!("get_op_input_types for {:?}", op),
         }
     }
-    pub fn sort_arity(&self, s: &str) -> Option<usize> {
-        self.sorts.get(s).copied()
+    pub fn type_arity(&self, s: &str) -> Option<usize> {
+        match self.type_defs.get(s) {
+            // For now, type aliases are not considered definitions
+            // like the others.
+            Some((_tas, TypeDef::Alias(_))) => None,
+            Some((tas, _)) => Some(tas.len()),
+            None => None,
+        }
     }
     pub fn all_op_names(&self) -> Vec<String> {
         self.ops_map().clone().into_iter().map(|(k,_)| k).collect()
@@ -580,10 +601,10 @@ impl Sig {
         self.ops.clone()
     }
     pub fn add_sort<S: ToString>(&mut self, s: S) {
-        self.sorts.insert(s.to_string(), 0);
+        self.sorts_insert(s.to_string(), 0);
     }
     pub fn add_type_con<S: ToString>(&mut self, s: S, arity: usize) {
-        self.sorts.insert(s.to_string(), arity);
+        self.sorts_insert(s.to_string(), arity);
     }
     pub fn add_alias<S1: ToString>(&mut self, s: S1, t: VType) {
         let s = s.to_string();
@@ -607,7 +628,7 @@ impl Sig {
         name: S1,
         sort: S2,
     ) {
-        assert!(self.sorts.contains_key(&sort.to_string()));
+        assert!(self.type_arity(&sort.to_string()).is_some());
         self.ops.push((
             name.to_string(),
             Vec::new(),
@@ -622,9 +643,11 @@ impl Sig {
         inputs: [S2; N],
     ) {
         for i in inputs.iter() {
+            // In this one case, since we perform alias exapansion
+            // afterwards, we check whether i is a defined sort or
+            // alias.
             assert!(
-                self.sorts.contains_key(&i.to_string())
-                    || self.type_aliases_get(&i.to_string()).is_some(),
+                self.type_defs.contains_key(&i.to_string()),
                 "{} is not a declared sort",
                 i.to_string(),
             );

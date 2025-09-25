@@ -72,7 +72,7 @@ impl Rcc {
     }
 
     pub fn reg_toplevel_type(&mut self, ident: &str, arity: usize) {
-        self.sig.0.sorts.insert(ident.to_string(), arity);
+        self.sig.0.sorts_insert(ident.to_string(), arity);
     }
 
     /// Register a function (`fn`) item as a checked annotation.

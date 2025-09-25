@@ -437,7 +437,7 @@ fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> Response {
     // Declare all type abstraction arguments as zero-arity
     // uninterpreted sorts.
     for s in tas {
-        sig.0.sorts.insert(s, 0);
+        sig.0.sorts_insert(s, 0);
     }
     let mut p = match c.as_prop(sig.inner_sig()) {
         Ok(p) => p,

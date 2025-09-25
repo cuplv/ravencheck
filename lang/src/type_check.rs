@@ -356,7 +356,7 @@ impl BType {
         match self {
             Self::Prop => Ok(()),
             Self::UI(name, args) => {
-                match sig.sort_arity(name) {
+                match sig.type_arity(name) {
                     Some(n) if n == args.len() => {
                         for a in args {
                             match a.validate(sig, type_bindings) {

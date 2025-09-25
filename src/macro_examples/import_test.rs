@@ -1,5 +1,4 @@
 #[crate::check_module(crate)]
-#[declare_types(u32)]
 #[allow(dead_code)]
 mod my_mod {
     #[import]
