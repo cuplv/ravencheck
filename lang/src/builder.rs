@@ -75,6 +75,18 @@ impl Builder {
             f(self.build(gen)).build(gen)
         })
     }
+    pub fn bind_many<F>(bs: Vec<Self>, f: F) -> Self
+    where
+        F: FnOnce(Vec<Comp>) -> Self + 'static,
+    {
+        Self::new(|gen| {
+            let cs = bs
+                .into_iter()
+                .map(|b| b.build(gen))
+                .collect();
+            f(cs).build(gen)
+        })
+    }
     pub fn return_<V: Into<Val>>(v: V) -> Self {
         Self::lift(Comp::return1(v))
     }
@@ -211,7 +223,25 @@ impl Builder {
     }
 
     pub fn mat(self, arms: Vec<(MatchArm, Self)>) -> Self {
-        todo!("builder for match statement")
+        let mut matchers = Vec::new();
+        let mut comps = Vec::new();
+        for (m,c) in arms {
+            matchers.push(m);
+            comps.push(c);
+        }
+        self.seq_gen(|v_target| {
+            Self::bind_many(comps, |comps| {
+                let comps = comps
+                    .into_iter()
+                    .map(|c| Box::new(c))
+                    .collect::<Vec<_>>();
+                let arms = matchers
+                    .into_iter()
+                    .zip(comps)
+                    .collect();
+                Self::lift(Comp::Match(v_target, arms))
+            })
+        })
     }
 
     pub fn tuple<Bs>(bs: Bs) -> Self
