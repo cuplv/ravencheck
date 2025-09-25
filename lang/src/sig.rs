@@ -466,7 +466,7 @@ pub struct Axiom {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeDef {
     Alias(VType),
-    Sum(HashMap<String, Vec<VType>>),
+    Enum(HashMap<String, Vec<VType>>),
     Uninterpreted,
 }
 
@@ -557,7 +557,7 @@ impl Sig {
             "You tried to define type {}, but it was already defined",
             s,
         );
-        let def = TypeDef::Sum(variants);
+        let def = TypeDef::Enum(variants);
         println!("Defined sum {} with tas {:?} as {:?}", &s, tas, def);
         self.type_defs.insert(s, (tas, def));
     }

@@ -166,7 +166,7 @@ impl Sig {
     ) -> Result<VType, String> {
         match &oc.path {
             Some(path) => match self.type_defs.get(path) {
-                Some((tas, TypeDef::Sum(_))) if oc.types.len() == tas.len() => {
+                Some((tas, TypeDef::Enum(_))) if oc.types.len() == tas.len() => {
                     Ok(VType::ui_args(path, oc.types.clone()))
                 }
                 Some((tas, _)) => Err(format!(
