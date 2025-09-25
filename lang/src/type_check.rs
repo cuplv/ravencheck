@@ -6,7 +6,6 @@ use crate::{
     CType,
     Literal,
     LogOpN,
-    Op,
     OpCode,
     Sig,
     Val,
@@ -261,48 +260,12 @@ impl Pattern {
 }
 
 impl Sig {
-    fn get_type(&self, oc: &OpCode, tas: Vec<String>) -> Result<VType, TypeError> {
-        match self.get_applied_op(oc) {
-            Ok(op) => match op {
-                Op::Const(op) => {
-                    return Ok(op.vtype)
-                }
-                Op::Direct(m) => {
-                    match m.type_of(TypeContext::new_types(self.clone(), tas))? {
-                        CType::Return(t) => return Ok(t),
-                        _ => return Err(format!(
-                            "signature function \"{}\" did not have a computation type",
-                            oc,
-                        )),
-                    }
-                }
-                Op::Fun(op) => {
-                    return Ok(VType::fun_v(
-                        op.inputs,
-                        op.output,
-                    ))
-                },
-                Op::Pred(op) => {
-                    return Ok(VType::fun_v(
-                        op.inputs,
-                        VType::prop(),
-                    ))
-                },
-                Op::Rec(op) => {
-                    return Ok(VType::fun_v(
-                        op.inputs,
-                        op.output,
-                    ))
-                }
-                Op::Symbol(op) => {
-                    return Ok(VType::fun_v(
-                        op.inputs,
-                        VType::prop(),
-                    ))
-                }
-            }
-            Err(e) => Err(e),
-        }
+    fn get_type(
+        &self,
+        oc: &OpCode,
+        tas: Vec<String>
+    ) -> Result<VType, TypeError> {
+        self.opcode_type(oc, tas)
     }
 }
 
@@ -333,7 +296,7 @@ impl Val {
                 }
                 Ok(VType::Tuple(ts))
             }
-            Self::Var(x, types, _) => {
+            Self::Var(x, types, path) => {
                 match tc.get(x) {
                     Ok(t) => Ok(t),
                     Err(_) => match x {
@@ -341,7 +304,7 @@ impl Val {
                             let oc = OpCode {
                                 ident: s.clone(),
                                 types: types.clone(),
-                                path: None,
+                                path: path.clone(),
                             };
                             tc.sig.get_type(&oc, tc.type_bindings.clone())
                         }

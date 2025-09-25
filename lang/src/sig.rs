@@ -281,6 +281,10 @@ impl VType {
         Self::Base(BType::ui(s))
     }
 
+    pub fn ui_args<T: ToString>(s: T, args: Vec<VType>) -> Self {
+        Self::Base(BType::ui_args(s, args))
+    }
+
     pub fn unit() -> Self {
         Self::Tuple(Vec::new())
     }
