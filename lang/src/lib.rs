@@ -166,8 +166,27 @@ impl Sig {
     ) -> Result<VType, String> {
         match &oc.path {
             Some(path) => match self.type_defs.get(path) {
-                Some((tas, TypeDef::Enum(_))) if oc.types.len() == tas.len() => {
-                    Ok(VType::ui_args(path, oc.types.clone()))
+                Some((tas, TypeDef::Enum(vs))) if oc.types.len() == tas.len() => {
+                    let inputs = match vs.get(&oc.ident) {
+                        Some(ts) => ts
+                            .iter()
+                            .map(|t| {
+                                t.clone().expand_types_from_call(
+                                    &oc.types,
+                                    tas
+                                )
+                            })
+                            .collect::<Result<Vec<_>,_>>(),
+                        None => Err(format!(
+                            "Enum {} does not have a variant {}",
+                            path, oc.ident
+                        )),
+                    }?;
+                    let t = VType::fun_v(
+                        inputs,
+                        VType::ui_args(path, oc.types.clone()),
+                    );
+                    Ok(t)
                 }
                 Some((tas, _)) => Err(format!(
                     "Enum {} should have {} type args, but got {}",

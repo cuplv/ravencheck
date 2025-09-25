@@ -189,6 +189,18 @@ impl CType {
     
 
 impl VType {
+    pub fn expand_types_from_call(
+        self,
+        targs: &Vec<VType>,
+        tas: &Vec<String>,
+    ) -> Result<Self,String> {
+        if targs.len() == tas.len() {
+            let subs = tas.iter().cloned().zip(targs.iter().cloned());
+            Ok(self.expand_types(&HashMap::from_iter(subs)))
+        } else {
+            Err(format!("mismatch between number of type args: {:?} does not match expected {:?}", targs, tas))
+        }
+    }
     pub fn expand_types(self, subs: &Subs) -> Self {
         self.expand_aliases(subs)
     }

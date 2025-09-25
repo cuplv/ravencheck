@@ -6,8 +6,10 @@ use crate::{
     CType,
     Literal,
     LogOpN,
+    MatchArm,
     OpCode,
     Sig,
+    TypeDef,
     Val,
     VName,
     VType,
@@ -207,6 +209,43 @@ if-then-else has branches with mismatched types: {:?} vs. {:?}",
                     ))
                 }
             }
+            Self::Match(target, arms) => {
+                let target_t = target.type_of(tc.clone())?;
+                let (enum_name, targs) = match target_t.unwrap_base() {
+                    Ok(BType::UI(enum_name, targs)) => (enum_name, targs),
+                    Ok(b) => return Err(format!(
+                        "you tried to match on a value with type {}, which is not an enum type.",
+                        b,
+                    )),
+                    Err(t) => return Err(format!(
+                        "you tried to match on a value with type {}, which is not an enum type.",
+                        t.render(),
+                    )),
+                };
+                if arms.len() == 0 {
+                    return Err(format!(
+                        "match {{..}} should have at least one arm"
+                    ));
+                }         
+                let (tas, td): &(Vec<String>, TypeDef) = tc.sig.type_defs
+                    .get(&enum_name)
+                    .expect(&format!("Enum {} should be defined, but was not.", enum_name));
+                let variants = match td {
+                    TypeDef::Enum(vs) => vs,
+                    _ => return Err(format!("You tried to match on a value of type {}, which is not an enum type.", enum_name)),
+                };
+                if tas.len() != targs.len() {
+                    return Err(format!("matched enum had the wrong number of type args?"));
+                }
+                let body_t = type_of_arm(&arms[0], &tc, &enum_name, &targs, &tas, &variants)?;
+                for arm in &arms[1..] {
+                    let t = type_of_arm(arm, &tc, &enum_name, &targs, &tas, &variants)?;
+                    if t != body_t {
+                        return Err(format!("match arm type mis-match: {} is not {}", t.render(), body_t.render()))
+                    }
+                }
+                Ok(body_t)
+            }
             Self::Return(vs) => {
                 if vs.len() == 1 {
                     Ok(CType::Return(vs[0].type_of(tc)?))
@@ -214,9 +253,37 @@ if-then-else has branches with mismatched types: {:?} vs. {:?}",
                     Err(format!("Multi-return {:?}", vs))
                 }
             }
-            c => todo!("type_of {:?}", c),
+            // c => todo!("type_of {:?}", c),
         }
     }
+}
+
+fn type_of_arm(
+    (MatchArm{ty, constructor, binders}, comp): &(MatchArm, Box<Comp>),
+    tc: &TypeContext,
+    enum_name: &str,
+    targs: &Vec<VType>,
+    tas: &Vec<String>,
+    variants: &HashMap<String, Vec<VType>>,
+) -> Result<CType, TypeError> {
+    if ty.as_str() != enum_name {
+        return Err(format!("You tried to match a value with type {} against a {} constructor", enum_name, ty));
+    }
+    let mut tc = tc.clone();
+    let v_types = match variants.get(constructor) {
+        Some(ts) => Ok(ts),
+        None => Err(format!("Enum {} does not have a variant {}", enum_name, constructor)),
+    }?;
+    let it = binders
+        .clone()
+        .into_iter()
+        .zip(v_types.clone());
+    for (b,t) in it {
+        let x = b.unwrap_vname()?;
+        let t = t.expand_types_from_call(targs, tas)?;
+        tc = tc.plus(x,t);
+    }
+    comp.type_of(tc)
 }
 
 impl CType {
