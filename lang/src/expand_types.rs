@@ -5,6 +5,7 @@ use crate::{
     CType,
     Comp,
     LogOpN,
+    MatchArm,
     Op,
     OpCode,
     RirFn,
@@ -141,12 +142,25 @@ impl Comp {
                 Box::new(then_b.expand_types(subs)),
                 Box::new(else_b.expand_types(subs)),
             ),
+            Self::Match(target, arms) => Self::Match(
+                target.expand_types(subs),
+                arms.into_iter().map(|(m,c)| {
+                    (m.expand_types(subs),
+                     Box::new(c.expand_types(subs)),
+                    )
+                }).collect(),
+            ),
             Self::Return(vs) => Self::Return(
                 vs.into_iter().map(|v| v.expand_types(subs)).collect()
             ),
-            c => todo!("expand_types {:?}", c),
+            // c => todo!("expand_types {:?}", c),
         }
     }
+}
+
+impl MatchArm {
+    // For now, this does nothing
+    fn expand_types(self, _subs: &Subs) -> Self { self }
 }
 
 impl Val {
