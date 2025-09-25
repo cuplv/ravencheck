@@ -160,8 +160,8 @@ impl Comp {
                     // If there is an unsubstituted var here, it must
                     // represent a primitive operator that we will
                     // intercept.
-                    Val::Var(VName::Manual(s), types) => {
-                        let oc = OpCode { ident: s.clone(), types };
+                    Val::Var(VName::Manual(s), types, path) => {
+                        let oc = OpCode { ident: s.clone(), types, path };
 
                         match stack.0.pop() {
                             // Primitive operators should only be
@@ -334,7 +334,7 @@ impl Comp {
                     match cond {
                         Val::Literal(Literal::LogTrue) => { self = *then_b; }
                         Val::Literal(Literal::LogFalse) => { self = *else_b; }
-                        Val::Var(x, types) => {
+                        Val::Var(x, types, path) => {
                             // Branches evaluate in parallel and don't
                             // affect each other, so we send two distinct
                             // copies of the stack down each.
@@ -360,7 +360,7 @@ impl Comp {
                             );
                             let else_b = else_cases.pop().unwrap().1;
 
-                            self = Self::ite(Val::Var(x, types), then_b, else_b);
+                            self = Self::ite(Val::Var(x, types, path), then_b, else_b);
                             return vec![(case_name, self.rebuild_from_stack(anti_stack))]
                         }
                         v => {

@@ -4,7 +4,7 @@ use std::fmt;
 
 impl VName {
     pub fn val(self) -> Val {
-        Val::Var(self, Vec::new())
+        Val::Var(self, Vec::new(), None)
     }
 }
 
@@ -27,12 +27,12 @@ pub enum Val {
     OpCode(OpMode, OpCode),
     Thunk(Box<Comp>),
     Tuple(Vec<Val>),
-    Var(VName, Vec<VType>),
+    Var(VName, Vec<VType>, Option<String>),
 }
 
 impl Val {
     pub fn var(v: &VName) -> Self {
-        Self::Var(v.clone(), Vec::new())
+        Self::Var(v.clone(), Vec::new(), None)
     }
     pub fn thunk(c: &Comp) -> Self {
         Self::Thunk(Box::new(c.clone()))
@@ -81,7 +81,7 @@ impl HypotheticalCall {
     pub fn code(&self) -> OpCode {
         let ident = self.ident.clone();
         let types = self.tas.clone().into_iter().map(VType::ui).collect();
-        OpCode{ ident, types }
+        OpCode{ ident, types, path: None }
     }
 }
 

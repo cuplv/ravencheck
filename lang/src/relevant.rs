@@ -43,7 +43,7 @@ impl Relevant {
         self
     }
     pub fn add_op(mut self, ident: String, types: Vec<VType>) -> Self {
-        self.ops.insert(OpCode{ident,types});
+        self.ops.insert(OpCode{ident,types,path: None});
         self
     }
     pub fn add_oc(mut self, oc: OpCode, sig: &Sig) -> Self {
@@ -166,12 +166,13 @@ impl Val {
                     rel = rel.union(v.relevant(sig));
                 }
             }
-            Self::Var(name, types) => {
+            Self::Var(name, types, None) => {
                 match name {
                     VName::Manual(s) => {
                         let code = OpCode {
                             ident: s.clone(),
                             types: types.clone(),
+                            path: None,
                         };
                         match sig.get_applied_op(&code) {
                             Ok(Op::Const(op)) => {
@@ -189,6 +190,7 @@ impl Val {
                     _ => {},
                 }
             }
+            Self::Var(_name, _types, _path) => todo!("relevant for pathed vars"),
         }
         rel
     }

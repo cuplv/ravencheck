@@ -392,7 +392,7 @@ impl <'a> Context<'a> {
     fn smt_val(&self, term: &Val) -> std::io::Result<SExpr> {
         match term {
             // Normalized Vars do not have type args, unless they are constants
-            Val::Var(n, types) => match self.get_assign(n) {
+            Val::Var(n, types, _) => match self.get_assign(n) {
                 Some(Assignment::Defined(e)) =>
                     Ok(e.clone()),
                 Some(Assignment::Quantified) =>
@@ -403,6 +403,7 @@ impl <'a> Context<'a> {
                     let code = OpCode {
                         ident: n.clone().unwrap_manual(),
                         types: types.clone(),
+                        path: None,
                     };
                     Ok(self.ctx.atom(code.render_smt()))
                 }

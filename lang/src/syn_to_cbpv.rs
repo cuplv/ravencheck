@@ -570,7 +570,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                         panic!("Can't handle parenthesized path arguments: {:?}", args)
                     }
                 };
-                Ok(Builder::return_(Val::Var(VName::new(ident), types)))
+                Ok(Builder::return_(Val::Var(VName::new(ident), types, None)))
             }
         }
 

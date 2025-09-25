@@ -350,6 +350,7 @@ impl Sig {
                 let code = OpCode {
                     ident: ident.clone(),
                     types: code_args,
+                    path: None,
                 };
                 let axiom = Self::relabs_axiom(
                     code,

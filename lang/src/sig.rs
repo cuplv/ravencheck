@@ -41,6 +41,7 @@ use std::fmt;
 pub struct OpCode {
     pub ident: String,
     pub types: Vec<VType>,
+    pub path: Option<String>,
 }
 
 impl fmt::Display for OpCode {

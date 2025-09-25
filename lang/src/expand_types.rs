@@ -157,9 +157,10 @@ impl Val {
             Self::Tuple(vs) => Self::Tuple(
                 vs.into_iter().map(|v| v.expand_types(subs)).collect()
             ),
-            Self::Var(name, args) => Self::Var(
+            Self::Var(name, args, path) => Self::Var(
                 name,
                 args.into_iter().map(|a| a.expand_types(subs)).collect(),
+                path,
             ),
         }
     }

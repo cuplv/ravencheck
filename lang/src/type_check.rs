@@ -332,7 +332,7 @@ impl Val {
                 }
                 Ok(VType::Tuple(ts))
             }
-            Self::Var(x, types) => {
+            Self::Var(x, types, _) => {
                 match tc.get(x) {
                     Ok(t) => Ok(t),
                     Err(_) => match x {
@@ -340,6 +340,7 @@ impl Val {
                             let oc = OpCode {
                                 ident: s.clone(),
                                 types: types.clone(),
+                                path: None,
                             };
                             tc.sig.get_type(&oc, tc.type_bindings.clone())
                         }

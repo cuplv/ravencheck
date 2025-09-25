@@ -371,7 +371,7 @@ Type error in def of \"{}\": {:?}",
                 // relational abstraction.
 
                 let code_args = targs.iter().cloned().map(VType::ui).collect();
-                let code = OpCode { ident: name.to_string(), types: code_args };
+                let code = OpCode { ident: name.to_string(), types: code_args, path: None };
                 let axiom = Self::relabs_axiom(
                     code,
                     inputs.clone(),
@@ -489,7 +489,7 @@ Error in type-checking definition of \"{}\": {:?}",
         }
 
         let code_args = tas.iter().cloned().map(VType::ui).collect();
-        let code = OpCode { ident: name.to_string(), types: code_args };
+        let code = OpCode { ident: name.to_string(), types: code_args, path: None };
         let axiom = Self::relabs_axiom(
             code,
             inputs.clone(),

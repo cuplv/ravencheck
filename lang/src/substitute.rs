@@ -128,7 +128,7 @@ impl Pattern {
 impl Val {
     fn substitute(self, x: &VName, v: &Val) -> Self {
         match self {
-            Self::Var(x2, _) if *x == x2 => { v.clone() },
+            Self::Var(x2, _, _) if *x == x2 => { v.clone() },
             Self::Thunk(c) => Self::Thunk(Box::new(c.substitute(x,v))),
             Self::Tuple(vs) => Self::Tuple(
                 vs

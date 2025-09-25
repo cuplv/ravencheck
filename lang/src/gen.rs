@@ -155,7 +155,7 @@ impl Val {
                     v.advance_gen(gen);
                 }
             }
-            Val::Var(x,_) => gen.advance(x),
+            Val::Var(x,_,_) => gen.advance(x),
         }
     }
 }
