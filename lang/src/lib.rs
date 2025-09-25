@@ -10,6 +10,7 @@ pub use cbpv::{
     HypotheticalCall,
     Literal,
     LogOpN,
+    MatchArm,
     OpMode,
     Pattern,
     Quantifier,

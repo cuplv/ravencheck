@@ -46,6 +46,7 @@ use crate::{
     Gen,
     HypotheticalCall,
     LogOpN,
+    MatchArm,
     Pattern,
     Quantifier,
     Val,
@@ -545,6 +546,60 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             // parse the tokens, then match result as a closure
             let expr: Expr = syn::parse(tokens.into()).unwrap();
             q_body(quantifier, expr)
+        }
+
+        Expr::Match(expr) => {
+            let target = syn_to_builder(*expr.expr)?;
+            let arms: Vec<(MatchArm, Builder)> = expr.arms
+                .into_iter()
+                .map(|arm| {
+                    match arm.pat {
+                        Pat::TupleStruct(pat) => {
+                            assert!(
+                                pat.path.segments.len() == 2,
+                                "match arm path should have 2 segments",
+                            );
+                            let segments: Vec<&PathSegment> =
+                                pat.path.segments.iter().collect();
+                            let ty: String =
+                                segments[0].clone().ident.to_string();
+                            let constructor: String =
+                                segments[1].clone().ident.to_string();
+
+                            let binders: Vec<Pattern> = pat.elems
+                                .iter()
+                                .map(|p| {
+                                    Pattern::from_pat(p.clone()).map(|tup|tup.0)
+                                })
+                                .collect::<Result<Vec<_>, _>>()?;
+
+                            let comp = syn_to_builder(*arm.body)?;
+                            Ok((MatchArm{ty, constructor, binders}, comp))
+                        }
+                        Pat::Path(pat) => {
+                            assert!(
+                                pat.path.segments.len() == 2,
+                                "match arm path should have 2 segments",
+                            );
+                            let segments: Vec<&PathSegment> =
+                                pat.path.segments.iter().collect();
+                            let ty: String =
+                                segments[0].clone().ident.to_string();
+                            let constructor: String =
+                                segments[1].clone().ident.to_string();
+
+                            let comp = syn_to_builder(*arm.body)?;
+                            Ok((MatchArm{
+                                ty,
+                                constructor,
+                                binders: Vec::new()
+                            }, comp))
+                        }
+                        p => panic!("can't parse match arm from {:?}", p),
+                    }
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            Ok(target.mat(arms))
         }
 
         Expr::Paren(ExprParen{expr,..}) => syn_to_builder(*expr),

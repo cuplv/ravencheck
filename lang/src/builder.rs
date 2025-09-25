@@ -1,7 +1,16 @@
 use crate::sig::VType;
 use crate::vname::VName;
 use crate::gen::Gen;
-use crate::cbpv::{Binder1, BinderN, Comp, LogOpN, Pattern, Quantifier, Val};
+use crate::cbpv::{
+    Binder1,
+    BinderN,
+    Comp,
+    LogOpN,
+    MatchArm,
+    Pattern,
+    Quantifier,
+    Val
+};
 
 pub struct Builder {
     fun: Box<dyn FnOnce(&mut Gen) -> Comp>,
@@ -199,6 +208,10 @@ impl Builder {
                 })
             })
         })
+    }
+
+    pub fn mat(self, arms: Vec<(MatchArm, Self)>) -> Self {
+        todo!("builder for match statement")
     }
 
     pub fn tuple<Bs>(bs: Bs) -> Self

@@ -150,10 +150,10 @@ pub enum Binder1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchPattern {
-    ty: String,
-    constructor: String,
-    binders: Vec<Pattern>,
+pub struct MatchArm {
+    pub ty: String,
+    pub constructor: String,
+    pub binders: Vec<Pattern>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +164,7 @@ pub enum Comp {
     Force(Val),
     Fun(Vec<(VName, Option<VType>)>, Box<Comp>),
     Ite(Val, Box<Comp>, Box<Comp>),
-    Match(Val, Vec<(MatchPattern, Box<Comp>)>),
+    Match(Val, Vec<(MatchArm, Box<Comp>)>),
     Return(Vec<Val>),
 }
 
