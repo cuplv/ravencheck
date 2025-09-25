@@ -312,7 +312,7 @@ impl VType {
                     if &seg.ident == "bool" {
                         Ok(VType::prop())
                     } else {
-                        let args = match seg.arguments {
+                        let mut args = match seg.arguments {
                             PathArguments::None => Vec::new(),
                             PathArguments::AngleBracketed(bs) => {
                                 bs
@@ -328,7 +328,12 @@ impl VType {
                             }
                             PathArguments::Parenthesized(..) => return Err(format!("Can't handle parenthesized type arguments")),
                         };
-                        Ok(VType::Base(BType::UI(seg.ident.to_string(), args)))
+                        if &seg.ident == "Box" {
+                            assert!(args.len() == 1, "Box<_> should have 1 type arg, but it was given {} type args", args.len());
+                            Ok(args.pop().unwrap())
+                        } else {
+                            Ok(VType::Base(BType::UI(seg.ident.to_string(), args)))
+                        }
                     }
                 } else {
                     Err(format!("Can't handle type path {:?}, since it does not have exactly 1 segment.", p))

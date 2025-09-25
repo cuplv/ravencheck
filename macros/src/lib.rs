@@ -102,6 +102,7 @@ impl RvnItemAttr {
     fn extract_from_item(item: &mut Item) -> Vec<RvnItemAttr> {
         match item {
             Item::Const(i) => Self::extract_from_attrs(&mut i.attrs),
+            Item::Enum(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Fn(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Impl(_) => Vec::new(),
             Item::Mod(_) => Vec::new(),

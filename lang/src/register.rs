@@ -1,6 +1,8 @@
 use syn::{
+    Fields,
     Ident,
     ItemConst,
+    ItemEnum,
     ItemFn,
     ItemStruct,
     ItemType,
@@ -35,6 +37,8 @@ use crate::{
     VType,
 };
 
+use std::collections::HashMap;
+
 impl Sig {
     pub fn reg_const_declare(
         &mut self,
@@ -49,6 +53,51 @@ impl Sig {
             Vec::new(),
             op,
         ));
+        Ok(())
+    }
+
+    pub fn reg_enum_declare(&mut self, i: ItemEnum) -> Result<(), String> {
+        self.declare_type_or_struct(i.ident, i.generics)
+    }
+
+    pub fn reg_enum_define(
+        &mut self,
+        i: ItemEnum,
+        // todo: validate variants types, depending on whether recursive was used
+        _is_rec: bool,
+    ) -> Result<(), String> {
+        let mut tas = Vec::new();
+        // Check that only Types are given as GenericParams.
+        for p in i.generics.params.iter() {
+            match p {
+                GenericParam::Lifetime(..) => {
+                    return Err(format!("Lifetime params on declared structs are not supported ({})", i.ident));
+                }
+                GenericParam::Type(tp) => {
+                    tas.push(tp.ident.to_string());
+                }
+                GenericParam::Const(..) => {
+                    return Err(format!("Const params on declared structs are not supported ({})", i.ident));
+                }
+            }
+        }
+        let mut variants = HashMap::new();
+        for variant in i.variants.iter() {
+            match &variant.fields {
+                Fields::Named(_) => return Err(format!("Defining named enum fields is not supported ({})", i.ident)),
+                Fields::Unnamed(fields) => {
+                    let mut ts = Vec::new();
+                    for f in fields.unnamed.iter() {
+                        ts.push(VType::from_syn(f.ty.clone())?);
+                    }
+                    variants.insert(variant.ident.to_string(), ts);
+                }
+                Fields::Unit => {
+                    variants.insert(variant.ident.to_string(), Vec::new());
+                }
+            }
+        }
+        self.type_sums_insert(i.ident.to_string(), tas, variants);
         Ok(())
     }
 

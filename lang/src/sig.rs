@@ -521,6 +521,26 @@ impl Sig {
             _ => None,
         }
     }
+    pub fn type_sums_insert(
+        &mut self,
+        s: String,
+        tas: Vec<String>,
+        variants: HashMap<String, Vec<VType>>,
+    ) {
+        assert!(
+            !self.sorts.contains_key(&s),
+            "You tried to define type {}, but it was already declared",
+            s,
+        );
+        assert!(
+            !self.type_defs.contains_key(&s),
+            "You tried to define type {}, but it was already defined",
+            s,
+        );
+        let def = TypeDef::Sum(TypeSum{tas, variants});
+        println!("Defined sum {} as {:?}", &s, def);
+        self.type_defs.insert(s, def);
+    }
     pub fn get_op(&self, s: &str) -> Option<(&Vec<String>, &Op)> {
         for (name, tas, op) in self.ops.iter() {
             if name == s {
