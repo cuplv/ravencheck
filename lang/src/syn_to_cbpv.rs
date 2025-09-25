@@ -550,9 +550,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         Expr::Paren(ExprParen{expr,..}) => syn_to_builder(*expr),
 
         Expr::Path(mut ep) => {
-            if ep.path.segments.len() != 1 {
-                Err(format!("Path should not have more than one segment: {:?}", ep.path))
-            } else {
+            if ep.path.segments.len() == 1 {
                 let PathSegment{ident,arguments} =
                     ep.path.segments.pop().unwrap().into_value();
                 let types = match arguments {
@@ -571,6 +569,35 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                     }
                 };
                 Ok(Builder::return_(Val::Var(VName::new(ident), types, None)))
+            } else if ep.path.segments.len() == 2 {
+                let PathSegment{ident: ident2, arguments: arguments2} =
+                    ep.path.segments.pop().unwrap().into_value();
+                let PathSegment{ident: ident1, arguments: arguments1} =
+                    ep.path.segments.pop().unwrap().into_value();
+                // Get the type arguments from the first path seg
+                let types = match arguments1 {
+                    PathArguments::None => Vec::new(),
+                    PathArguments::AngleBracketed(a) => {
+                        a.args.into_pairs().map(|pr| {
+                            match pr.into_value() {
+                                GenericArgument::Type(t) =>
+                                    VType::from_syn(t).unwrap(),
+                                a => panic!("Can't handle this generic argument: {:?}", a),
+                            }
+                        }).collect()
+                    }
+                    PathArguments::Parenthesized(args) => {
+                        panic!("Can't handle parenthesized path arguments: {:?}", args)
+                    }
+                };
+                assert!(
+                    arguments2 == PathArguments::None,
+                    "2-segment paths should not have type args on second seg: {:?}",
+                    ep.path,
+                );
+                Ok(Builder::return_(Val::Var(VName::new(ident2), types, Some(ident1.to_string()))))
+            } else {
+                panic!("Got path with more than 2 segments: {:?}", ep.path)
             }
         }
 
