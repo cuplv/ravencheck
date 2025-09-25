@@ -28,7 +28,7 @@ impl CheckedSig {
         match query_negative_c(condition, self, tas) {
             Response::Unsat if should_be_valid => Ok(()),
             Response::Unsat =>
-                Err(format!("Failed to falisfy '{}': solver did not find counterexample", title)),
+                Err(format!("Failed to falsify '{}': solver did not find counterexample", title)),
             Response::Sat if !should_be_valid => Ok(()),
             Response::Sat =>
                 Err(format!("Failed to verify '{}': solver found counterexample", title)),

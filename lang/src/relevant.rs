@@ -154,6 +154,13 @@ impl Val {
         let mut rel = Relevant::new();
         match self {
             Self::Literal(..) => {},
+            Self::EnumCon(oc, vs) => {
+                let t = oc.get_enum_type().unwrap();
+                rel = rel.add_base_type(t);
+                for v in vs {
+                    rel = rel.union(v.relevant(sig));
+                }
+            }
             Self::OpCode(om, oc) => match om {
                 OpMode::Const | OpMode::ZeroArgAsConst => {
                     rel = rel.add_oc(oc.clone(), sig);

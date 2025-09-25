@@ -23,6 +23,7 @@ pub enum OpMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Val {
+    EnumCon(OpCode, Vec<Val>),
     Literal(Literal),
     OpCode(OpMode, OpCode),
     Thunk(Box<Comp>),
@@ -154,6 +155,26 @@ pub struct MatchArm {
     pub ty: String,
     pub constructor: String,
     pub binders: Vec<Pattern>,
+}
+
+impl MatchArm {
+    pub fn select(
+        con: &str,
+        arms: Vec<(MatchArm, Box<Comp>)>
+    ) -> Option<(Vec<VName>,Comp)> {
+        for (m,c) in arms.into_iter() {
+            if con == &m.constructor {
+                let xs = m.binders
+                    .into_iter()
+                    .map(|p| {
+                        p.unwrap_vname().unwrap()
+                    })
+                    .collect();
+                return Some((xs, *c))
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

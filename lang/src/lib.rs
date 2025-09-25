@@ -140,6 +140,11 @@ impl Comp {
     }
 }
 
+pub enum Oc {
+    Op(Op),
+    Con(Vec<VType>),
+}
+
 impl Sig {
     pub fn get_applied_op(
         &self,
@@ -159,11 +164,10 @@ impl Sig {
         }
     }
 
-    pub fn opcode_type(
+    pub fn get_applied_op_or_con(
         &self,
         oc: &OpCode,
-        tas: Vec<String>,
-    ) -> Result<VType, String> {
+    ) -> Result<Oc, String> {
         match &oc.path {
             Some(path) => match self.type_defs.get(path) {
                 Some((tas, TypeDef::Enum(vs))) if oc.types.len() == tas.len() => {
@@ -182,11 +186,7 @@ impl Sig {
                             path, oc.ident
                         )),
                     }?;
-                    let t = VType::fun_v(
-                        inputs,
-                        VType::ui_args(path, oc.types.clone()),
-                    );
-                    Ok(t)
+                    Ok(Oc::Con(inputs))
                 }
                 Some((tas, _)) => Err(format!(
                     "Enum {} should have {} type args, but got {}",
@@ -198,46 +198,65 @@ impl Sig {
                 )),
             }
             None => match self.get_applied_op(oc) {
-                Ok(op) => match op {
-                    Op::Const(op) => {
-                        return Ok(op.vtype)
-                    }
-                    Op::Direct(m) => {
-                        match m.type_of(TypeContext::new_types(self.clone(), tas))? {
-                            CType::Return(t) => return Ok(t),
-                            _ => return Err(format!(
-                                "signature function \"{}\" did not have a computation type",
-                                oc,
-                            )),
-                        }
-                    }
-                    Op::Fun(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            op.output,
-                        ))
-                    },
-                    Op::Pred(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            VType::prop(),
-                        ))
-                    },
-                    Op::Rec(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            op.output,
-                        ))
-                    }
-                    Op::Symbol(op) => {
-                        return Ok(VType::fun_v(
-                            op.inputs,
-                            VType::prop(),
-                        ))
-                    }
-                }
+                Ok(op) => Ok(Oc::Op(op)),
                 Err(e) => Err(e),
             }
+        }
+    }
+
+    pub fn opcode_type(
+        &self,
+        oc: &OpCode,
+        tas: Vec<String>,
+    ) -> Result<VType, String> {
+        match self.get_applied_op_or_con(oc) {
+            Ok(Oc::Con(inputs)) => {
+                let path = oc.path.clone().unwrap();
+                let t = VType::fun_v(
+                    inputs,
+                    VType::ui_args(path, oc.types.clone()),
+                );
+                Ok(t)
+            }
+            Ok(Oc::Op(op)) => match op {
+                Op::Const(op) => {
+                    return Ok(op.vtype)
+                }
+                Op::Direct(m) => {
+                    match m.type_of(TypeContext::new_types(self.clone(), tas))? {
+                        CType::Return(t) => return Ok(t),
+                        _ => return Err(format!(
+                            "signature function \"{}\" did not have a computation type",
+                            oc,
+                        )),
+                    }
+                }
+                Op::Fun(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        op.output,
+                    ))
+                },
+                Op::Pred(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        VType::prop(),
+                    ))
+                },
+                Op::Rec(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        op.output,
+                    ))
+                }
+                Op::Symbol(op) => {
+                    return Ok(VType::fun_v(
+                        op.inputs,
+                        VType::prop(),
+                    ))
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 

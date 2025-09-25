@@ -112,12 +112,21 @@ impl Comp {
                 then_b.advance_gen(gen);
                 else_b.advance_gen(gen);
             }
+            Self::Match(v, arms) => {
+                v.advance_gen(gen);
+                for (arm, comp) in arms.iter() {
+                    for p in arm.binders.iter() {
+                        p.advance_gen(gen);
+                    }
+                    comp.advance_gen(gen);
+                }
+            }
             Self::Return(vs) => {
                 for v in vs {
                     v.advance_gen(gen);
                 }
             }
-            c => todo!("advance_gen {:?}", c),
+            // c => todo!("advance_gen {:?}", c),
         }
     }
     /// Returns a Gen that has advanced beyond any VName
@@ -148,6 +157,11 @@ impl Pattern {
 impl Val {
     fn advance_gen(&self, gen: &mut Gen) {
         match self {
+            Val::EnumCon(_, vs) => {
+                for v in vs {
+                    v.advance_gen(gen);
+                }
+            }
             Val::Literal(_l) => {},
             Val::OpCode(..) => {},
             Val::Thunk(m) => m.advance_gen(gen),

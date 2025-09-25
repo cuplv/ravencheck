@@ -105,7 +105,26 @@ impl Comp {
                     else_b.substitute(x,v),
                 )
             }
-            c => todo!("substitute for {:?}", c)
+            Self::Match(target, arms) => {
+                let mut new_arms = Vec::new();
+                for (arm, comp) in arms {
+                    let shadows = arm.binders
+                        .clone()
+                        .into_iter()
+                        .map(|p| p.unwrap_vname().unwrap())
+                        .collect::<Vec<_>>();
+                    if !shadows.contains(&x) {
+                        new_arms.push((arm, Box::new(comp.substitute(x,v))));
+                    } else {
+                        new_arms.push((arm, comp))
+                    }
+                }
+                Self::Match(
+                    target.substitute(x,v),
+                    new_arms,
+                )
+            }
+            // c => todo!("substitute for {:?}", c)
         }
     }
     pub fn substitute_many(mut self, ss: &Vec<(VName,Val)>) -> Self {

@@ -7,6 +7,8 @@ use crate::{
     Gen,
     Literal,
     LogOpN,
+    MatchArm,
+    Oc,
     Op,
     OpCode,
     OpMode,
@@ -174,17 +176,20 @@ impl Comp {
                             // expand_funs). The output, however, does get
                             // flattened.
                             Some(Frame::Args(_targs,vs)) => {
-                                match sig.get_applied_op(&oc) {
-                                    Ok(Op::Const(..)) => panic!(
+                                match sig.get_applied_op_or_con(&oc) {
+                                    Ok(Oc::Con(..)) => {
+                                        self = Comp::return1(Val::EnumCon(oc, vs));
+                                    }
+                                    Ok(Oc::Op(Op::Const(..))) => panic!(
                                         "Found constant {} in Force position",
                                         oc,
                                     ),
-                                    Ok(Op::Direct(f)) => {
+                                    Ok(Oc::Op(Op::Direct(f))) => {
                                         self = Builder::lift(f.clone().rename(gen))
                                             .apply_rt(vs)
                                             .build(gen);
                                     }
-                                    Ok(Op::Symbol(..)) => {
+                                    Ok(Oc::Op(Op::Symbol(..))) => {
                                         let x_result = gen.next();
                                         let mut flat_vs = Vec::new();
                                         for v in vs {
@@ -197,7 +202,7 @@ impl Comp {
                                         ));
                                         self = Comp::return1(x_result);
                                     }
-                                    Ok(Op::Pred(..)) => {
+                                    Ok(Oc::Op(Op::Pred(..))) => {
                                         let x_result = gen.next();
                                         anti_stack.push(Rebuild::LogOpN(
                                             LogOpN::Pred(oc,true),
@@ -206,7 +211,7 @@ impl Comp {
                                         ));
                                         self = Comp::return1(x_result);
                                     }
-                                    Ok(Op::Rec(op)) => {
+                                    Ok(Oc::Op(Op::Rec(op))) => {
                                         // This is exactly the same as the
                                         // Fun case below.
     
@@ -226,7 +231,7 @@ impl Comp {
                                         anti_stack.push(Rebuild::Call(oc, vs, ps));
                                         self = Comp::return1(ret_v);
                                     }
-                                    Ok(Op::Fun(op)) => {
+                                    Ok(Oc::Op(Op::Fun(op))) => {
                                         if vs.len() == 0 {
                                             let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
                                             self = Comp::return1(ret_v);
@@ -368,6 +373,17 @@ impl Comp {
                         }
                     }
                 }
+                Self::Match(target, arms) => {
+                    match target {
+                        Val::EnumCon(code, vs) => {
+                            let (xs,branch) = MatchArm::select(&code.ident, arms)
+                                .expect("typed match should have matching arm");
+                            let subs = xs.into_iter().zip(vs).collect();
+                            self = branch.substitute_many(&subs);
+                        }
+                        target => todo!("match with target {:?}", target),
+                    }
+                }
                 Self::Return(vs) => match stack.0.pop() {
                     Some(Frame::Seq(ps,m)) => {
                         assert!(
@@ -397,7 +413,7 @@ impl Comp {
                         )];
                     }
                 }
-                c => todo!("partial_eval loop {:?}", c),
+                // c => todo!("partial_eval loop {:?}", c),
             }
         }
     }

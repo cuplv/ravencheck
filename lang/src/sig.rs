@@ -46,7 +46,10 @@ pub struct OpCode {
 
 impl fmt::Display for OpCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = format!("{}", &self.ident);
+        let mut s = match &self.path {
+            Some(p) => format!("{}::{}", p, &self.ident),
+            None => format!("{}", &self.ident),
+        };
         // write!(f, "{}::<", &self.ident)?;
         if self.types.len() == 1 {
             s.push_str(&format!("::<{}>", &self.types[0].render()));
@@ -66,6 +69,15 @@ impl fmt::Display for OpCode {
             }
         }
         write!(f, "{}", s)
+    }
+}
+
+impl OpCode {
+    pub fn get_enum_type(&self) -> Option<BType> {
+        match &self.path {
+            Some(path) => Some(BType::ui_args(path, self.types.clone())),
+            None => None
+        }
     }
 }
 

@@ -210,6 +210,7 @@ if-then-else has branches with mismatched types: {:?} vs. {:?}",
                 }
             }
             Self::Match(target, arms) => {
+                // Todo: check that arms are exhaustive.
                 let target_t = target.type_of(tc.clone())?;
                 let (enum_name, targs) = match target_t.unwrap_base() {
                     Ok(BType::UI(enum_name, targs)) => (enum_name, targs),
@@ -348,6 +349,9 @@ impl Val {
     }
     fn type_of(&self, tc: TypeContext) -> Result<VType, TypeError> {
         match self {
+            Self::EnumCon(..) => panic!(
+                "EnumCon should not exist at type-check time."
+            ),
             Self::Literal(l) => match l {
                 Literal::LogTrue => Ok(VType::prop()),
                 Literal::LogFalse => Ok(VType::prop()),

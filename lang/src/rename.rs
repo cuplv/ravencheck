@@ -166,6 +166,10 @@ impl Pattern {
 impl Val {
     fn rename_r(self, gen: &mut Gen) -> Self {
         match self {
+            Self::EnumCon(a, vs) => Self::EnumCon(
+                a,
+                vs.into_iter().map(|v| v.rename_r(gen)).collect()
+            ),
             Self::Literal(l) => Self::Literal(l),
             Self::OpCode(om,oc) => Self::OpCode(om,oc),
             Self::Thunk(m) => Self::Thunk(Box::new(m.rename_r(gen))),

@@ -47,6 +47,30 @@ mod rvn {
     fn oops() -> bool { false }
 
     #[verify]
+    fn no_quantify_true() -> bool {
+        let maybe_x = Opt::<(bool,bool)>::Some((true, false));
+        match maybe_x {
+            Opt::Some(x) => {
+                let (t,f) = x;
+                t && !f
+            }
+            Opt::None => false,
+        }
+    }
+
+    #[falsify]
+    fn no_quantify_false() -> bool {
+        let maybe_x = Opt::<(bool,bool)>::Some((true, false));
+        match maybe_x {
+            Opt::Some(x) => {
+                let (t,f) = x;
+                !(t && !f)
+            }
+            Opt::None => true,
+        }
+    }
+
+    #[verify]
     fn construct_deconstruct_v<X: Clone + PartialEq>() -> bool {
         forall(|x: X| {
             let maybe_x = Opt::<X>::Some(x.clone());
@@ -62,7 +86,7 @@ mod rvn {
         forall(|x: X| {
             let maybe_x = Opt::<X>::Some(x);
             match maybe_x {
-                Opt::<X>::Some(y) => true,
+                Opt::<X>::Some(y) => y != x,
                 Opt::<X>::None => false,
             }
         })
@@ -73,7 +97,7 @@ mod rvn {
         forall(|x: X| {
             let maybe_x = Opt::<X>::Some(x);
             match maybe_x {
-                Opt::<X>::Some(y) => y == x,
+                Opt::<X>::Some(y) => false,
                 Opt::<X>::None => true,
             }
         })
