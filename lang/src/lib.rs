@@ -204,6 +204,44 @@ impl Sig {
         }
     }
 
+    pub fn get_con_codes_with_inputs_btype(
+        &self,
+        t: &BType,
+    ) -> Option<Vec<(OpCode, Vec<VType>)>> {
+        match t {
+            BType::UI(path, types) =>
+                self.get_con_codes_with_inputs(path, types.clone()),
+            _ => None,
+        }
+    }
+    pub fn get_con_codes_with_inputs(
+        &self,
+        path: &str,
+        types: Vec<VType>,
+    ) -> Option<Vec<(OpCode, Vec<VType>)>> {
+        match self.type_defs.get(path) {
+            Some((tas, def)) => match def {
+                TypeDef::Enum(vars) => {
+                    let mut out = Vec::new();
+                    for (ident, inputs) in vars {
+                        let inputs = inputs.clone().into_iter().map(|i| i.expand_types_from_call(&types, &tas).unwrap()).collect();
+                        let code = OpCode{
+                            ident: ident.clone(),
+                            types: types.clone(),
+                            path: Some(path.to_string()),
+                        };
+                        out.push((code, inputs));
+                            
+                    }
+                    Some(out)
+                }
+                _ => None,
+            }
+            _ => None,
+        }
+        
+    }
+
     pub fn opcode_type(
         &self,
         oc: &OpCode,

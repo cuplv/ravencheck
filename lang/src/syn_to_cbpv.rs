@@ -47,6 +47,7 @@ use crate::{
     HypotheticalCall,
     LogOpN,
     MatchArm,
+    OpCode,
     Pattern,
     Quantifier,
     Val,
@@ -561,10 +562,17 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                             );
                             let segments: Vec<&PathSegment> =
                                 pat.path.segments.iter().collect();
+                            let ty_seg = segments[0].clone();
                             let ty: String =
-                                segments[0].clone().ident.to_string();
+                                ty_seg.ident.to_string();
+                            let targs: Vec<VType> = type_args_from_seg(ty_seg)?;
                             let constructor: String =
                                 segments[1].clone().ident.to_string();
+                            let code = OpCode {
+                                ident: constructor,
+                                path: Some(ty),
+                                types: targs,
+                            };
 
                             let binders: Vec<Pattern> = pat.elems
                                 .iter()
@@ -574,7 +582,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                                 .collect::<Result<Vec<_>, _>>()?;
 
                             let comp = syn_to_builder(*arm.body)?;
-                            Ok((MatchArm{ty, constructor, binders}, comp))
+                            Ok((MatchArm{code, binders}, comp))
                         }
                         Pat::Path(pat) => {
                             assert!(
@@ -583,15 +591,21 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                             );
                             let segments: Vec<&PathSegment> =
                                 pat.path.segments.iter().collect();
+                            let ty_seg = segments[0].clone();
                             let ty: String =
-                                segments[0].clone().ident.to_string();
+                                ty_seg.ident.to_string();
+                            let targs: Vec<VType> = type_args_from_seg(ty_seg)?;
                             let constructor: String =
                                 segments[1].clone().ident.to_string();
+                            let code = OpCode {
+                                ident: constructor,
+                                path: Some(ty),
+                                types: targs,
+                            };
 
                             let comp = syn_to_builder(*arm.body)?;
                             Ok((MatchArm{
-                                ty,
-                                constructor,
+                                code,
                                 binders: Vec::new()
                             }, comp))
                         }
@@ -731,5 +745,25 @@ impl RirFn {
             Err(e) => Err(e),
         }?;
         Ok(RirFn{sig, body})
+    }
+}
+
+fn type_args_from_seg(seg: PathSegment) -> Result<Vec<VType>, String> {
+    match seg.arguments {
+        PathArguments::None => Ok(Vec::new()),
+        PathArguments::AngleBracketed(bs) => {
+            bs
+                .args
+                .into_pairs()
+                .map(|p| p.into_value())
+                .map(|ga| match ga {
+                    GenericArgument::Type(t) =>
+                        VType::from_syn(t),
+                    ga => Err(format!("Can't handle type argument of form {:?}", ga)),
+                })
+                // .map(|t| VType::from_syn(t).unwrap())
+                .collect::<Result<Vec<_>, _>>()
+        }
+        PathArguments::Parenthesized(..) => Err(format!("Can't handle parenthesized type arguments")),
     }
 }

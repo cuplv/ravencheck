@@ -13,6 +13,7 @@ use crate::{
     OpCode,
     OpMode,
     Pattern,
+    Quantifier,
     Rebuild,
     Sig,
     Val,
@@ -381,6 +382,30 @@ impl Comp {
                             let subs = xs.into_iter().zip(vs).collect();
                             self = branch.substitute_many(&subs);
                         }
+                        Val::Var(x, _types, _path) => {
+                            let mut branches = Vec::<Comp>::new();
+                            for (arm, branch) in arms.into_iter() {
+                                // Each branch should start with a
+                                // quantification of any values in the
+                                // constructor --- or an equation (to
+                                // target) if the constructor has no
+                                // values.
+                                let branch = build_symbolic_branch(
+                                    x.clone(),
+                                    arm,
+                                    *branch,
+                                    sig,
+                                    gen,
+                                );
+                                branches.push(branch);
+                            }
+                            self = build_symbolic_match(branches, sig, gen);
+                            // self = Self::Match(
+                            //     Val::Var(x, types, path),
+                            //     new_arms,
+                            // );
+                            return vec![(case_name, self.rebuild_from_stack(anti_stack))]
+                        }
                         target => todo!("match with target {:?}", target),
                     }
                 }
@@ -492,4 +517,42 @@ impl Val {
             v => Ok(v),
         }
     }
+}
+
+fn build_symbolic_branch(
+    x: VName,
+    arm: MatchArm,
+    branch: Comp,
+    sig: &Sig,
+    igen: &mut Gen,
+) -> Comp {
+    let types = match sig.get_applied_op_or_con(&arm.code) {
+        Ok(Oc::Con(ts)) => ts,
+        _ => panic!("match arm code was not for a constructor: {:?}", &arm.code),
+    };
+    let xs = arm.binders.into_iter().map(|p| p.unwrap_vname().unwrap());
+    let mut rel_args: Vec<Val> =
+        xs.clone().into_iter().map(|x| x.val()).collect();
+    rel_args.push(x.clone().val());
+    let qsig = xs.zip(types).collect::<Vec<_>>();
+    // Relate x to the newly quantified vars, using the relational
+    // abstraction of the arm's opcode. This then implies the
+    // remaining comp.
+    let cond = Builder::force(Val::OpCode(OpMode::RelAbs, arm.code)).apply_v(rel_args).not();
+    let branch =
+        Builder::log_op(LogOpN::Or, [cond, Builder::return_(Val::false_()), Builder::lift(branch)])
+        .quant(Quantifier::Forall, qsig);
+    branch.build(igen)
+}
+
+fn build_symbolic_match(
+    branches: Vec<Comp>,
+    sig: &Sig,
+    igen: &mut Gen,
+) -> Comp {
+    let branches: Vec<Builder> =
+        branches.into_iter().map(Builder::lift).collect();
+    Builder::log_op(LogOpN::And, branches)
+        .build(igen)
+        .partial_eval_single_case(sig, igen)
 }

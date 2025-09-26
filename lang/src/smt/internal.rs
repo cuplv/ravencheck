@@ -9,11 +9,13 @@ use crate::{
     Comp,
     Gen,
     Literal,
+    Oc,
     Op,
     OpCode,
     OpMode,
     Quantifier,
     Sig,
+    TypeDef,
     Val,
     VName,
     VType,
@@ -64,7 +66,15 @@ fn render_smt_op_name(name: &str, ts: &Vec<VType>) -> String {
 
 impl OpCode {
     fn render_smt(&self) -> String {
-        render_smt_op_name(&self.ident, &self.types)
+        match &self.path {
+            Some(p) => {
+                let mut s = p.to_string();
+                s.push_str(&mut "__".to_string());
+                s.push_str(&mut self.ident.to_string());
+                render_smt_op_name(s.as_str(), &self.types)
+            }
+            None => render_smt_op_name(&self.ident, &self.types),
+        }
     }
 }
 
@@ -197,13 +207,38 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
             "Bool should not be listed as a relevant type"
         );
         ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
+        match t {
+            BType::UI(name, ts) => match sig.get_con_codes_with_inputs(name, ts.clone()) {
+                Some(cs) => {
+                    for (code,inputs) in cs {
+                        let op_smt = code.render_smt();
+                        let input_atoms = VType::flatten_many(inputs)
+                            .iter()
+                            .map(|sort| {
+                                let s = sort
+                                    .clone()
+                                    .unwrap_base()
+                                    .expect("symbol input types must be base");
+                                ctx.atom(format!("{}", s.render_smt()))
+                            })
+                            .collect();
+                        println!("Declared {} as relation {}", code, op_smt);
+                        ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
+                    }
+                }
+                _ => {}
+            }
+            _ => {}
+        }
         println!("Declared {} as {}", t, t.render_smt());
     }
 
     for code in relevant.ops() {
         let op_smt = code.render_smt();
-        match sig.get_applied_op(code).expect("relevant op should be defined") {
-            Op::Const(p) => {
+        match sig.get_applied_op_or_con(code).expect("relevant op should be defined") {
+            // Enum constructors are all declared at the type level
+            Oc::Con(..) => {},
+            Oc::Op(Op::Const(p)) => {
                 let sort = ctx.atom(format!(
                     "{}",
                     p.vtype
@@ -215,7 +250,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                 println!("Declared {} as constant {}", code, op_smt);
                 ctx.declare_const(op_smt, sort)?;
             }
-            Op::Symbol(p) => {
+            Oc::Op(Op::Symbol(p)) => {
                 let input_atoms = VType::flatten_many(p.inputs.clone())
                     .iter()
                     .map(|sort| {
@@ -229,16 +264,16 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                 println!("Declared {} as relation {}", code, op_smt);
                 ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
             }
-            Op::Fun(p) => {
+            Oc::Op(Op::Fun(p)) => {
                 declare_uf(ctx, sig, code.clone(), p)?;
             }
-            Op::Rec(p) => {
+            Oc::Op(Op::Rec(p)) => {
                 declare_uf(ctx, sig, code.clone(), p.as_fun_op())?;
             }
-            Op::Pred(..) => {
+            Oc::Op(Op::Pred(..)) => {
                 panic!("Can't hanlde Pred ops");
             }
-            op => todo!("declare_sig for op {:?}", op),
+            Oc::Op(op) => todo!("declare_sig for op {:?}", op),
         }
     }
 
@@ -402,6 +437,11 @@ impl <'a> Context<'a> {
                 // Type-checking should have caught actual unbound
                 // variables.  This must be a constant.
                 None => {
+                    match &n {
+                        VName::Auto(u) =>
+                            panic!("Ident {:?} seems to be unbound", &n),
+                        _ => {}
+                    }
                     let code = OpCode {
                         ident: n.clone().unwrap_manual(),
                         types: types.clone(),

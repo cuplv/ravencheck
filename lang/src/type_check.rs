@@ -260,13 +260,15 @@ if-then-else has branches with mismatched types: {:?} vs. {:?}",
 }
 
 fn type_of_arm(
-    (MatchArm{ty, constructor, binders}, comp): &(MatchArm, Box<Comp>),
+    (MatchArm{code, binders}, comp): &(MatchArm, Box<Comp>),
     tc: &TypeContext,
     enum_name: &str,
     targs: &Vec<VType>,
     tas: &Vec<String>,
     variants: &HashMap<String, Vec<VType>>,
 ) -> Result<CType, TypeError> {
+    let ty = &code.path.clone().unwrap();
+    let constructor = &code.ident;
     if ty.as_str() != enum_name {
         return Err(format!("You tried to match a value with type {} against a {} constructor", enum_name, ty));
     }

@@ -5,6 +5,7 @@ use crate::{
     Comp,
     Gen,
     LogOpN,
+    Oc,
     Op,
     Quantifier,
     Rebuild,
@@ -134,14 +135,14 @@ impl Comp {
                         Binder1::LogOpN(LogOpN::Pred(oc,is_pos), vs) => {
                             // anti_stack.push(Rebuild::LogOpN(LogOpN::Pred(oc, is_pos), vs, x));
                             // self = *m;
-                            match sig.get_applied_op(&oc).unwrap() {
-                                Op::Const(..) => {
+                            match sig.get_applied_op_or_con(&oc).unwrap() {
+                                Oc::Op(Op::Const(..)) => {
                                     panic!("Got constant op {:?} in Pred", oc)
                                 }
-                                Op::Direct(..) => {
+                                Oc::Op(Op::Direct(..)) => {
                                     panic!("Got direct fun {:?} in Pred", oc)
                                 }
-                                Op::Pred(op) => {
+                                Oc::Op(Op::Pred(op)) => {
                                     println!("Expanding pred {}...", &oc.ident);
                                     self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
                                     break;
@@ -149,7 +150,7 @@ impl Comp {
                                 // Treat Fun like a Symbol, since this
                                 // is the relational abstraction being
                                 // applied.
-                                Op::Fun(..) => {
+                                Oc::Op(Op::Fun(..)) => {
                                     anti_stack.push(Rebuild::LogOpN(
                                         LogOpN::Pred(oc,is_pos),
                                         vs,
@@ -158,7 +159,7 @@ impl Comp {
                                     self = *m;
                                 }
                                 // Same deal for Rec
-                                Op::Rec(..) => {
+                                Oc::Op(Op::Rec(..)) => {
                                     anti_stack.push(Rebuild::LogOpN(
                                         LogOpN::Pred(oc,is_pos),
                                         vs,
@@ -166,7 +167,15 @@ impl Comp {
                                     ));
                                     self = *m;
                                 }
-                                Op::Symbol(_op) => {
+                                Oc::Op(Op::Symbol(_op)) => {
+                                    anti_stack.push(Rebuild::LogOpN(
+                                        LogOpN::Pred(oc,is_pos),
+                                        vs,
+                                        x,
+                                    ));
+                                    self = *m;
+                                }
+                                Oc::Con(..) => {
                                     anti_stack.push(Rebuild::LogOpN(
                                         LogOpN::Pred(oc,is_pos),
                                         vs,

@@ -7,6 +7,7 @@ use crate::{
     InstMode,
     InstRule,
     LogOpN,
+    Oc,
     Op,
     OpCode,
     OpMode,
@@ -48,11 +49,22 @@ impl Relevant {
     }
     pub fn add_oc(mut self, oc: OpCode, sig: &Sig) -> Self {
         self.ops.insert(oc.clone());
-        match sig.get_applied_op(&oc).unwrap() {
-            Op::Const(op) => {
+        match sig.get_applied_op_or_con(&oc).unwrap() {
+            Oc::Con(ts) => {
+                self = self.add_base_type(BType::ui_args(
+                    oc.path.clone().unwrap(),
+                    oc.types.clone(),
+                ));
+                for t in ts {
+                    for t in t.flatten() {
+                        self = self.add_base_type(t.unwrap_base().unwrap());
+                    }
+                }
+            }
+            Oc::Op(Op::Const(op)) => {
                 self = self.add_base_type(op.vtype.unwrap_base().unwrap());
             }
-            Op::Fun(op) => {
+            Oc::Op(Op::Fun(op)) => {
                 for i in op.inputs {
                     for t in i.flatten() {
                         self = self.add_base_type(t.unwrap_base().unwrap());
@@ -62,7 +74,7 @@ impl Relevant {
                     self = self.add_base_type(t.unwrap_base().unwrap());
                 }
             }
-            Op::Rec(op) => {
+            Oc::Op(Op::Rec(op)) => {
                 for i in op.inputs {
                     for t in i.flatten() {
                         self = self.add_base_type(t.unwrap_base().unwrap());
@@ -72,7 +84,7 @@ impl Relevant {
                     self = self.add_base_type(t.unwrap_base().unwrap());
                 }
             }
-            Op::Symbol(op) => {
+            Oc::Op(Op::Symbol(op)) => {
                 for i in op.inputs {
                     for t in i.flatten() {
                         self = self.add_base_type(t.unwrap_base().unwrap());
@@ -216,7 +228,22 @@ impl Sig {
                 let a = a.body.clone().normal_form_single_case(self, &mut g);
                 inst_axioms.push(a);
             } else {
-                for t in relevant.base_types() {
+                for t in &relevant.base_types().clone() {
+                    match self.get_con_codes_with_inputs_btype(t) {
+                        Some(cs) => {
+                            for (_code, inputs) in cs {
+                                for i in inputs {
+                                    for t in i.clone().flatten() {
+                                        relevant =
+                                            relevant.add_base_type(
+                                                t.unwrap_base().unwrap()
+                                            );
+                                    }
+                                }
+                            }
+                        }
+                        None => {},
+                    }
                     match a.inst_for_type(t) {
                         Some(a) => {
                             let mut g = a.get_gen();

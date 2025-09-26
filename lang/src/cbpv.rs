@@ -152,18 +152,23 @@ pub enum Binder1 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchArm {
-    pub ty: String,
-    pub constructor: String,
+    pub code: OpCode,
     pub binders: Vec<Pattern>,
 }
 
 impl MatchArm {
+    pub fn ty(&self) -> String {
+        self.code.path.clone().unwrap()
+    }
+    pub fn constructor(&self) -> String {
+        self.code.ident.clone()
+    }
     pub fn select(
         con: &str,
         arms: Vec<(MatchArm, Box<Comp>)>
     ) -> Option<(Vec<VName>,Comp)> {
         for (m,c) in arms.into_iter() {
-            if con == &m.constructor {
+            if con == &m.constructor() {
                 let xs = m.binders
                     .into_iter()
                     .map(|p| {
