@@ -78,12 +78,16 @@ impl OpCode {
     }
 }
 
-fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: FunOp) -> std::io::Result<()> {
+fn declare_uf_fun_op(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: FunOp) -> std::io::Result<()> {
+    declare_uf(ctx, sig, code, p.inputs.clone(), p.output.clone())
+}
+
+fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Vec<VType>, f_output: VType) -> std::io::Result<()> {
     let op_smt = code.render_smt();
-    if p.inputs.len() == 0 {
+    if f_inputs.len() == 0 {
         let sort = ctx.atom(format!(
             "{}",
-            p.output
+            f_output
                 .clone()
                 .unwrap_base()
                 .expect("declared zero-arg functions must have base output type")
@@ -96,11 +100,11 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: FunOp) ->
 
         // For now, if there are any higher-order arguments,
         // we omit the functionality axiom.
-        if !p.inputs.iter().any(|i| i.contains_thunk()) {
+        if !f_inputs.iter().any(|i| i.contains_thunk()) {
             let input_types: Vec<VType> =
-                VType::flatten_many(p.inputs.clone());
+                VType::flatten_many(f_inputs.clone());
             let output_types: Vec<VType> =
-                VType::flatten(p.output.clone());
+                VType::flatten(f_output.clone());
             let rel_type_atoms: Vec<SExpr> = input_types
                 .iter()
                 .chain(output_types.iter())
@@ -216,19 +220,20 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
             BType::UI(name, ts) => match sig.get_con_codes_with_inputs(name, ts.clone()) {
                 Some(cs) => {
                     for (code,inputs) in cs {
-                        let op_smt = code.render_smt();
-                        let input_atoms = VType::flatten_many(inputs)
-                            .iter()
-                            .map(|sort| {
-                                let s = sort
-                                    .clone()
-                                    .unwrap_base()
-                                    .expect("symbol input types must be base");
-                                ctx.atom(format!("{}", s.render_smt()))
-                            })
-                            .collect();
-                        println!("Declared {} as relation {}", code, op_smt);
-                        ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
+                        declare_uf(ctx, sig, code, inputs, VType::Base(t.clone()))?;
+                        // let op_smt = code.render_smt();
+                        // let input_atoms: Vec<_> = VType::flatten_many(inputs)
+                        //     .iter()
+                        //     .map(|sort| {
+                        //         let s = sort
+                        //             .clone()
+                        //             .unwrap_base()
+                        //             .expect("symbol input types must be base");
+                        //         ctx.atom(format!("{}", s.render_smt()))
+                        //     })
+                        //     .collect();
+                        // println!("Declared {} as relation {} with {} inputs", code, op_smt, input_atoms.len());
+                        // ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
                     }
                 }
                 _ => {}
@@ -255,7 +260,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                 ctx.declare_const(op_smt, sort)?;
             }
             Oc::Op(Op::Symbol(p)) => {
-                let input_atoms = VType::flatten_many(p.inputs.clone())
+                let input_atoms: Vec<_> = VType::flatten_many(p.inputs.clone())
                     .iter()
                     .map(|sort| {
                         let s = sort
@@ -265,14 +270,14 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
                         ctx.atom(format!("{}", s.render_smt()))
                     })
                     .collect();
-                println!("Declared {} as relation {}", code, op_smt);
+                println!("Declared {} as relation {} with {} inputs", code, op_smt, input_atoms.len());
                 ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
             }
             Oc::Op(Op::Fun(p)) => {
-                declare_uf(ctx, sig, code.clone(), p)?;
+                declare_uf_fun_op(ctx, sig, code.clone(), p)?;
             }
             Oc::Op(Op::Rec(p)) => {
-                declare_uf(ctx, sig, code.clone(), p.as_fun_op())?;
+                declare_uf_fun_op(ctx, sig, code.clone(), p.as_fun_op())?;
             }
             Oc::Op(Op::Pred(..)) => {
                 panic!("Can't hanlde Pred ops");
@@ -497,18 +502,22 @@ impl <'a> Context<'a> {
                         .expect("quantifier types should be flattened to base types before smt");
                     (x.as_string(), self.ctx.atom(s.render_smt()))
                 });
-                match q {
-                    Quantifier::Exists => {
-                        Ok(self.ctx.exists(
-                            q_sig,
-                            body[0],
-                        ))
-                    }
-                    Quantifier::Forall => {
-                        Ok(self.ctx.forall(
-                            q_sig,
-                            body[0],
-                        ))
+                if q_sig.len() == 0 {
+                    Ok(body[0])
+                } else {
+                    match q {
+                        Quantifier::Exists => {
+                            Ok(self.ctx.exists(
+                                q_sig,
+                                body[0],
+                            ))
+                        }
+                        Quantifier::Forall => {
+                            Ok(self.ctx.forall(
+                                q_sig,
+                                body[0],
+                            ))
+                        }
                     }
                 }
             }

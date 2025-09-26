@@ -535,12 +535,23 @@ fn build_symbolic_branch(
         xs.clone().into_iter().map(|x| x.val()).collect();
     rel_args.push(x.clone().val());
     let qsig = xs.zip(types).collect::<Vec<_>>();
-    // Relate x to the newly quantified vars, using the relational
-    // abstraction of the arm's opcode. This then implies the
-    // remaining comp.
-    let cond = Builder::force(Val::OpCode(OpMode::RelAbs, arm.code)).apply_v(rel_args).not();
+
+    let cond = if qsig.len() == 0 {
+        // Equate x to the contsructor as a constant.
+        Builder::return_(x.val())
+            .eq_ne(
+                true,
+                Builder::return_(Val::OpCode(OpMode::ZeroArgAsConst, arm.code))
+            )
+    } else {
+        // Relate x to the newly quantified vars, using the relational
+        // abstraction of the arm's opcode. 
+        Builder::force(Val::OpCode(OpMode::RelAbs, arm.code))
+            .apply_v(rel_args)
+    };
+    // The condition should then imply the remaining comp.
     let branch =
-        Builder::log_op(LogOpN::Or, [cond, Builder::lift(branch)])
+        Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
     // let branch = Builder::lift(branch);
     branch.build(igen)
