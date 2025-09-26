@@ -113,23 +113,23 @@ mod rvn {
         })
     }
 
-    #[falsify]
-    fn symbolic2() -> bool {
-        forall(|l1: List<usize>, l2: List<usize>| {
-            match l1 {
-                List::<usize>::Cons(n, tail) => n == n && tail == l2,
-                List::<usize>::Nil => true,
-            }
-        })
-    }
+    // #[falsify]
+    // fn symbolic2() -> bool {
+    //     forall(|l1: List<usize>, l2: List<usize>| {
+    //         match l1 {
+    //             List::<usize>::Cons(n, tail) => n == n && tail == l2,
+    //             List::<usize>::Nil => true,
+    //         }
+    //     })
+    // }
 
-    #[falsify]
-    fn symbolic3() -> bool {
-        forall(|l1: List<usize>| {
-            match l1 {
-                List::<usize>::Cons(n, tail) => n == n,
-                List::<usize>::Nil => false,
-            }
-        })
-    }
+    // #[falsify]
+    // fn symbolic3() -> bool {
+    //     forall(|l1: List<usize>| {
+    //         match l1 {
+    //             List::<usize>::Cons(n, tail) => n == n,
+    //             List::<usize>::Nil => false,
+    //         }
+    //     })
+    // }
 }

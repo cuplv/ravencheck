@@ -207,6 +207,11 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
             "Bool should not be listed as a relevant type"
         );
         ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
+        println!("Declared {} as {}", t, t.render_smt());
+    }
+
+    // AFTER declaring all types, declare the contsructors for all relevant enum types
+    for t in relevant.base_types() {
         match t {
             BType::UI(name, ts) => match sig.get_con_codes_with_inputs(name, ts.clone()) {
                 Some(cs) => {
@@ -230,7 +235,6 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
             }
             _ => {}
         }
-        println!("Declared {} as {}", t, t.render_smt());
     }
 
     for code in relevant.ops() {

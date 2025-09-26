@@ -20,6 +20,7 @@ use crate::{
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+#[derive(Debug)]
 pub struct Relevant {
     base_types: HashSet<BType>,
     ops: HashSet<OpCode>,
@@ -220,6 +221,25 @@ impl Sig {
         println!("Calling relevant_with_axioms on...");
         println!("term: {:?}", &term);
         let mut relevant = term.relevant(self);
+        for t in &relevant.base_types().clone() {
+            match self.get_con_codes_with_inputs_btype(t) {
+                Some(cs) => {
+                    for (_code, inputs) in cs {
+                        for i in inputs {
+                            for a_t in i.clone().flatten() {
+                                println!("Adding {} due to association with {}", a_t.render(), t);
+                                relevant =
+                                    relevant.add_base_type(
+                                        a_t.unwrap_base().unwrap()
+                                    );
+                            }
+                        }
+                    }
+                }
+                None => {},
+            }
+        }
+        
 
         let mut inst_axioms: Vec<Comp> = Vec::new();
         for a in &self.axioms {
@@ -229,21 +249,6 @@ impl Sig {
                 inst_axioms.push(a);
             } else {
                 for t in &relevant.base_types().clone() {
-                    match self.get_con_codes_with_inputs_btype(t) {
-                        Some(cs) => {
-                            for (_code, inputs) in cs {
-                                for i in inputs {
-                                    for t in i.clone().flatten() {
-                                        relevant =
-                                            relevant.add_base_type(
-                                                t.unwrap_base().unwrap()
-                                            );
-                                    }
-                                }
-                            }
-                        }
-                        None => {},
-                    }
                     match a.inst_for_type(t) {
                         Some(a) => {
                             let mut g = a.get_gen();
@@ -274,6 +279,7 @@ impl Sig {
 
         // Do not recurse...
 
+        println!("Got relevant: {:?}", relevant);
         (relevant, inst_axioms)
     }
 }

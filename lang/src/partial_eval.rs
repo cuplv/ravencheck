@@ -540,8 +540,9 @@ fn build_symbolic_branch(
     // remaining comp.
     let cond = Builder::force(Val::OpCode(OpMode::RelAbs, arm.code)).apply_v(rel_args).not();
     let branch =
-        Builder::log_op(LogOpN::Or, [cond, Builder::return_(Val::false_()), Builder::lift(branch)])
+        Builder::log_op(LogOpN::Or, [cond, Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
+    // let branch = Builder::lift(branch);
     branch.build(igen)
 }
 
