@@ -62,6 +62,18 @@ impl Val {
     pub fn unit() -> Self {
         Self::Tuple(Vec::new())
     }
+    pub fn rel_abs(code: OpCode) -> Self {
+        Self::OpCode(OpMode::RelAbs, code)
+    }
+    pub fn zero_arg_as_const(code: OpCode) -> Self {
+        Self::OpCode(OpMode::ZeroArgAsConst, code)
+    }
+    pub fn ret(self) -> Comp {
+        Comp::return1(self)
+    }
+    pub fn force(self) -> Comp {
+        Comp::force(self)
+    }
 }
 
 impl From<VName> for Val {

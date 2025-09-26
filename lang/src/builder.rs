@@ -24,9 +24,15 @@ impl Comp {
     }
 }
 
-impl Into<Builder> for Comp {
-    fn into(self) -> Builder {
-        self.builder()
+// impl Into<Builder> for Comp {
+//     fn into(self) -> Builder {
+//         self.builder()
+//     }
+// }
+
+impl From<Comp> for Builder {
+    fn from(comp: Comp) -> Self {
+        comp.builder()
     }
 }
 
@@ -45,6 +51,25 @@ impl Builder {
             f(Builder::lift(m))(x).build(gen)
         })
     }
+
+    pub fn with_x<F>(f: F) -> Self
+    where F: FnOnce(VName) -> Self + 'static,
+    {
+        Self::new(move |igen| {
+            let x = igen.next();
+            f(x).build(igen)
+        })
+    }
+
+    pub fn with_x_many<F>(n: usize, f: F) -> Self
+    where F: FnOnce(Vec<VName>) -> Self + 'static,
+    {
+        Self::new(move |igen| {
+            let xs = igen.next_many(n);
+            f(xs).build(igen)
+        })
+    }
+
     pub fn gen_many<F1,F2>(self, n: usize, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
@@ -212,6 +237,34 @@ impl Builder {
         })
     }
 
+    pub fn and_many<Bs: Into<Vec<Self>>>(bs: Bs) -> Self {
+        Self::log_op(LogOpN::And, bs)
+    }
+
+    pub fn and<T: Into<Self>>(self, other: T) -> Self {
+        Self::and_many([self, other.into()])
+    }
+
+    pub fn or_many<Bs: Into<Vec<Self>>>(bs: Bs) -> Self {
+        Self::log_op(LogOpN::Or, bs)
+    }
+
+    pub fn or<T: Into<Self>>(self, other: T) -> Self {
+        Self::or_many([self, other.into()])
+    }
+
+    pub fn implies<T: Into<Self>>(self, other: T) -> Self {
+        self.not().or(other)
+    }
+
+    pub fn is_eq<T: Into<Self>>(self, other: T) -> Self {
+        self.eq_ne(true, other.into())
+    }
+
+    pub fn is_ne<T: Into<Self>>(self, other: T) -> Self {
+        self.eq_ne(false, other.into())
+    }
+
     pub fn ite(self, then_branch: Self, else_branch: Self) -> Self {
         self.seq_gen(|v_cond| {
             then_branch.bind(|m_then| {
@@ -285,6 +338,70 @@ impl Builder {
                 Comp::return1(x_result),
             )
         })
+    }
+
+    pub fn quantify<F>(q: Quantifier, t_q: VType, f: F) -> Self
+    where
+        F: FnOnce(Val) -> Self + 'static,
+    {
+        let f = |mut vs: Vec<Val>| f(vs.pop().unwrap());
+        Self::quantify_many(q, [t_q], f)
+    }
+
+    pub fn quantify_many<Ts,F>(q: Quantifier, ts_q: Ts, f: F) -> Self
+    where
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+        Ts: Into<Vec<VType>> + 'static,
+    {
+        let ts_q: Vec<VType> = ts_q.into();
+        Self::with_x_many(ts_q.len(), move |xs_q| {
+            let qs: Vec<(VName,VType)> =
+                xs_q.clone().into_iter().zip(ts_q).collect();
+            let vs_q = xs_q.into_iter().map(|x| x.val()).collect();
+            let body = f(vs_q);
+            Self::with_x(move |x_result| {
+                let cont = Comp::return1(x_result.clone());
+                body.bind(move |body| {
+                    Builder::lift(Comp::quant_many(
+                        q,
+                        qs,
+                        body,
+                        x_result,
+                        cont,
+                    ))
+                })
+            })
+        })
+    }
+
+    pub fn forall<F>(t_q: VType, f: F) -> Self
+    where
+        F: FnOnce(Val) -> Self + 'static,
+    {
+        Self::quantify(Quantifier::Forall, t_q, f)
+    }
+
+    pub fn forall_many<Ts,F>(ts_q: Ts, f: F) -> Self
+    where
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+        Ts: Into<Vec<VType>> + 'static,
+    {
+        Self::quantify_many(Quantifier::Forall, ts_q, f)
+    }
+
+    pub fn exists<F>(t_q: VType, f: F) -> Self
+    where
+        F: FnOnce(Val) -> Self + 'static,
+    {
+        Self::quantify(Quantifier::Exists, t_q, f)
+    }
+
+    pub fn exists_many<Ts,F>(ts_q: Ts, f: F) -> Self
+    where
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+        Ts: Into<Vec<VType>> + 'static,
+    {
+        Self::quantify_many(Quantifier::Exists, ts_q, f)
     }
 
     pub fn fun<Xs>(self, xs: Xs) -> Self

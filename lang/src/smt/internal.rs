@@ -2,7 +2,6 @@ use easy_smt;
 use easy_smt::{Response, SExpr};
 use crate::{
     Binder1,
-    Builder,
     BType,
     FunOp,
     LogOpN,
@@ -15,10 +14,10 @@ use crate::{
     OpMode,
     Quantifier,
     Sig,
-    TypeDef,
     Val,
     VName,
     VType,
+    constructions,
 };
 
 impl BType {
@@ -95,7 +94,6 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Ve
         ));
         println!("Declared {} as constant (zero-arg conversion) {}", code, op_smt);
         ctx.declare_const(op_smt, sort)?;
-        // todo!("Declare zero-arg fun");
     } else {
 
         // For now, if there are any higher-order arguments,
@@ -122,82 +120,97 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Ve
                 ctx.atom("Bool"),
             )?;
             println!("Declared {} as absrel {}", code, op_smt);
-    
-            let mut vgen = Gen::new();
-            let ixs = vgen.next_many(input_types.len());
-            let oxs1 = vgen.next_many(output_types.len());
-            let oxs2 = vgen.next_many(output_types.len());
-            let q_sig: Vec<(VName, VType)> = ixs
-                .iter()
-                .cloned()
-                .zip(input_types.iter().cloned())
-                .chain(
-                    oxs1
-                       .iter()
-                       .cloned()
-                       .zip(output_types.iter().cloned())
-                )
-                .chain(
-                    oxs2
-                       .iter()
-                       .cloned()
-                       .zip(output_types.iter().cloned())
-                )
-                .collect();
-    
-            let args1: Vec<Val> = ixs
-                .iter()
-                .cloned()
-                .chain(oxs1.iter().cloned())
-                .map(|i| i.val())
-                .collect();
-            let args2: Vec<Val> = ixs
-                .iter()
-                .cloned()
-                .chain(oxs2.iter().cloned())
-                .map(|i| i.val())
-                .collect();
-    
-            let otup1: Builder = Builder::tuple(
-                oxs1
-                    .iter()
-                    .cloned()
-                    .map(|x| Builder::return_(x.val()))
-                    .collect::<Vec<Builder>>()
-            );
-            let otup2: Builder = Builder::tuple(
-                oxs2
-                    .iter()
-                    .cloned()
-                    .map(|x| Builder::return_(x.val()))
-                    .collect::<Vec<Builder>>()
-            );
-    
-            let fun_axiom = Builder::log_op(
-                LogOpN::Or,
-                [
-                    Builder::log_op(
-                        LogOpN::And,
-                        [
-                            Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
-                                .apply_v(args1),
-                            Builder::force(Val::OpCode(OpMode::RelAbs, code.clone()))
-                                .apply_v(args2),
-                        ]
-                    )
-                        .not(),
-                    otup1.eq_ne(true, otup2),
-                ]
+
+            let mut igen = Gen::new();
+
+            // // Only include a construction axiom for ops that are enum
+            // // constructors.
+            // match code.path {
+            //     Some(_) => {
+            //         let axiom = constructions::same_con_exclusion_axiom(
+            //             code.clone(),
+            //             f_inputs.clone(),
+            //             f_output.clone(),
+            //         )
+            //             .build(&mut igen)
+            //             .normal_form_single_case(&sig, &mut igen);
+            //         let mut builder = Context::new(ctx);
+            //         let e = builder.smt(&axiom)?;
+            //         println!("SMT Axiom [Rel-Con for {}]: {}", code, ctx.display(e[0]));
+            //         ctx.assert(e[0])?;
+            //     }
+            //     None => {}
+            // }
+
+            // Include a functionality axiom for any op that has a
+            // relational abstraction.
+            let fun_axiom = constructions::fun_axiom(
+                code.clone(),
+                f_inputs,
+                f_output,
             )
-                .quant(Quantifier::Forall, q_sig)
-                .build(&mut vgen)
-                .normal_form_single_case(&sig, &mut vgen);
+                .build(&mut igen)
+                .normal_form_single_case(&sig, &mut igen);
     
             let mut builder = Context::new(ctx);
             let e = builder.smt(&fun_axiom)?;
-            println!("SMT Axiom [Rel]: {}", ctx.display(e[0]));
+            println!("SMT Axiom [Rel-Fun for {}]: {}", code, ctx.display(e[0]));
             ctx.assert(e[0])?;
         }
+    }
+    Ok(())
+}
+
+fn declare_con_exclusions(
+    ctx: &mut easy_smt::Context,
+    sig: &Sig,
+    enum_type: VType,
+    cons: Vec<(OpCode, Vec<VType>)>,
+) -> std::io::Result<()> {
+    // Declare same-constructor exclusion axioms.
+    for (code,inputs) in cons.clone() {
+        let mut igen = Gen::new();
+        let axiom = constructions::same_con_exclusion_axiom(
+            code.clone(),
+            inputs,
+            enum_type.clone(),
+        )
+            .build(&mut igen)
+            .normal_form_single_case(&sig, &mut igen);
+        let mut builder = Context::new(ctx);
+        println!("SMT Axiom [Rel-Con-Same for {}]...", code);
+        let e = builder.smt(&axiom)?;
+        println!("SMT Axiom [Rel-Con-Same for {}]: {}", code, ctx.display(e[0]));
+        ctx.assert(e[0])?;
+    }
+
+    // Collect every two differing constructors into a pair. When we
+    // have pair (A,B), we don't also have pair (B,A).
+    let con_pairs = crate::utility::unordered_cross(cons);
+    // Declare different-constructor exclusion axioms.
+    for ((code1,inputs1), (code2, inputs2)) in con_pairs {
+        let mut igen = Gen::new();
+        let axiom = constructions::diff_con_exclusion_axiom(
+            code1.clone(),
+            inputs1,
+            code2.clone(),
+            inputs2,
+            enum_type.clone(),
+        )
+            .build(&mut igen)
+            .normal_form_single_case(&sig, &mut igen);
+        let mut builder = Context::new(ctx);
+        println!(
+            "SMT Axiom [Rel-Con-Diff for {} vs. {}]...",
+            code1, code2,
+        );
+        let e = builder.smt(&axiom)?;
+        println!(
+            "SMT Axiom [Rel-Con-Diff for {} vs. {}]: {}",
+            code1, code2,
+            ctx.display(e[0])
+        );
+        ctx.assert(e[0])?;
     }
     Ok(())
 }
@@ -219,22 +232,17 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
         match t {
             BType::UI(name, ts) => match sig.get_con_codes_with_inputs(name, ts.clone()) {
                 Some(cs) => {
-                    for (code,inputs) in cs {
-                        declare_uf(ctx, sig, code, inputs, VType::Base(t.clone()))?;
-                        // let op_smt = code.render_smt();
-                        // let input_atoms: Vec<_> = VType::flatten_many(inputs)
-                        //     .iter()
-                        //     .map(|sort| {
-                        //         let s = sort
-                        //             .clone()
-                        //             .unwrap_base()
-                        //             .expect("symbol input types must be base");
-                        //         ctx.atom(format!("{}", s.render_smt()))
-                        //     })
-                        //     .collect();
-                        // println!("Declared {} as relation {} with {} inputs", code, op_smt, input_atoms.len());
-                        // ctx.declare_fun(op_smt,input_atoms,ctx.atom("Bool"))?;
+                    let output_type = VType::Base(t.clone());
+                    for (code,inputs) in cs.clone() {
+                        declare_uf(
+                            ctx,
+                            sig,
+                            code,
+                            inputs,
+                            output_type.clone(),
+                        )?;
                     }
+                    declare_con_exclusions(ctx, sig, output_type, cs)?;
                 }
                 _ => {}
             }
@@ -428,7 +436,7 @@ impl <'a> Context<'a> {
     }
 
     fn cut(&mut self) {
-        let a = self.assign.pop();
+        let _a = self.assign.pop();
         // println!("Cut {:?}", a);
     }
 
@@ -451,7 +459,7 @@ impl <'a> Context<'a> {
                 // variables.  This must be a constant.
                 None => {
                     match &n {
-                        VName::Auto(u) =>
+                        VName::Auto(_) =>
                             panic!("Ident {:?} seems to be unbound: {:?}", &n, &self.assign),
                         _ => {}
                     }
@@ -531,7 +539,9 @@ impl <'a> Context<'a> {
                     args.push(self.smt_val(v)?);
                 }
                 match op {
+                    LogOpN::And if args.len() == 0 => Ok(self.ctx.true_()),
                     LogOpN::And => Ok(self.ctx.and_many(args)),
+                    LogOpN::Or if args.len() == 0 => Ok(self.ctx.false_()),
                     LogOpN::Or => Ok(self.ctx.or_many(args)),
                     // LogOpN::Pred(_oc,true) => todo!("smt Pred-true"),
                     LogOpN::Pred(oc,true) => {

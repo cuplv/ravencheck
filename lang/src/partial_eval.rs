@@ -179,7 +179,7 @@ impl Comp {
                             // flattened.
                             Some(Frame::Args(_targs,vs)) => {
                                 match sig.get_applied_op_or_con(&oc) {
-                                    Ok(Oc::Con(inputs)) => {
+                                    Ok(Oc::Con(_inputs)) => {
                                         // self = Comp::return1(Val::EnumCon(oc, vs));
 
                                         if vs.len() == 0 {
@@ -399,7 +399,7 @@ impl Comp {
                 }
                 Self::Match(target, arms) => {
                     match target {
-                        Val::EnumCon(code, vs) => {
+                        Val::EnumCon(..) => {
                             unreachable!("EnumCon should not appear any more");
                             // let (xs,branch) = MatchArm::select(&code.ident, arms)
                             //     .expect("typed match should have matching arm");

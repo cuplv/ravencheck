@@ -16,6 +16,7 @@ pub use cbpv::{
     Quantifier,
     Val,
 };
+mod constructions;
 mod depth;
 pub mod epr_check;
 mod expand_funs;
@@ -52,6 +53,7 @@ pub use smt::CheckedSig;
 mod substitute;
 mod type_check;
 pub use type_check::TypeContext;
+mod utility;
 mod vname;
 pub use vname::VName;
 mod gen;
