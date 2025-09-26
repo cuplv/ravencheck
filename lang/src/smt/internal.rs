@@ -399,6 +399,7 @@ impl <'a> Context<'a> {
 
     fn with_define<F,A>(&mut self, v: &VName, e: &SExpr, f: F) -> A
     where F: Fn(&mut Self) -> A {
+        // println!("Defining {:?}", v);
         self.define(v,e);
         let a = f(self);
         self.cut();
@@ -420,16 +421,19 @@ impl <'a> Context<'a> {
     }
 
     fn cut_n(&mut self, n: usize) {
-        for _ in [0..n] {
+        // println!("Cutting {}...", n);
+        for _ in 0..n {
             self.cut()
         }
     }
 
     fn cut(&mut self) {
-        self.assign.pop();
+        let a = self.assign.pop();
+        // println!("Cut {:?}", a);
     }
 
     pub fn smt(&mut self, term: &Comp) -> std::io::Result<Vec<SExpr>> {
+        println!("\n\nCalled smt on {:?}\n\n", term);
         self.smt_comp(term)
     }
 
@@ -448,7 +452,7 @@ impl <'a> Context<'a> {
                 None => {
                     match &n {
                         VName::Auto(u) =>
-                            panic!("Ident {:?} seems to be unbound", &n),
+                            panic!("Ident {:?} seems to be unbound: {:?}", &n, &self.assign),
                         _ => {}
                     }
                     let code = OpCode {

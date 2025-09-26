@@ -11,4 +11,5 @@ mod nat_u32;
 mod sets;
 mod sets_using_alias;
 mod sum;
+mod sum_small;
 mod type_parameter_sets;
