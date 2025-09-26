@@ -272,6 +272,14 @@ fn type_of_arm(
     if ty.as_str() != enum_name {
         return Err(format!("You tried to match a value with type {} against a {} constructor", enum_name, ty));
     }
+    if &code.types != targs {
+        return Err(format!(
+            "You tried to match a value with type args {:?} against a constructor {} with type args {:?}",
+            targs,
+            &code.ident,
+            &code.types,
+        ));
+    }
     let mut tc = tc.clone();
     let v_types = match variants.get(constructor) {
         Some(ts) => Ok(ts),

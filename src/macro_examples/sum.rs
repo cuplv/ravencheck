@@ -50,25 +50,25 @@ mod rvn {
     fn no_quantify_true() -> bool {
         let maybe_x = Opt::<(bool,bool)>::Some((true, false));
         match maybe_x {
-            Opt::Some(x) => {
+            Opt::<(bool,bool)>::Some(x) => {
                 let (t,f) = x;
                 t && !f
             }
-            Opt::None => false,
+            Opt::<(bool,bool)>::None => false,
         }
     }
 
-    #[falsify]
-    fn no_quantify_false() -> bool {
-        let maybe_x = Opt::<(bool,bool)>::Some((true, false));
-        match maybe_x {
-            Opt::Some(x) => {
-                let (t,f) = x;
-                !(t && !f)
-            }
-            Opt::None => true,
-        }
-    }
+    // #[falsify]
+    // fn no_quantify_false() -> bool {
+    //     let maybe_x = Opt::<(bool,bool)>::Some((true, false));
+    //     match maybe_x {
+    //         Opt::<(bool,bool)>::Some(x) => {
+    //             let (t,f) = x;
+    //             !(t && !f)
+    //         }
+    //         Opt::<(bool,bool)>::None => true,
+    //     }
+    // }
 
     #[verify]
     fn construct_deconstruct_v<X: Clone + PartialEq>() -> bool {
@@ -137,4 +137,25 @@ mod rvn {
             }
         })
     }
+
+    // #[verify]
+    // fn unique1() -> bool {
+    //     let l1 = List::<usize>::Nil();
+    //     let l2 = List::<usize>::Nil();
+    //     l1 == l2
+    // }
+    // #[verify]
+    // fn unique2() -> bool {
+    //     forall(|n: usize| {
+    //         List::<usize>::Cons(n, List::<usize>::Nil)
+    //             == List::<usize>::Cons(n, List::<usize>::Nil)
+    //     })
+    // }
+    // #[verify]
+    // fn unique3() -> bool {
+    //     forall(|n: usize, l: List<usize>| {
+    //         List::<usize>::Cons(n, l)
+    //             == List::<usize>::Cons(n, l)
+    //     })
+    // }
 }

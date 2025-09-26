@@ -206,12 +206,12 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
     let (relevant, inst_axioms) = sig.relevant_with_axioms(term);
 
     for t in relevant.base_types() {
-        assert!(
-            *t != BType::prop(),
-            "Bool should not be listed as a relevant type"
-        );
-        ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
-        println!("Declared {} as {}", t, t.render_smt());
+        if *t != BType::prop() {
+            ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
+            println!("Declared {} as {}", t, t.render_smt());
+        } else {
+            println!("Ignoring relevant type Bool");
+        }
     }
 
     // AFTER declaring all types, declare the contsructors for all relevant enum types

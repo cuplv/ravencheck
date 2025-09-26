@@ -10,8 +10,9 @@ use crate::{
     Quantifier,
     Rebuild,
     Sig,
-    Val,
     VName,
+    VType,
+    Val,
     FunOp,
     PredOp,
 };
@@ -201,16 +202,27 @@ impl Comp {
                         .into_iter()
                         .map(|p| p.unwrap_atom().expect("Call should only be bound to flat patterns"))
                         .collect();
-                    match sig.get_applied_op(&oc).unwrap() {
-                        Op::Fun(op) => {
+                    match sig.get_applied_op_or_con(&oc).unwrap() {
+                        Oc::Con(inputs) => {
+                            let output = VType::Base(oc.get_enum_type().unwrap());
+                            let axiom = Sig::relabs_axiom(
+                                oc.clone(),
+                                inputs.clone(),
+                                output.clone(),
+                            );
+                            let op = FunOp{inputs, output, axioms: vec![axiom]};
+                            println!("Expanding call {}...", &oc);
+                            self = expand_fun(op, vs, xs, *m, sig, gen);
+                        }
+                        Oc::Op(Op::Fun(op)) => {
                             println!("Expanding call {}...", &oc);
                             self = expand_fun(op, vs, xs, *m, sig, gen);
                             break;
                         }
-                        Op::Pred(_op) => {
+                        Oc::Op(Op::Pred(_op)) => {
                             panic!("Got pred op {:?} in Fun", oc)
                         }
-                        Op::Rec(op) => {
+                        Oc::Op(Op::Rec(op)) => {
                             println!("Expanding call {}...", &oc);
                             self = expand_fun(op.as_fun_op(), vs, xs, *m, sig, gen);
                             break;

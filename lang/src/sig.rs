@@ -144,7 +144,8 @@ impl BType {
     pub fn contains_prop(&self) -> bool {
         match self {
             BType::Prop => true,
-            BType::UI(_, args) => args.iter().any(|t| t.contains_prop()),
+            // We don't care if the type args contain prop
+            BType::UI(_, _args) => false,
         }
     }
     pub fn contains_ui(&self, name: &str) -> bool {

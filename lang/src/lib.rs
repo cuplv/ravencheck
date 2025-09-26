@@ -140,6 +140,7 @@ impl Comp {
     }
 }
 
+#[derive(Debug)]
 pub enum Oc {
     Op(Op),
     Con(Vec<VType>),

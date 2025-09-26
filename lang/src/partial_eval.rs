@@ -40,6 +40,7 @@ impl Comp {
     pub fn partial_eval(self, sig: &Sig, gen: &mut Gen, name: CaseName) -> Vec<(CaseName,Self)> {
         let cases = self.partial_eval_loop(sig, gen, Stack::new(), Vec::new(), name);
         // println!("partial_eval passing up {} cases", cases.len());
+        println!("\npartial_eval returning {:?}\n", cases);
         cases
     }
 
@@ -178,8 +179,30 @@ impl Comp {
                             // flattened.
                             Some(Frame::Args(_targs,vs)) => {
                                 match sig.get_applied_op_or_con(&oc) {
-                                    Ok(Oc::Con(..)) => {
-                                        self = Comp::return1(Val::EnumCon(oc, vs));
+                                    Ok(Oc::Con(inputs)) => {
+                                        // self = Comp::return1(Val::EnumCon(oc, vs));
+
+                                        if vs.len() == 0 {
+                                            let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            self = Comp::return1(ret_v);
+                                        } else {
+                                            // First, we need to flatten the
+                                            // output type.
+                                            let output = VType::Base(oc.get_enum_type().unwrap());
+                                            let ts = output.flatten();
+                                            // We generate an ident for each
+                                            // atomic type.
+                                            let xs = gen.next_many(ts.len());
+                                            // Then make a pattern to bind each ident.
+                                            let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
+                                            // And a return value that gathers
+                                            // all of the bound idents into a
+                                            // tuple (with type matching the
+                                            // original output type).
+                                            let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
+                                            anti_stack.push(Rebuild::Call(oc, vs, ps));
+                                            self = Comp::return1(ret_v);
+                                        }
                                     }
                                     Ok(Oc::Op(Op::Const(..))) => panic!(
                                         "Found constant {} in Force position",
@@ -377,10 +400,16 @@ impl Comp {
                 Self::Match(target, arms) => {
                     match target {
                         Val::EnumCon(code, vs) => {
-                            let (xs,branch) = MatchArm::select(&code.ident, arms)
+                            unreachable!("EnumCon should not appear any more");
+                            // let (xs,branch) = MatchArm::select(&code.ident, arms)
+                            //     .expect("typed match should have matching arm");
+                            // let subs = xs.into_iter().zip(vs).collect();
+                            // self = branch.substitute_many(&subs);
+                        }
+                        Val::OpCode(OpMode::ZeroArgAsConst, code) => {
+                            let (_,branch) = MatchArm::select(&code.ident, arms)
                                 .expect("typed match should have matching arm");
-                            let subs = xs.into_iter().zip(vs).collect();
-                            self = branch.substitute_many(&subs);
+                            self = branch;
                         }
                         Val::Var(x, _types, _path) => {
                             let mut branches = Vec::<Comp>::new();
@@ -537,7 +566,7 @@ fn build_symbolic_branch(
     let qsig = xs.zip(types).collect::<Vec<_>>();
 
     let cond = if qsig.len() == 0 {
-        // Equate x to the contsructor as a constant.
+        // Equate x to the constructor as a constant.
         Builder::return_(x.val())
             .eq_ne(
                 true,
@@ -554,17 +583,27 @@ fn build_symbolic_branch(
         Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
     // let branch = Builder::lift(branch);
-    branch.build(igen)
+    let b = branch.build(igen);
+    println!("\nBuilt match branch: {:?}\n", b);
+    b
 }
 
 fn build_symbolic_match(
-    branches: Vec<Comp>,
+    mut branches: Vec<Comp>,
     sig: &Sig,
     igen: &mut Gen,
 ) -> Comp {
-    let branches: Vec<Builder> =
-        branches.into_iter().map(Builder::lift).collect();
-    Builder::log_op(LogOpN::And, branches)
-        .build(igen)
-        .partial_eval_single_case(sig, igen)
+    if branches.len() == 1 {
+        let b = branches.pop().unwrap().partial_eval_single_case(sig, igen);
+        println!("\nBuilt (single) matcher: {:?}\n", b);
+        b
+    } else {
+        let branches: Vec<Builder> =
+            branches.into_iter().map(Builder::lift).collect();
+        let b = Builder::log_op(LogOpN::And, branches)
+            .build(igen)
+            .partial_eval_single_case(sig, igen);
+        println!("\nBuilt matcher: {:?}\n", b);
+        b
+    }
 }
