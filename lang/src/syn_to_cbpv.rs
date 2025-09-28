@@ -476,35 +476,47 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         }
         Expr::MethodCall(e) => syn_to_builder(get_cloned_expr(e)?),
         Expr::Call(ExprCall{ func, mut args, .. }) => {
-            match *func {
-                Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "forall" => {
-                    assert!(
-                        args.len() == 1,
-                        "forall must take single closure as its only argument, got {:?}",
-                        args,
-                    );
-                    q_body(Quantifier::Forall, args.pop().unwrap().into_value())
+            let func = *func;
+            if is_box_new(&func) {
+                if args.len() == 1 {
+                    syn_to_builder(args.pop().unwrap().into_value())
+                } else {
+                    Err(format!(
+                        "Box::new(..) should take one argument but it has {}",
+                        args.len(),
+                    ))
                 }
-                Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "exists" => {
-                    assert!(
-                        args.len() == 1,
-                        "exists must take single closure as its only argument, got {:?}",
-                        args,
-                    );
-                    q_body(Quantifier::Exists, args.pop().unwrap().into_value())
-                }
-                func => {
-                    let f = syn_to_builder(func)?;
-                    let mut cs = Vec::new();
-                    for arg in args {
-                        cs.push(syn_to_builder(arg)?);
+            } else {
+                match func {
+                    Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "forall" => {
+                        assert!(
+                            args.len() == 1,
+                            "forall must take single closure as its only argument, got {:?}",
+                            args,
+                        );
+                        q_body(Quantifier::Forall, args.pop().unwrap().into_value())
                     }
-        
-                    // Note: this orders the Seq, Apply, and Force nodes
-                    // differently than the previous algorithm, and
-                    // differently to the CPBV algorithm. But it seems to be
-                    // equivalent.
-                    Ok(f.flatten().apply(cs))
+                    Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "exists" => {
+                        assert!(
+                            args.len() == 1,
+                            "exists must take single closure as its only argument, got {:?}",
+                            args,
+                        );
+                        q_body(Quantifier::Exists, args.pop().unwrap().into_value())
+                    }
+                    func => {
+                        let f = syn_to_builder(func)?;
+                        let mut cs = Vec::new();
+                        for arg in args {
+                            cs.push(syn_to_builder(arg)?);
+                        }
+            
+                        // Note: this orders the Seq, Apply, and Force nodes
+                        // differently than the previous algorithm, and
+                        // differently to the CPBV algorithm. But it seems to be
+                        // equivalent.
+                        Ok(f.flatten().apply(cs))
+                    }
                 }
             }
         }
@@ -771,5 +783,15 @@ fn type_args_from_seg(seg: PathSegment) -> Result<Vec<VType>, String> {
                 .collect::<Result<Vec<_>, _>>()
         }
         PathArguments::Parenthesized(..) => Err(format!("Can't handle parenthesized type arguments")),
+    }
+}
+
+fn is_box_new(expr: &Expr) -> bool {
+    match expr {
+        Expr::Path(expr) => {
+            let segs = &expr.path.segments;
+            segs.len() == 2 && &segs[0].ident == "Box" && &segs[1].ident == "new"
+        }
+        _ => false,
     }
 }

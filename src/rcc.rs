@@ -10,6 +10,7 @@ use ravenlang::{
     CheckedSig,
     Goal,
     HypotheticalCallSyntax,
+    HypotheticalCall,
     Op,
     Quantifier,
     RirFn,
@@ -143,6 +144,35 @@ impl Rcc {
             should_be_valid: true,
         })?;
         Ok(())
+    }
+
+    pub fn reg_multi_annotate<const N: usize>(
+        &mut self,
+        calls: [&str; N],
+        item_fn: &str,
+    ) -> Result<(), String> {
+        // Parse syn values from strs
+        let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
+        let calls: Vec<HypotheticalCallSyntax> = calls
+            .into_iter()
+            .map(|call| {
+                 match syn::parse_str(call) {
+                     Ok(call) => Ok(call),
+                     Err(e) => Err(format!("Failed to parse #[annotate({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e)),
+                 }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Parse the signature into Rir types, and keep the body.
+        let i = RirFn::from_syn(item_fn)?;
+        let prop_ident = i.sig.ident.clone();
+        let calls: Vec<HypotheticalCall> = calls
+            .into_iter()
+            .map(|call| call.into_rir())
+            .collect::<Result<Vec<_>, _>>()?;
+        // Apply type aliases
+        let i = i.expand_types(&self.sig.0.type_aliases());
+        todo!("reg_multi_annotate")
     }
 
     pub fn reg_fn_assume<const N: usize>(

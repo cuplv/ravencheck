@@ -109,7 +109,6 @@ impl RvnItemAttr {
             Item::Struct(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Type(i) => Self::extract_from_attrs(&mut i.attrs),
             Item::Use(i) => Self::extract_from_attrs(&mut i.attrs),
-            // // item => todo!("RvnItemAttr::extract_from_item for {:?}", item),
             // Assume anything we haven't listed here is something
             // that we totally ignore.
             _item => Vec::new(),
@@ -120,6 +119,7 @@ impl RvnItemAttr {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
+    AnnotateMulti(Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The boolean is `true` if this is a phantom declaration.
@@ -333,6 +333,13 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_annotate(#call_str, #item_str).unwrap();
+                }).unwrap();
+                out.push(s);
+            }
+            RccCommand::AnnotateMulti(call_strs, item_fn) => {
+                let item_str = quote!{ #item_fn }.to_string();
+                let s: Stmt = syn::parse2(quote! {
+                    rcc.reg_fn_annotate([#(#call_strs),*], #item_str).unwrap();
                 }).unwrap();
                 out.push(s);
             }
