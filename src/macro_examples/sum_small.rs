@@ -36,8 +36,7 @@ mod rvn {
     fn test2_1() -> bool {
         let t = Test2::ConA(true);
         match t {
-            // The == true part is addressing a weird bug
-            Test2::ConA(b) => b == true,
+            Test2::ConA(b) => b,
         }
     }
 
@@ -45,7 +44,7 @@ mod rvn {
     fn test2_2() -> bool {
         forall(|t: Test2| {
             match t {
-                Test2::ConA(b) => b == true
+                Test2::ConA(b) => b,
             }
         })
     }

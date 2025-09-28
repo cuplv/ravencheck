@@ -164,7 +164,11 @@ impl Comp {
                     // If there is an unsubstituted var here, it must
                     // represent a primitive operator that we will
                     // intercept.
-                    Val::Var(VName::Manual(s), types, path) => {
+                    Val::Var(x, types, path, false) => panic!(
+                        "Should not force a bool, but {:?} was negated, which should only happen if it's a bool",
+                        Val::Var(x, types, path, false),
+                    ),
+                    Val::Var(VName::Manual(s), types, path, true) => {
                         let oc = OpCode { ident: s.clone(), types, path };
 
                         match stack.0.pop() {
@@ -343,7 +347,7 @@ impl Comp {
                     match cond {
                         Val::Literal(Literal::LogTrue) => { self = *then_b; }
                         Val::Literal(Literal::LogFalse) => { self = *else_b; }
-                        Val::Var(x, types, path) => {
+                        Val::Var(x, types, path, is_pos) => {
                             // Branches evaluate in parallel and don't
                             // affect each other, so we send two distinct
                             // copies of the stack down each.
@@ -369,7 +373,7 @@ impl Comp {
                             );
                             let else_b = else_cases.pop().unwrap().1;
 
-                            self = Self::ite(Val::Var(x, types, path), then_b, else_b);
+                            self = Self::ite(Val::Var(x, types, path, is_pos), then_b, else_b);
                             return vec![(case_name, self.rebuild_from_stack(anti_stack))]
                         }
                         v => {
@@ -387,7 +391,7 @@ impl Comp {
                                 .expect("typed match should have matching arm");
                             self = branch;
                         }
-                        Val::Var(x, types, path) => {
+                        Val::Var(x, types, path, true) => {
                             let mut branches = Vec::<Comp>::new();
                             for (arm, branch) in arms.into_iter() {
                                 // Each branch should start with a
@@ -399,7 +403,8 @@ impl Comp {
                                     Val::Var(
                                         x.clone(),
                                         types.clone(),
-                                        path.clone()
+                                        path.clone(),
+                                        true,
                                     ),
                                     arm,
                                     *branch,
@@ -410,6 +415,9 @@ impl Comp {
                             }
                             self = build_symbolic_match(branches, sig, gen);
                             return vec![(case_name, self.rebuild_from_stack(anti_stack))]
+                        }
+                        Val::Var(_x, _types, _path, false) => {
+                            panic!("Tried to match on a negative var, which should be bool type. You cannot match on bools, only enum types.")
                         }
                         target => todo!("match with target {:?}", target),
                     }
@@ -559,7 +567,7 @@ fn build_symbolic_branch(
         Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
     let b = branch.build(igen);
-    println!("\nBuilt match branch: {:?}\n", b);
+    // println!("\nBuilt match branch: {:?}\n", b);
     b
 }
 
@@ -570,7 +578,7 @@ fn build_symbolic_match(
 ) -> Comp {
     if branches.len() == 1 {
         let b = branches.pop().unwrap().partial_eval_single_case(sig, igen);
-        println!("\nBuilt (single) matcher: {:?}\n", b);
+        // println!("\nBuilt (single) matcher: {:?}\n", b);
         b
     } else {
         let branches: Vec<Builder> =
@@ -578,7 +586,7 @@ fn build_symbolic_match(
         let b = Builder::log_op(LogOpN::And, branches)
             .build(igen)
             .partial_eval_single_case(sig, igen);
-        println!("\nBuilt matcher: {:?}\n", b);
+        // println!("\nBuilt matcher: {:?}\n", b);
         b
     }
 }

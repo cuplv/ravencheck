@@ -4,7 +4,10 @@ use std::fmt;
 
 impl VName {
     pub fn val(self) -> Val {
-        Val::Var(self, Vec::new(), None)
+        Val::var(self)
+    }
+    pub fn val_negative(self) -> Val {
+        Val::var_negative(self)
     }
 }
 
@@ -28,12 +31,22 @@ pub enum Val {
     OpCode(OpMode, OpCode),
     Thunk(Box<Comp>),
     Tuple(Vec<Val>),
-    Var(VName, Vec<VType>, Option<String>),
+    /// (ident, types, path, is_positive)
+    ///
+    /// is_positive should only equal `false` when types and path are
+    /// both empty.
+    Var(VName, Vec<VType>, Option<String>, bool),
 }
 
 impl Val {
-    pub fn var(v: &VName) -> Self {
-        Self::Var(v.clone(), Vec::new(), None)
+    pub fn var(v: VName) -> Self {
+        Self::Var(v, Vec::new(), None, true)
+    }
+    pub fn into_var<T: Into<VName>>(v: T) -> Self {
+        Self::var(v.into())
+    }
+    pub fn var_negative(v: VName) -> Self {
+        Self::Var(v, Vec::new(), None, false)
     }
     pub fn thunk(c: &Comp) -> Self {
         Self::Thunk(Box::new(c.clone()))
@@ -62,6 +75,9 @@ impl Val {
     pub fn unit() -> Self {
         Self::Tuple(Vec::new())
     }
+    pub fn op(OpCode{ident, types, path}: OpCode) -> Self {
+        Self::Var(VName::new(ident), types, path, true)
+    }
     pub fn rel_abs(code: OpCode) -> Self {
         Self::OpCode(OpMode::RelAbs, code)
     }
@@ -79,6 +95,18 @@ impl Val {
 impl From<VName> for Val {
     fn from(x: VName) -> Self {
         x.val()
+    }
+}
+
+impl OpCode {
+    pub fn as_fun(self) -> Comp {
+        Val::op(self).ret()
+    }
+    pub fn as_rel_abs(self) -> Val {
+        Val::rel_abs(self)
+    }
+    pub fn as_zero_arg_as_const(self) -> Val {
+        Val::zero_arg_as_const(self)
     }
 }
 

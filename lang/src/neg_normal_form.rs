@@ -92,7 +92,26 @@ impl Binder1 {
                 Self::Eq(*pos, vs1.clone(), vs2.clone())
             }
             Self::LogQuantifier(q, xs, m) => {
-                let m2 = m.neg_normal_form_r(sig, dem, gen);
+                let mut m2 = m.neg_normal_form_r(sig, dem, gen);
+                for (x,_) in xs {
+                    match dem.get(x) {
+                        Some(DemandVal::Negative(y)) => {
+                            m2 = m2.substitute(
+                                &y,
+                                &Val::var_negative(x.clone())
+                            );
+                        }
+                        Some(DemandVal::Both(y)) => {
+                            m2 = m2.substitute(
+                                &y,
+                                &Val::var_negative(x.clone())
+                            );
+                        }
+                        // We don't need to take any action for
+                        // positive demands.
+                        _ => {}
+                    }
+                }
                 Self::LogQuantifier(*q, xs.clone(), Box::new(m2))
             }
             Self::LogOpN(op, vs) => {
@@ -146,7 +165,7 @@ impl Comp {
             Self::Return(vs) => {
                 for v in vs {
                     match v {
-                        Val::Var(x,_,_) => { dem.add_positive(x); }
+                        Val::Var(x,_,_,_) => { dem.add_positive(x); }
                         _ => {},
                     }
                 }
@@ -207,6 +226,8 @@ impl Comp {
                     }
                 }
             }
+            // Todo: do we need to demand the arguments to a
+            // BinderN::Call that could be inside 'b' here?
             Self::BindN(b, ps, m) => {
                 Self::BindN(
                     b.clone(),
@@ -238,7 +259,7 @@ impl Val {
     /// nothing gets demanded inside of Thunks.
     pub fn demand_positive(&self, dem: &mut DemandSet) {
         match self {
-            Self::Var(x, _, _) => {
+            Self::Var(x, _, _, _) => {
                 dem.add_positive(x);
             }
             Self::Tuple(vs) => {
@@ -257,9 +278,15 @@ impl Val {
         gen: &mut Gen
     ) -> Self {
         match self {
-            Self::Var(x, types, path) => {
+            Self::Var(x, types, path, true) => {
                 let x2 = dem.add_negative_gen(&x,gen);
-                Self::Var(x2, types.clone(), path.clone())
+                Self::Var(x2, types.clone(), path.clone(), true)
+            }
+            // Since this is a negative variable, we can just flip the
+            // sign here and make a positive demand.
+            Self::Var(x, types, path, false) => {
+                dem.add_positive(x);
+                Self::Var(x.clone(), types.clone(), path.clone(), true)
             }
             Self::Literal(Literal::LogTrue) =>
                 Self::Literal(Literal::LogFalse),

@@ -73,6 +73,27 @@ impl fmt::Display for OpCode {
 }
 
 impl OpCode {
+    pub fn fun_types<T: ToString>(
+        fun_name: T,
+        types: Vec<VType>,
+    ) -> Self {
+        Self{
+            ident: fun_name.to_string(),
+            types,
+            path: None,
+        }
+    }
+    pub fn enum_con<T1: ToString, T2: ToString>(
+        enum_name: T1,
+        types: Vec<VType>,
+        constructor: T2,
+    ) -> Self {
+        Self{
+            ident: constructor.to_string(),
+            path: Some(enum_name.to_string()),
+            types,
+        }
+    }
     pub fn get_enum_type(&self) -> Option<BType> {
         match &self.path {
             Some(path) => Some(BType::ui_args(path, self.types.clone())),

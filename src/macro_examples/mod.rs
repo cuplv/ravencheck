@@ -1,3 +1,4 @@
+mod bool_match_bug;
 mod filter;
 mod import_test;
 mod main_example_nat;

@@ -359,18 +359,7 @@ impl Builder {
                 xs_q.clone().into_iter().zip(ts_q).collect();
             let vs_q = xs_q.into_iter().map(|x| x.val()).collect();
             let body = f(vs_q);
-            Self::with_x(move |x_result| {
-                let cont = Comp::return1(x_result.clone());
-                body.bind(move |body| {
-                    Builder::lift(Comp::quant_many(
-                        q,
-                        qs,
-                        body,
-                        x_result,
-                        cont,
-                    ))
-                })
-            })
+            body.quant(q, qs)
         })
     }
 

@@ -186,7 +186,7 @@ impl Val {
                     rel = rel.union(v.relevant(sig));
                 }
             }
-            Self::Var(name, types, None) => {
+            Self::Var(name, types, None, _is_neg) => {
                 match name {
                     VName::Manual(s) => {
                         let code = OpCode {
@@ -210,7 +210,7 @@ impl Val {
                     _ => {},
                 }
             }
-            Self::Var(_name, types, Some(path)) => {
+            Self::Var(_name, types, Some(path), _is_neg) => {
                 // Just add the path (the enum type) as a base type,
                 // with its args.
                 rel = rel.add_base_type(BType::ui_args(path.clone(), types.clone()))
@@ -222,8 +222,8 @@ impl Val {
 
 impl Sig {
     pub fn relevant_with_axioms(&self, term: &Comp) -> (Relevant, Vec<Comp>) {
-        println!("Calling relevant_with_axioms on...");
-        println!("term: {:?}", &term);
+        // println!("Calling relevant_with_axioms on...");
+        // println!("term: {:?}", &term);
         let mut relevant = term.relevant(self);
         for t in &relevant.base_types().clone() {
             match self.get_con_codes_with_inputs_btype(t) {

@@ -82,6 +82,7 @@ fn declare_uf_fun_op(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, p: Fu
 }
 
 fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Vec<VType>, f_output: VType) -> std::io::Result<()> {
+    println!("###\n### Declaring op {:?} to smt solver...\n###\n", code);
     let op_smt = code.render_smt();
     if f_inputs.len() == 0 {
         let sort = ctx.atom(format!(
@@ -122,25 +123,6 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Ve
             println!("Declared {} as absrel {}", code, op_smt);
 
             let mut igen = Gen::new();
-
-            // // Only include a construction axiom for ops that are enum
-            // // constructors.
-            // match code.path {
-            //     Some(_) => {
-            //         let axiom = constructions::same_con_exclusion_axiom(
-            //             code.clone(),
-            //             f_inputs.clone(),
-            //             f_output.clone(),
-            //         )
-            //             .build(&mut igen)
-            //             .normal_form_single_case(&sig, &mut igen);
-            //         let mut builder = Context::new(ctx);
-            //         let e = builder.smt(&axiom)?;
-            //         println!("SMT Axiom [Rel-Con for {}]: {}", code, ctx.display(e[0]));
-            //         ctx.assert(e[0])?;
-            //     }
-            //     None => {}
-            // }
 
             // Include a functionality axiom for any op that has a
             // relational abstraction.
@@ -449,12 +431,21 @@ impl <'a> Context<'a> {
         match term {
             Val::EnumCon(..) =>
                 panic!("EnumCon values must be eliminated beform smt: {:?}", term),
-            // Normalized Vars do not have type args, unless they are constants
-            Val::Var(n, types, path) => match self.get_assign(n) {
-                Some(Assignment::Defined(e)) =>
-                    Ok(e.clone()),
-                Some(Assignment::Quantified) =>
-                    Ok(self.ctx.atom(n.as_string())),
+            // Normalized Vars do not have type args, unless they are
+            // constants.
+            Val::Var(n, types, path, is_pos) => match self.get_assign(n) {
+                Some(Assignment::Defined(e)) => {
+                    assert!(is_pos, "Vars should only be negative when they are quantified, but {:?} is defined as {:?}", n, e);
+                    Ok(e.clone())
+                }
+                Some(Assignment::Quantified) => {
+                    let base = self.ctx.atom(n.as_string());
+                    if *is_pos {
+                        Ok(base)
+                    } else {
+                        Ok(self.ctx.not(base))
+                    }
+                }
                 // Type-checking should have caught actual unbound
                 // variables.  This must be a constant.
                 None => {

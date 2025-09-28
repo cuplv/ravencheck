@@ -637,7 +637,11 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                         panic!("Can't handle parenthesized path arguments: {:?}", args)
                     }
                 };
-                Ok(Builder::return_(Val::Var(VName::new(ident), types, None)))
+                // This could be either a primitive function call
+                // (with type args) or a variable (which cannot have
+                // type args). For now, we do not distinguish here.
+                let code = OpCode::fun_types(ident, types);
+                Ok(code.as_fun().builder())
             } else if ep.path.segments.len() == 2 {
                 let PathSegment{ident: ident2, arguments: arguments2} =
                     ep.path.segments.pop().unwrap().into_value();
@@ -664,7 +668,9 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                     "2-segment paths should not have type args on second seg: {:?}",
                     ep.path,
                 );
-                Ok(Builder::return_(Val::Var(VName::new(ident2), types, Some(ident1.to_string()))))
+                let code = OpCode::enum_con(ident1, types, ident2);
+                Ok(code.as_fun().builder())
+                // Ok(Builder::return_(Val::Var(VName::new(ident2), types, Some(ident1.to_string()))))
             } else {
                 panic!("Got path with more than 2 segments: {:?}", ep.path)
             }

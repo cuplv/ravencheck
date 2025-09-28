@@ -18,8 +18,8 @@ pub mod my_mod {
 
     #[assume]
     fn equal_or_distinguisher() -> bool {
-        forall(|a:Set,b:Set| {
-            a == b || exists(|e:Elem| member(e,a) !=  member(e,b))
+        forall(|x:Set,y:Set| {
+            x == y || exists(|e:Elem| member(e,x) !=  member(e,y))
         })
     }
 

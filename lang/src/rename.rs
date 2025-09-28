@@ -177,12 +177,8 @@ impl Val {
                 vs.into_iter().map(|v| v.rename_r(gen)).collect()
             ),
             // Remember, vars get renamed at their introduction point,
-            // not at their use-points.
-            Self::Var(n,ts,None) => Self::Var(n,ts, None),
-            Self::Var(n,ts,p) => panic!(
-                "Can't rename a pathed var: {:?}",
-                Self::Var(n,ts,p),
-            ),
+            // not at their use-points. So here, we make no change.
+            Self::Var(n,ts,p,is_pos) => Self::Var(n,ts,p,is_pos),
         }
     }
 }

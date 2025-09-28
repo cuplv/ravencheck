@@ -377,7 +377,7 @@ impl Val {
                 }
                 Ok(VType::Tuple(ts))
             }
-            Self::Var(x, types, path) => {
+            Self::Var(x, types, path, true) => {
                 match tc.get(x) {
                     Ok(t) => Ok(t),
                     Err(_) => match x {
@@ -393,6 +393,10 @@ impl Val {
                     }
                 }
             }
+            Self::Var(_, _, _, false) => panic!(
+                "Var should only be positive at type-check time, but: {:?}",
+                self,
+            ),
         }
     }
 }

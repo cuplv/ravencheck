@@ -148,7 +148,14 @@ impl Pattern {
 impl Val {
     fn substitute(self, x: &VName, v: &Val) -> Self {
         match self {
-            Self::Var(x2, _, _) if *x == x2 => { v.clone() },
+            // It seems like it should matter whether this var that is
+            // being substituted-into is positive or negative... but
+            // I'm going to test whether that is the case.
+            Self::Var(x2, _, _, _) if *x == x2 => { v.clone() },
+            // Self::Var(x2, _, _, false) => panic!(
+            //     "Negative vars should not be substituted into, but {:?} was substituted into negative var {:?}",
+            //     v, x2,
+            // ),
             Self::Thunk(c) => Self::Thunk(Box::new(c.substitute(x,v))),
             Self::Tuple(vs) => Self::Tuple(
                 vs

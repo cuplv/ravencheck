@@ -48,31 +48,31 @@ mod rvn {
 
     // no_quantify_true triggers the unbound-match-case bug
 
-    // #[verify]
-    // fn no_quantify_true() -> bool {
-    //     let maybe_x = Opt::<(bool,bool)>::Some((true, false));
-    //     match maybe_x {
-    //         Opt::<(bool,bool)>::Some(x) => {
-    //             let (t,f) = x;
-    //             t && !f
-    //         }
-    //         Opt::<(bool,bool)>::None => false,
-    //     }
-    // }
+    #[verify]
+    fn no_quantify_true() -> bool {
+        let maybe_x = Opt::<(bool,bool)>::Some((true, false));
+        match maybe_x {
+            Opt::<(bool,bool)>::Some(x) => {
+                let (t,f) = x;
+                t && !f
+            }
+            Opt::<(bool,bool)>::None => false,
+        }
+    }
 
     // no_quantify_false triggers the unbound-match-case bug
 
-    // #[falsify]
-    // fn no_quantify_false() -> bool {
-    //     let maybe_x = Opt::<(bool,bool)>::Some((true, false));
-    //     match maybe_x {
-    //         Opt::<(bool,bool)>::Some(x) => {
-    //             let (t,f) = x;
-    //             !(t && !f)
-    //         }
-    //         Opt::<(bool,bool)>::None => true,
-    //     }
-    // }
+    #[falsify]
+    fn no_quantify_false() -> bool {
+        let maybe_x = Opt::<(bool,bool)>::Some((true, false));
+        match maybe_x {
+            Opt::<(bool,bool)>::Some(x) => {
+                let (t,f) = x;
+                !(t && !f)
+            }
+            Opt::<(bool,bool)>::None => true,
+        }
+    }
 
     #[verify]
     fn construct_deconstruct_v<X: Clone + PartialEq>() -> bool {

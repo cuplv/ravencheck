@@ -169,6 +169,7 @@ Error in parsing definition of \"{}\": {:?}",
                 e,
             ),
         };
+        // println!("Adding fun {} with def: {:?}", name.to_string(), &fun);
         let tc = TypeContext::new_types(self.0.clone(), tas.clone());
         match fun.type_of(tc) {
             Ok(ct) => match ct.clone().unwrap_fun_v() {
