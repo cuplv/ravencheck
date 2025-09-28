@@ -383,9 +383,6 @@ impl Comp {
                 }
                 Self::Match(target, arms) => {
                     match target {
-                        Val::EnumCon(..) => {
-                            unreachable!("EnumCon should no longer appear");
-                        }
                         Val::OpCode(OpMode::ZeroArgAsConst, code) => {
                             let (_,branch) = MatchArm::select(&code.ident, arms)
                                 .expect("typed match should have matching arm");

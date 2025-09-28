@@ -166,7 +166,6 @@ impl MatchArm {
 impl Val {
     pub fn expand_types(self, subs: &Subs) -> Self {
         match self {
-            Self::EnumCon(..) => panic!("expand_types for EnumCon"),
             Self::Literal(l) => Self::Literal(l),
             Self::OpCode(om, oc) => Self::OpCode(om, oc.expand_types(subs)),
             Self::Thunk(m) => Self::Thunk(Box::new(m.expand_types(subs))),

@@ -429,8 +429,6 @@ impl <'a> Context<'a> {
 
     fn smt_val(&self, term: &Val) -> std::io::Result<SExpr> {
         match term {
-            Val::EnumCon(..) =>
-                panic!("EnumCon values must be eliminated beform smt: {:?}", term),
             // Normalized Vars do not have type args, unless they are
             // constants.
             Val::Var(n, types, path, is_pos) => match self.get_assign(n) {

@@ -359,9 +359,6 @@ impl Val {
     }
     fn type_of(&self, tc: TypeContext) -> Result<VType, TypeError> {
         match self {
-            Self::EnumCon(..) => panic!(
-                "EnumCon should not exist at type-check time."
-            ),
             Self::Literal(l) => match l {
                 Literal::LogTrue => Ok(VType::prop()),
                 Literal::LogFalse => Ok(VType::prop()),

@@ -26,7 +26,6 @@ pub enum OpMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Val {
-    EnumCon(OpCode, Vec<Val>),
     Literal(Literal),
     OpCode(OpMode, OpCode),
     Thunk(Box<Comp>),

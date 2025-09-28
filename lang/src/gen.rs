@@ -157,11 +157,6 @@ impl Pattern {
 impl Val {
     fn advance_gen(&self, gen: &mut Gen) {
         match self {
-            Val::EnumCon(_, vs) => {
-                for v in vs {
-                    v.advance_gen(gen);
-                }
-            }
             Val::Literal(_l) => {},
             Val::OpCode(..) => {},
             Val::Thunk(m) => m.advance_gen(gen),
