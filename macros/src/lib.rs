@@ -25,7 +25,9 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnItemAttr {
+    AlsoCall(String),
     Annotate(String),
+    AnnotateMulti(String),
     Assume,
     AssumeFor(String),
     Declare,
@@ -66,8 +68,12 @@ impl RvnItemAttr {
             }
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
+                    Some("also_call") =>
+                        Some(RvnItemAttr::AlsoCall(l.tokens.to_string())),
                     Some("annotate") =>
                         Some(RvnItemAttr::Annotate(l.tokens.to_string())),
+                    Some("annotate_multi") =>
+                        Some(RvnItemAttr::AnnotateMulti(l.tokens.to_string())),
                     Some("assume") =>
                         Some(RvnItemAttr::AssumeFor(l.tokens.to_string())),
                     Some("assume_for") => {
@@ -119,7 +125,7 @@ impl RvnItemAttr {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
-    AnnotateMulti(Vec<String>, ItemFn),
+    AnnotateMulti(String, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The boolean is `true` if this is a phantom declaration.
@@ -206,6 +212,22 @@ impl RccCommand {
                 }
                 item => panic!("Can't use #[annotate(..)] on {:?}", item),
             }
+            AnnotateMulti(main_call) => match item {
+                Item::Fn(i) => {
+                    let mut extra_calls = Vec::new();
+                    for a in ras { match a {
+                        RvnItemAttr::AlsoCall(c) => { extra_calls.push(c); },
+                        a => panic!(
+                            "Unexpected {:?} on '{}'",
+                            a,
+                            i.sig.ident
+                        ),
+                    }}
+                    let c = RccCommand::AnnotateMulti(main_call, extra_calls, i);
+                    (Some(c), None)
+                }
+                item => panic!("Can't use #[annotate_multi(..)] on {:?}", item),
+            }
             Assume => match item {
                 Item::Fn(i) => {
                     let mut rules = Vec::new();
@@ -244,7 +266,7 @@ impl RccCommand {
             Phantom =>
                 panic!("#[phantom] should only appear under #[declare] or #[define]"),
             Verify => Self::mk_goal(Vec::from(ras), item, true),
-            _ => todo!("other attrs for from_item"),
+            a => todo!("other attrs for from_item: {:?}", a),
         }
     }
 
@@ -336,10 +358,14 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            RccCommand::AnnotateMulti(call_strs, item_fn) => {
+            RccCommand::AnnotateMulti(main_call_str, extra_call_strs, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
-                    rcc.reg_fn_annotate([#(#call_strs),*], #item_str).unwrap();
+                    rcc.reg_fn_annotate_multi(
+                        #main_call_str,
+                        [#(#extra_call_strs),*],
+                        #item_str
+                    ).unwrap();
                 }).unwrap();
                 out.push(s);
             }

@@ -30,6 +30,12 @@ mod rvn {
         }
     }
 
+    #[annotate_multi(max(a,b) => c)]
+    #[also_call(max(b,a) => d)]
+    fn max_commutative() -> bool {
+        c == d
+    }
+
     #[test]
     fn max1() {
         assert!(

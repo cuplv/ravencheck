@@ -146,19 +146,25 @@ impl Rcc {
         Ok(())
     }
 
-    pub fn reg_multi_annotate<const N: usize>(
+    pub fn reg_fn_annotate_multi<const N: usize>(
         &mut self,
-        calls: [&str; N],
+        main_call: &str,
+        extra_calls: [&str; N],
         item_fn: &str,
     ) -> Result<(), String> {
         // Parse syn values from strs
         let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
-        let calls: Vec<HypotheticalCallSyntax> = calls
+        let main_call: HypotheticalCallSyntax =
+            match syn::parse_str(main_call) {
+                Ok(call) => call,
+                Err(e) => panic!("Failed to parse #[annotate_multi({})] on item '{}', did you use '->' instead of '=>'? Error: {}", main_call, item_fn.sig.ident.to_string(), e),
+            };
+        let extra_calls: Vec<HypotheticalCallSyntax> = extra_calls
             .into_iter()
             .map(|call| {
                  match syn::parse_str(call) {
                      Ok(call) => Ok(call),
-                     Err(e) => Err(format!("Failed to parse #[annotate({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e)),
+                     Err(e) => Err(format!("Failed to parse #[also_call({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e)),
                  }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -166,13 +172,14 @@ impl Rcc {
         // Parse the signature into Rir types, and keep the body.
         let i = RirFn::from_syn(item_fn)?;
         let prop_ident = i.sig.ident.clone();
-        let calls: Vec<HypotheticalCall> = calls
+        let main_call: HypotheticalCall = main_call.into_rir()?;
+        let extra_calls: Vec<HypotheticalCall> = extra_calls
             .into_iter()
             .map(|call| call.into_rir())
             .collect::<Result<Vec<_>, _>>()?;
         // Apply type aliases
         let i = i.expand_types(&self.sig.0.type_aliases());
-        todo!("reg_multi_annotate")
+        todo!("reg_fn_annotate_multi")
     }
 
     pub fn reg_fn_assume<const N: usize>(
