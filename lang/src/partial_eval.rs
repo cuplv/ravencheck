@@ -278,26 +278,6 @@ impl Comp {
                                         }
                                     }
                                     Err(e) => panic!("Invalid OpCode '{}': {}", oc, e),
-                                    // // If undefined, assume it is a
-                                    // // relational abstraction and
-                                    // // treat it like a symbol.
-                                    // None => {
-                                    //     let x_result = gen.next();
-                                    //     let mut flat_vs = Vec::new();
-                                    //     for v in vs {
-                                    //         flat_vs.append(&mut v.flatten());
-                                    //     }
-                                    //     anti_stack.push(Rebuild::LogOpN(
-                                    //         LogOpN::Pred(SName(s),true),
-                                    //         flat_vs,
-                                    //         x_result.clone(),
-                                    //     ));
-                                    //     self = Comp::return1(x_result);
-                                    // }
-                                    // // None => panic!(
-                                    // //     "Undeclared operator: {}",
-                                    // //     s,
-                                    // // ),
                                 }
                             }
                             Some(f) => {
@@ -400,18 +380,14 @@ impl Comp {
                 Self::Match(target, arms) => {
                     match target {
                         Val::EnumCon(..) => {
-                            unreachable!("EnumCon should not appear any more");
-                            // let (xs,branch) = MatchArm::select(&code.ident, arms)
-                            //     .expect("typed match should have matching arm");
-                            // let subs = xs.into_iter().zip(vs).collect();
-                            // self = branch.substitute_many(&subs);
+                            unreachable!("EnumCon should no longer appear");
                         }
                         Val::OpCode(OpMode::ZeroArgAsConst, code) => {
                             let (_,branch) = MatchArm::select(&code.ident, arms)
                                 .expect("typed match should have matching arm");
                             self = branch;
                         }
-                        Val::Var(x, _types, _path) => {
+                        Val::Var(x, types, path) => {
                             let mut branches = Vec::<Comp>::new();
                             for (arm, branch) in arms.into_iter() {
                                 // Each branch should start with a
@@ -420,7 +396,11 @@ impl Comp {
                                 // target) if the constructor has no
                                 // values.
                                 let branch = build_symbolic_branch(
-                                    x.clone(),
+                                    Val::Var(
+                                        x.clone(),
+                                        types.clone(),
+                                        path.clone()
+                                    ),
                                     arm,
                                     *branch,
                                     sig,
@@ -429,10 +409,6 @@ impl Comp {
                                 branches.push(branch);
                             }
                             self = build_symbolic_match(branches, sig, gen);
-                            // self = Self::Match(
-                            //     Val::Var(x, types, path),
-                            //     new_arms,
-                            // );
                             return vec![(case_name, self.rebuild_from_stack(anti_stack))]
                         }
                         target => todo!("match with target {:?}", target),
@@ -549,7 +525,7 @@ impl Val {
 }
 
 fn build_symbolic_branch(
-    x: VName,
+    target: Val,
     arm: MatchArm,
     branch: Comp,
     sig: &Sig,
@@ -562,19 +538,19 @@ fn build_symbolic_branch(
     let xs = arm.binders.into_iter().map(|p| p.unwrap_vname().unwrap());
     let mut rel_args: Vec<Val> =
         xs.clone().into_iter().map(|x| x.val()).collect();
-    rel_args.push(x.clone().val());
+    rel_args.push(target.clone());
     let qsig = xs.zip(types).collect::<Vec<_>>();
 
     let cond = if qsig.len() == 0 {
-        // Equate x to the constructor as a constant.
-        Builder::return_(x.val())
+        // Equate target to the constructor as a constant.
+        Builder::return_(target)
             .eq_ne(
                 true,
                 Builder::return_(Val::OpCode(OpMode::ZeroArgAsConst, arm.code))
             )
     } else {
-        // Relate x to the newly quantified vars, using the relational
-        // abstraction of the arm's opcode. 
+        // Relate target to the newly quantified vars, using the
+        // relational abstraction of the arm's opcode.
         Builder::force(Val::OpCode(OpMode::RelAbs, arm.code))
             .apply_v(rel_args)
     };
@@ -582,7 +558,6 @@ fn build_symbolic_branch(
     let branch =
         Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
-    // let branch = Builder::lift(branch);
     let b = branch.build(igen);
     println!("\nBuilt match branch: {:?}\n", b);
     b

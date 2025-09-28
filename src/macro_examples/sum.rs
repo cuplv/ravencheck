@@ -142,24 +142,24 @@ mod rvn {
         })
     }
 
-    // #[verify]
-    // fn unique1() -> bool {
-    //     let l1 = List::<usize>::Nil();
-    //     let l2 = List::<usize>::Nil();
-    //     l1 == l2
-    // }
-    // #[verify]
-    // fn unique2() -> bool {
-    //     forall(|n: usize| {
-    //         List::<usize>::Cons(n, List::<usize>::Nil)
-    //             == List::<usize>::Cons(n, List::<usize>::Nil)
-    //     })
-    // }
-    // #[verify]
-    // fn unique3() -> bool {
-    //     forall(|n: usize, l: List<usize>| {
-    //         List::<usize>::Cons(n, l)
-    //             == List::<usize>::Cons(n, l)
-    //     })
-    // }
+    #[verify]
+    fn unique1() -> bool {
+        let l1 = List::<usize>::Nil;
+        let l2 = List::<usize>::Nil;
+        l1 == l2
+    }
+    #[verify]
+    fn unique2() -> bool {
+        forall(|n: usize| {
+            List::<usize>::Cons(n, List::<usize>::Nil)
+                == List::<usize>::Cons(n, List::<usize>::Nil)
+        })
+    }
+    #[verify]
+    fn unique3() -> bool {
+        forall(|n: usize, l: List<usize>| {
+            List::<usize>::Cons(n, l)
+                == List::<usize>::Cons(n, l)
+        })
+    }
 }

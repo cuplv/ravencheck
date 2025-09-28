@@ -210,7 +210,11 @@ impl Val {
                     _ => {},
                 }
             }
-            Self::Var(_name, _types, _path) => todo!("relevant for pathed vars"),
+            Self::Var(_name, types, Some(path)) => {
+                // Just add the path (the enum type) as a base type,
+                // with its args.
+                rel = rel.add_base_type(BType::ui_args(path.clone(), types.clone()))
+            }
         }
         rel
     }

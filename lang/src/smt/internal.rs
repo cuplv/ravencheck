@@ -450,7 +450,7 @@ impl <'a> Context<'a> {
             Val::EnumCon(..) =>
                 panic!("EnumCon values must be eliminated beform smt: {:?}", term),
             // Normalized Vars do not have type args, unless they are constants
-            Val::Var(n, types, _) => match self.get_assign(n) {
+            Val::Var(n, types, path) => match self.get_assign(n) {
                 Some(Assignment::Defined(e)) =>
                     Ok(e.clone()),
                 Some(Assignment::Quantified) =>
@@ -466,7 +466,7 @@ impl <'a> Context<'a> {
                     let code = OpCode {
                         ident: n.clone().unwrap_manual(),
                         types: types.clone(),
-                        path: None,
+                        path: path.clone(),
                     };
                     Ok(self.ctx.atom(code.render_smt()))
                 }

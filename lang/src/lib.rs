@@ -253,10 +253,18 @@ impl Sig {
         match self.get_applied_op_or_con(oc) {
             Ok(Oc::Con(inputs)) => {
                 let path = oc.path.clone().unwrap();
-                let t = VType::fun_v(
-                    inputs,
-                    VType::ui_args(path, oc.types.clone()),
-                );
+                let t = if inputs.len() == 0 {
+                    // If the constructor's type has zero args, then
+                    // we report this as a constant of the enum type.
+                    VType::ui_args(path, oc.types.clone())
+                } else {
+                    // Otherwise, it's a function that produces a
+                    // value of the enum type.
+                    VType::fun_v(
+                        inputs,
+                        VType::ui_args(path, oc.types.clone()),
+                    )
+                };
                 Ok(t)
             }
             Ok(Oc::Op(op)) => match op {

@@ -4,6 +4,7 @@
 mod rvn {
 
     #[define]
+    #[phantom]
     enum Test {
         ConA,
         ConB,
@@ -11,7 +12,7 @@ mod rvn {
 
     #[verify]
     fn test1() -> bool {
-        let t = Test::ConA();
+        let t = Test::ConA;
         match t {
             Test::ConA => true,
             Test::ConB => false,
