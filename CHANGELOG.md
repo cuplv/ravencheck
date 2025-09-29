@@ -1,3 +1,8 @@
+# 2025-09-28: v0.4.0
+
+* Added enum definitions and pattern-matching
+* Added the #[annotate_multi] recursive verification command
+
 # 2025-09-24: v0.3.0
 
 * simplified annotation syntax: see doc/migration.md
