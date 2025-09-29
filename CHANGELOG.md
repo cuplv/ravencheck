@@ -1,3 +1,8 @@
+# 2025-09-29: v0.4.1
+
+* Fix annotate_multi for relations, using recursion guards.
+* Add the #[total] option for #[declare] and #[define].
+
 # 2025-09-28: v0.4.0
 
 * Added enum definitions and pattern-matching
