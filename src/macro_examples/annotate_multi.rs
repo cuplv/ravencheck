@@ -24,12 +24,12 @@ mod rvn {
         }
     }
 
-    // #[annotate_multi]
-    // #[for_values(a: Nat)]
-    // #[for_call(get_zero(a) => z)]
-    // fn always_zero1() -> bool {
-    //     z == Nat::Z
-    // }
+    #[annotate_multi]
+    #[for_values(a: Nat)]
+    #[for_call(get_zero(a) => z)]
+    fn always_zero1() -> bool {
+        z == Nat::Z
+    }
 
     #[annotate(get_zero(a) => z)]
     fn always_zero2() -> bool {
@@ -46,6 +46,10 @@ mod rvn {
         }
     }
 
+    // The following commutativity property for 'add' does not
+    // directly verify, but the same property for 'add_alt' does
+    // directly verify.
+
     // #[annotate_multi]
     // #[for_values(a: Nat, b: Nat)]
     // #[for_call(add(a,b) => c)]
@@ -53,6 +57,31 @@ mod rvn {
     // fn add_commutative() -> bool {
     //     c == d
     // }
+
+    #[define]
+    #[recursive]
+    fn add_alt(a: Nat, b: Nat) -> Nat {
+        match a.clone() {
+            Nat::Z => b,
+            Nat::S(a_minus) => match b {
+                Nat::Z => a,
+                Nat::S(b_minus) =>
+                    Nat::S(Box::new(
+                        Nat::S(Box::new(
+                            add_alt(*a_minus, *b_minus)
+                        ))
+                    ))
+            }
+        }
+    }
+
+    #[annotate_multi]
+    #[for_values(a: Nat, b: Nat)]
+    #[for_call(add_alt(a,b) => c)]
+    #[for_call(add_alt(b,a) => d)]
+    fn add_alt_commutative() -> bool {
+        c == d
+    }
 
     #[define]
     #[recursive]
@@ -69,38 +98,57 @@ mod rvn {
         }
     }
 
-    // #[annotate_multi]
-    // #[for_values(a: Nat, b: Nat)]
-    // #[for_call(max(a,b) => c)]
-    // #[for_call(max(b,a) => d)]
-    // fn max_commutative() -> bool {
-    //     c == d
-    // }
+    #[annotate_multi]
+    #[for_values(a: Nat, b: Nat)]
+    #[for_call(max(a,b) => c)]
+    #[for_call(max(b,a) => d)]
+    fn max_commutative() -> bool {
+        c == d
+    }
 
+    // Here are some normal Rust tests that actually run the above
+    // functions, just to check that we haven't made any simple
+    // mistakes in their definitions.
     #[test]
     fn max1() {
         assert!(
             max(Nat::from_usize(1), Nat::from_usize(0)) == Nat::from_usize(1)
         )
     }
+    #[test]
     fn max2() {
         assert!(
             max(Nat::from_usize(0), Nat::from_usize(1)) == Nat::from_usize(1)
         )
     }
+    #[test]
     fn max3() {
         assert!(
             max(Nat::from_usize(7), Nat::from_usize(7)) == Nat::from_usize(7)
         )
     }
+    #[test]
     fn max4() {
         assert!(
             max(Nat::from_usize(7), Nat::from_usize(20)) == Nat::from_usize(20)
         )
     }
+    #[test]
     fn max5() {
         assert!(
             max(Nat::from_usize(7), Nat::from_usize(2)) == Nat::from_usize(7)
+        )
+    }
+    #[test]
+    fn add1() {
+        assert!(
+            add(Nat::from_usize(1), Nat::from_usize(2)) == Nat::from_usize(3)
+        )
+    }
+    #[test]
+    fn add2() {
+        assert!(
+            add(Nat::from_usize(2), Nat::from_usize(1)) == Nat::from_usize(3)
         )
     }
 }

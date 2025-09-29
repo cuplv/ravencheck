@@ -125,21 +125,29 @@ impl Comp {
         gen: &mut Gen,
         starting_name: CaseName,
     ) -> Cases {
-        let cases_pe = self.partial_eval(sig, gen, starting_name);
+        // Partial evaluation
+        let cases = self.partial_eval(sig, gen, starting_name);
         // println!("got {} cases from partial_eval", cases_pe.len());
 
-        let mut cases_nnf = Vec::new();
-        for (name,comp) in cases_pe.into_iter() {
-            cases_nnf.push((name, comp.neg_normal_form(sig,gen)));
-        };
+        // Match elimination
+        let cases = cases.into_iter().map(|(name,comp)| {
+            let comp = comp.eliminate_match(sig,gen);
+            println!("After match elimination: {:?}", comp);
+            (name, comp)
+        }).collect::<Vec<_>>();
 
-        let mut cases_exp = Vec::new();
-        for (name,comp) in cases_nnf.into_iter() {
-            cases_exp.push((name, comp.expand_funs(sig,gen,Vec::new())));
-        };
+        // Negation normal form (NNF)
+        let cases = cases.into_iter().map(|(name,comp)| {
+            (name, comp.neg_normal_form(sig,gen))
+        }).collect::<Vec<_>>();
+
+        // Function expansion
+        let cases = cases.into_iter().map(|(name,comp)| {
+            (name, comp.expand_funs(sig, gen, Vec::new()))
+        }).collect::<Vec<_>>();
 
         // println!("normal_form_x passing on {} cases", cases_exp.len());
-        cases_exp
+        cases
     }
 }
 

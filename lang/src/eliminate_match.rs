@@ -1,5 +1,6 @@
 use crate::{
     Builder,
+    Binder1,
     Comp,
     Gen,
     LogOpN,
@@ -11,9 +12,37 @@ use crate::{
     Val,
 };
 
+impl Binder1 {
+    pub fn eliminate_match(self, sig: &Sig, igen: &mut Gen) -> Self {
+        match self {
+            Self::LogQuantifier(q, xs, m) => Self::LogQuantifier(
+                q, xs, Box::new(m.eliminate_match(sig,igen))
+            ),
+            b => b,
+        }
+    }
+}
+
 impl Comp {
     pub fn eliminate_match(self, sig: &Sig, igen: &mut Gen) -> Self {
         match self {
+            Self::Bind1(b, x, m) => Self::Bind1(
+                b.eliminate_match(sig,igen),
+                x,
+                Box::new(m.eliminate_match(sig,igen)),
+            ),
+            Self::BindN(b, ps, m) => Self::BindN(
+                // BinderN::Call can appear here, but does not contain
+                // computations that we need to eliminate on.
+                b,
+                ps,
+                Box::new(m.eliminate_match(sig,igen)),
+            ),
+            Self::Ite(cond, then_b, else_b) => Self::Ite(
+                cond,
+                Box::new(then_b.eliminate_match(sig, igen)),
+                Box::new(else_b.eliminate_match(sig, igen)),
+            ),
             Self::Match(target, arms) => {
                 match target {
                     Val::OpCode(OpMode::ZeroArgAsConst, code) => {
@@ -24,6 +53,10 @@ impl Comp {
                     Val::Var(x, types, path, true) => {
                         let mut branches = Vec::<Comp>::new();
                         for (arm, branch) in arms.into_iter() {
+                            // First, eliminate_matches within the
+                            // branch.
+                            let branch = branch.eliminate_match(sig,igen);
+
                             // Each branch should start with a
                             // quantification of any values in the
                             // constructor --- or an equation (to
@@ -37,7 +70,7 @@ impl Comp {
                                     true,
                                 ),
                                 arm,
-                                *branch,
+                                branch,
                                 sig,
                                 igen,
                             );
@@ -51,6 +84,7 @@ impl Comp {
                     target => todo!("match with target {:?}", target),
                 }
             }
+            Self::Return(vs) => Self::Return(vs),
             m => todo!("eliminate_match for {:?}", m),
         }
     }

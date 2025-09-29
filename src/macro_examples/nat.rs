@@ -95,13 +95,6 @@ pub mod my_nat_mod {
         true
     }
 
-    // #[annotate(add)]
-    // fn add_monotonic<T>() -> bool {
-    //     |a: Nat<T>, b: Nat<T>|
-    //     |c: Nat<T>|
-    //     le::<T>(a,c) && le::<T>(a,b)
-    // }
-
     #[annotate(add::<T>(a,b) => c)]
     fn add_zeros() -> bool {
         implies(a == zero::<T>(), b == c)

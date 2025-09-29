@@ -97,15 +97,4 @@ mod my_mod {
     fn simple_zeros() -> bool {
         add(ZERO, ZERO) == ZERO
     }
-
-    // The following annotation does not verify under the current
-    // assumptions. What axioms on 'ZERO' and 'le' are needed to fix
-    // it?
-
-    // #[annotate(add)]
-    // fn add_monotonic() -> bool {
-    //     |a: u32, b: u32|
-    //     |c: u32|
-    //     le(a,c) && le(a,b)
-    // }
 }
