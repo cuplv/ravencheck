@@ -229,6 +229,8 @@ pub enum Comp {
     Force(Val),
     Fun(Vec<(VName, Option<VType>)>, Box<Comp>),
     Ite(Val, Box<Comp>, Box<Comp>),
+    // Todo: we don't need the Box in the Match variant, since the
+    // Comps are already in a Vec.
     Match(Val, Vec<(MatchArm, Box<Comp>)>),
     Return(Vec<Val>),
 }
