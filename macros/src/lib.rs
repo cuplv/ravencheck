@@ -38,6 +38,7 @@ enum RvnItemAttr {
     InstRule(String),
     Phantom,
     Recursive,
+    ShouldFail,
     Verify,
 }
 
@@ -64,6 +65,7 @@ impl RvnItemAttr {
                     Some("import") => Some(RvnItemAttr::Import),
                     Some("phantom") => Some(RvnItemAttr::Phantom),
                     Some("recursive") => Some(RvnItemAttr::Recursive),
+                    Some("should_fail") => Some(RvnItemAttr::ShouldFail),
                     Some("verify") => Some(RvnItemAttr::Verify),
                     _ => None,
                 }
@@ -127,7 +129,7 @@ impl RvnItemAttr {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
-    AnnotateMulti(Vec<String>, Vec<String>, ItemFn),
+    AnnotateMulti(bool, Vec<String>, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The boolean is `true` if this is a phantom declaration.
@@ -218,16 +220,23 @@ impl RccCommand {
                 Item::Fn(i) => {
                     let mut call_lines = Vec::new();
                     let mut value_lines = Vec::new();
+                    let mut should_fail = false;
                     for a in ras { match a {
                         RvnItemAttr::ForCall(c) => { call_lines.push(c); },
                         RvnItemAttr::ForValues(l) => { value_lines.push(l); },
+                        RvnItemAttr::ShouldFail => { should_fail = true; },
                         a => panic!(
                             "Unexpected {:?} on '{}'",
                             a,
                             i.sig.ident
                         ),
                     }}
-                    let c = RccCommand::AnnotateMulti(value_lines, call_lines, i);
+                    let c = RccCommand::AnnotateMulti(
+                        should_fail,
+                        value_lines,
+                        call_lines,
+                        i
+                    );
                     (Some(c), None)
                 }
                 item => panic!("Can't use #[annotate_multi(..)] on {:?}", item),
@@ -362,10 +371,11 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            RccCommand::AnnotateMulti(value_strs, call_strs, item_fn) => {
+            RccCommand::AnnotateMulti(should_fail, value_strs, call_strs, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_annotate_multi(
+                        #should_fail,
                         [#(#value_strs),*],
                         [#(#call_strs),*],
                         #item_str

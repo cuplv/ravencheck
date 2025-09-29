@@ -170,6 +170,7 @@ impl Rcc {
 
     pub fn reg_fn_annotate_multi<const N1: usize, const N2: usize>(
         &mut self,
+        should_fail: bool,
         value_lines: [&str; N1],
         call_lines: [&str; N2],
         item_fn: &str,
@@ -287,12 +288,15 @@ impl Rcc {
             body: guarded_axiom,            
         });
 
-        // Assume the non-guarded axiom in the main sig.
-        self.sig.0.axioms.push(Axiom {
-            tas: Vec::new(),
-            inst_mode: InstMode::Rules(Vec::new()),
-            body: axiom,
-        });
+        // IF this annotation is not intended to fail, assume the
+        // non-guarded axiom in the main sig.
+        if !should_fail {
+            self.sig.0.axioms.push(Axiom {
+                tas: Vec::new(),
+                inst_mode: InstMode::Rules(Vec::new()),
+                body: axiom,
+            });
+        }
 
 
         // Then build the verification condition.
@@ -341,7 +345,7 @@ impl Rcc {
                 title: prop_ident.clone(),
                 tas: Vec::new(),
                 condition: vc,
-                should_be_valid: true,
+                should_be_valid: !should_fail,
             },
             vc_sig,
         )?;
