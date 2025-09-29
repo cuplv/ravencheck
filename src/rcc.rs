@@ -1,9 +1,14 @@
 use syn::{
     Item,
     ItemFn,
+    parse::Parser,
+    punctuated::Punctuated,
+    PatType,
+    Token,
 };
 
 use ravenlang::{
+    Axiom,
     Builder,
     Comp,
     CType,
@@ -11,7 +16,9 @@ use ravenlang::{
     Goal,
     HypotheticalCallSyntax,
     HypotheticalCall,
+    InstMode,
     Op,
+    Pattern,
     Quantifier,
     RirFn,
     RirFnSig,
@@ -146,25 +153,41 @@ impl Rcc {
         Ok(())
     }
 
-    pub fn reg_fn_annotate_multi<const N: usize>(
+    pub fn reg_fn_annotate_multi<const N1: usize, const N2: usize>(
         &mut self,
-        main_call: &str,
-        extra_calls: [&str; N],
+        value_lines: [&str; N1],
+        call_lines: [&str; N2],
         item_fn: &str,
     ) -> Result<(), String> {
         // Parse syn values from strs
         let item_fn: ItemFn = syn::parse_str(item_fn).unwrap();
-        let main_call: HypotheticalCallSyntax =
-            match syn::parse_str(main_call) {
-                Ok(call) => call,
-                Err(e) => panic!("Failed to parse #[annotate_multi({})] on item '{}', did you use '->' instead of '=>'? Error: {}", main_call, item_fn.sig.ident.to_string(), e),
-            };
-        let extra_calls: Vec<HypotheticalCallSyntax> = extra_calls
+        let qsigs: Vec<Punctuated<PatType, Token![,]>> = value_lines
+            .into_iter()
+            .map(|line| {
+                let parser =
+                    Punctuated::<PatType, Token![,]>::parse_terminated;
+                match parser.parse_str(line) {
+                    Ok(line) => Ok(line),
+                    Err(e) => Err(format!(
+                        "Failed to parse #[for_values({})] on item '{}'. This should look like \"a: Type1, b: Type2, ..\". Error: {}",
+                        line,
+                        item_fn.sig.ident.to_string(),
+                        e,
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let calls: Vec<HypotheticalCallSyntax> = call_lines
             .into_iter()
             .map(|call| {
                  match syn::parse_str(call) {
                      Ok(call) => Ok(call),
-                     Err(e) => Err(format!("Failed to parse #[also_call({})] on item '{}', did you use '->' instead of '=>'? Error: {}", call, item_fn.sig.ident.to_string(), e)),
+                     Err(e) => Err(format!(
+                         "Failed to parse #[for_call({})] on item '{}', did you use '->' instead of '=>'? Error: {}",
+                         call,
+                         item_fn.sig.ident.to_string(),
+                         e,
+                     )),
                  }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -172,14 +195,113 @@ impl Rcc {
         // Parse the signature into Rir types, and keep the body.
         let i = RirFn::from_syn(item_fn)?;
         let prop_ident = i.sig.ident.clone();
-        let main_call: HypotheticalCall = main_call.into_rir()?;
-        let extra_calls: Vec<HypotheticalCall> = extra_calls
+        let mut qsig = Vec::new();
+        for punct in qsigs {
+            for pair in punct.into_pairs() {
+                let pat_type = pair.into_value();
+                let (p,t) = Pattern::from_pat_type(pat_type)?;
+                let x = p.unwrap_vname()?;
+                let t = t.expand_types(&self.sig.0.type_aliases());
+                qsig.push((x,t));
+            }
+        }
+        let calls: Vec<HypotheticalCall> = calls
             .into_iter()
-            .map(|call| call.into_rir())
+            .map(|call| {
+                let call = call.into_rir();
+                call
+            })
             .collect::<Result<Vec<_>, _>>()?;
         // Apply type aliases
         let i = i.expand_types(&self.sig.0.type_aliases());
-        todo!("reg_fn_annotate_multi")
+
+        // Build the axiom.
+
+        // Forall-quantify all input values.
+
+        // Sequence each call to the given output variable.
+
+        // The fn item body goes on bottom.
+        let code_calls: Vec<(Builder, VName)> = calls
+            .iter()
+            .map(|call| {
+                let vs = call.inputs
+                    .iter()
+                    .map(|s| VName::new(s).val())
+                    .collect::<Vec<_>>();
+                let b = call.code().as_fun().builder().apply_rt(vs);
+                (b, VName::new(&call.output))
+            })
+            .collect();
+
+        let mut igen = i.body.get_gen();
+        let axiom_body = i.body.clone().builder();
+        let axiom =
+            Builder::seq_many(code_calls, |_| axiom_body)
+            .quant(Quantifier::Forall, qsig.clone())
+            .build(&mut igen);
+        // Sanity-check that the generated axiom is well-formed
+        axiom.type_check_r(
+            &CType::Return(VType::prop()),
+            TypeContext::new_types(
+                self.sig.0.clone(),
+                Vec::new(),
+            )
+        ).expect("vc type error");
+        // Assume the axiom
+        self.sig.0.axioms.push(Axiom {
+            tas: Vec::new(),
+            inst_mode: InstMode::Rules(Vec::new()),
+            body: axiom,
+        });
+
+
+        // Then build the verification condition.
+
+        // Again, forall-quantify the input values.
+
+        // Sequence the body that each call refers to, to the given
+        // output variable.
+
+        // The fn item body goes on bottom, again.
+        let def_calls: Vec<(Builder, VName)> = calls
+            .iter()
+            .map(|call| {
+                let vs = call.inputs
+                    .iter()
+                    .map(|s| VName::new(s).val())
+                    .collect();
+                let def = match self.defs.get(&call.ident) {
+                    Some(def) => Ok(def.clone()),
+                    None => Err(format!("Cannot check annotation '{}', because no definition found for '{}'. Did you forget to use #[recursive]?", prop_ident, &call.ident)),
+                }?;
+                let def = def.rename(&mut igen);
+                def.advance_gen(&mut igen);
+                let b = def.builder().apply_rt(vs);
+                Ok::<(Builder,VName), String>((b, VName::new(&call.output)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let vc =
+            Builder::seq_many(def_calls, |_| i.body.builder())
+            .quant(Quantifier::Forall, qsig)
+            .build(&mut igen);
+        // Sanity-check that the generated vc is well-formed
+        vc.type_check_r(
+            &CType::Return(VType::prop()),
+            TypeContext::new_types(
+                self.sig.0.clone(),
+                Vec::new(),
+            )
+        ).expect("vc type error");
+        println!("Just type-checked this vc: {:?}", vc);
+
+        self.push_goal(Goal {
+            title: prop_ident.clone(),
+            tas: Vec::new(),
+            condition: vc,
+            should_be_valid: true,
+        })?;
+        Ok(())
     }
 
     pub fn reg_fn_assume<const N: usize>(

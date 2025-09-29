@@ -3,6 +3,7 @@ use crate::{
     BinderN,
     Comp,
     Gen,
+    MatchArm,
     Pattern,
     Val,
     VName,
@@ -136,7 +137,29 @@ impl Comp {
                     else_b.rename_r(gen),
                 )
             }
-            c => todo!("rename_r {:?}", c),
+            Self::Match(target, arms) => {
+                let target = target.rename_r(gen);
+                let arms = arms
+                    .into_iter()
+                    .map(|(a,m)| {
+                        let MatchArm{code, binders} = a;
+                        let mut subs = Vec::new();
+                        // Replace each pattern in 'a', and collect
+                        // the subs that have occured.
+                        let mut binders2 = Vec::new();
+                        for p in binders {
+                            let (p2, mut ss) = p.rename_r(gen);
+                            binders2.push(p2);
+                            subs.append(&mut ss);
+                        }
+                        let m = m
+                            .rename_r(gen)
+                            .substitute_many(&subs);
+                        (MatchArm{code, binders: binders2}, Box::new(m))
+                    })
+                    .collect();
+                Self::Match(target, arms)
+            }
         }
     }
 }

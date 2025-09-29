@@ -155,6 +155,26 @@ impl Builder {
             b.seq(cont)(x)
         })
     }
+    pub fn seq_many<F>(bxs: Vec<(Self, VName)>, cont: F) -> Self
+    where
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+    {
+        let mut bs = Vec::new();
+        let mut xs = Vec::new();
+        for (b,x) in bxs {
+            bs.push(b);
+            xs.push(x);
+        }
+        Self::bind_many(bs, |ms| {
+            let vs = xs.clone()
+                .into_iter()
+                .map(|x| x.val())
+                .collect();
+            Self::bind(cont(vs), |m2| {
+                Comp::seq1_many(ms, xs, m2).builder()
+            })
+        })
+    }
     pub fn seq_many_gen<Cs,F>(bs: Cs, cont: F) -> Self
     where
         Cs: Into<Vec<Self>> + 'static,

@@ -4,6 +4,7 @@ use crate::{
     Literal,
     Val,
     VName,
+    VType,
     Gen,
     Sig,
 };
@@ -93,15 +94,27 @@ impl Binder1 {
             }
             Self::LogQuantifier(q, xs, m) => {
                 let mut m2 = m.neg_normal_form_r(sig, dem, gen);
-                for (x,_) in xs {
+                for (x,t) in xs {
                     match dem.get(x) {
                         Some(DemandVal::Negative(y)) => {
+                            assert!(
+                                t == &VType::prop(),
+                                "Found negative demand for {:?} of type {}",
+                                x,
+                                t.render(),
+                            );
                             m2 = m2.substitute(
                                 &y,
                                 &Val::var_negative(x.clone())
                             );
                         }
                         Some(DemandVal::Both(y)) => {
+                            assert!(
+                                t == &VType::prop(),
+                                "Found positive + negative demand for {:?} of type {}",
+                                x,
+                                t.render(),
+                            );
                             m2 = m2.substitute(
                                 &y,
                                 &Val::var_negative(x.clone())
@@ -109,7 +122,8 @@ impl Binder1 {
                         }
                         // We don't need to take any action for
                         // positive demands.
-                        _ => {}
+                        Some(DemandVal::Positive) => {}
+                        None => {}
                     }
                 }
                 Self::LogQuantifier(*q, xs.clone(), Box::new(m2))
@@ -285,8 +299,9 @@ impl Val {
             // Since this is a negative variable, we can just flip the
             // sign here and make a positive demand.
             Self::Var(x, types, path, false) => {
-                dem.add_positive(x);
-                Self::Var(x.clone(), types.clone(), path.clone(), true)
+                panic!("Huh!");
+                // dem.add_positive(x);
+                // Self::Var(x.clone(), types.clone(), path.clone(), true)
             }
             Self::Literal(Literal::LogTrue) =>
                 Self::Literal(Literal::LogFalse),

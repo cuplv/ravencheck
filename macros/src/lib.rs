@@ -25,14 +25,15 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnItemAttr {
-    AlsoCall(String),
     Annotate(String),
-    AnnotateMulti(String),
+    AnnotateMulti,
     Assume,
     AssumeFor(String),
     Declare,
     Define,
     Falsify,
+    ForCall(String),
+    ForValues(String),
     Import,
     InstRule(String),
     Phantom,
@@ -54,6 +55,7 @@ impl RvnItemAttr {
             Meta::Path(p) if p.segments.len() == 1 => {
                 match path_to_one_str(p).as_deref() {
                     Some("annotate") => panic!("#[annotate] needs arguments"),
+                    Some("annotate_multi") => Some(RvnItemAttr::AnnotateMulti),
                     Some("assume") => Some(RvnItemAttr::Assume),
                     Some("declare") => Some(RvnItemAttr::Declare),
                     Some("define") => Some(RvnItemAttr::Define),
@@ -68,12 +70,8 @@ impl RvnItemAttr {
             }
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
-                    Some("also_call") =>
-                        Some(RvnItemAttr::AlsoCall(l.tokens.to_string())),
                     Some("annotate") =>
                         Some(RvnItemAttr::Annotate(l.tokens.to_string())),
-                    Some("annotate_multi") =>
-                        Some(RvnItemAttr::AnnotateMulti(l.tokens.to_string())),
                     Some("assume") =>
                         Some(RvnItemAttr::AssumeFor(l.tokens.to_string())),
                     Some("assume_for") => {
@@ -81,7 +79,11 @@ impl RvnItemAttr {
                         // let fun_name: Ident = l.parse_args().unwrap();
                         // Some(RvnAttr::AssumeFor(fun_name.to_string()))
                     }
+                    Some("for_call") =>
+                        Some(RvnItemAttr::ForCall(l.tokens.to_string())),
                     Some("for_type") => Some(RvnItemAttr::InstRule(l.tokens.to_string())),
+                    Some("for_values") =>
+                        Some(RvnItemAttr::ForValues(l.tokens.to_string())),
                     _ => None,
                 }
             }
@@ -125,7 +127,7 @@ impl RvnItemAttr {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
-    AnnotateMulti(String, Vec<String>, ItemFn),
+    AnnotateMulti(Vec<String>, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The boolean is `true` if this is a phantom declaration.
@@ -212,18 +214,20 @@ impl RccCommand {
                 }
                 item => panic!("Can't use #[annotate(..)] on {:?}", item),
             }
-            AnnotateMulti(main_call) => match item {
+            AnnotateMulti => match item {
                 Item::Fn(i) => {
-                    let mut extra_calls = Vec::new();
+                    let mut call_lines = Vec::new();
+                    let mut value_lines = Vec::new();
                     for a in ras { match a {
-                        RvnItemAttr::AlsoCall(c) => { extra_calls.push(c); },
+                        RvnItemAttr::ForCall(c) => { call_lines.push(c); },
+                        RvnItemAttr::ForValues(l) => { value_lines.push(l); },
                         a => panic!(
                             "Unexpected {:?} on '{}'",
                             a,
                             i.sig.ident
                         ),
                     }}
-                    let c = RccCommand::AnnotateMulti(main_call, extra_calls, i);
+                    let c = RccCommand::AnnotateMulti(value_lines, call_lines, i);
                     (Some(c), None)
                 }
                 item => panic!("Can't use #[annotate_multi(..)] on {:?}", item),
@@ -358,12 +362,12 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            RccCommand::AnnotateMulti(main_call_str, extra_call_strs, item_fn) => {
+            RccCommand::AnnotateMulti(value_strs, call_strs, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_annotate_multi(
-                        #main_call_str,
-                        [#(#extra_call_strs),*],
+                        [#(#value_strs),*],
+                        [#(#call_strs),*],
                         #item_str
                     ).unwrap();
                 }).unwrap();

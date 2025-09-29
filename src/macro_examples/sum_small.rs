@@ -72,4 +72,26 @@ mod rvn {
             }
         })
     }
+
+    #[verify]
+    fn test3_3() -> bool {
+        forall(|n: usize, t: Test3| {
+            let x = match t {
+                Test3::ConA(b) => b
+            };
+            let y = match t {
+                Test3::ConA(b) => b
+            };
+            x == y
+        })
+    }
+
+    #[verify]
+    fn test3_4() -> bool {
+        forall(|n: usize, m: usize| {
+            let x = if n == m { n } else { m };
+            let y = if n == m { n } else { m };
+            x == y
+        })
+    }
 }
