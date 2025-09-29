@@ -3,9 +3,23 @@
 mod rvn {
     #[define]
     #[derive(Clone, Debug, PartialEq, Eq)]
-    enum Nat { Z, S(Box<Nat>) }
+    enum Nat {
+        // The zero variant
+        Z,
+        // The successor variant. The sub-value needs to go inside a
+        // Box (i.e. needs to get heap-allocated) so that Nat has a
+        // fixed byte-size, which is a requirement for all types in
+        // Rust.
+        //
+        // You unbox a value `n: Box<Nat>` using `*n`.
+        //
+        // You re-box a value `n: Nat` using `Box::new(n)`.
+        S(Box<Nat>)
+    }
 
     impl Nat {
+        // This is a convenience function for the Rust tests at the
+        // bottom of this file. We don't declare it to Ravencheck.
         fn from_usize(n: usize) -> Self {
             if n == 0 {
                 Self::Z
@@ -15,11 +29,15 @@ mod rvn {
         }
     }
 
+    /// A trivial function that pattern-matches a Nat to the bottom
+    /// `Z` value, and then returns `Z`.
     #[define]
     #[recursive]
     fn get_zero(a: Nat) -> Nat {
         match a {
             Nat::Z => Nat::Z,
+            // Note that `a_minus` must be unboxed (*) before passing
+            // it to `get_zero`.
             Nat::S(a_minus) => get_zero(*a_minus),
         }
     }
@@ -42,6 +60,9 @@ mod rvn {
         match a {
             Nat::Z => b,
             Nat::S(a_minus) =>
+                // We unbox `a_minus` before calling `add`, and then
+                // re-box the output of `add` so that we can wrap it
+                // in Nat::S.
                 Nat::S(Box::new(add(*a_minus,b))),
         }
     }
@@ -49,6 +70,9 @@ mod rvn {
     // The following commutativity property for 'add' does not
     // directly verify, but the same property for 'add_alt' does
     // directly verify.
+    //
+    // What extra annotation(s) would let us verify 'add' without
+    // modifying it?
 
     // #[annotate_multi]
     // #[for_values(a: Nat, b: Nat)]
