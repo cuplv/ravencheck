@@ -2,7 +2,6 @@ use crate::{
     Binder1,
     Comp,
     Literal,
-    OpCode,
     OpMode,
     Val,
     VName,

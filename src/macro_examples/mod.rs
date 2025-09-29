@@ -7,6 +7,7 @@ mod minimal;
 mod minimal_polymorphic;
 mod minimal_filter;
 mod annotate_multi;
+mod annotate_nat;
 mod recursive;
 mod nat;
 mod nat_u32;

@@ -5,13 +5,8 @@ use crate::{
     Comp,
     Gen,
     LogOpN,
-    MatchArm,
-    Oc,
     OpCode,
-    OpMode,
-    Quantifier,
     Sig,
-    Val,
 };
 
 use std::collections::HashSet;
