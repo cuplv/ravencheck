@@ -24,6 +24,21 @@ pub fn applied_code_clause(
     }
 }
 
+pub fn totality_axiom(
+    code: OpCode,
+    inputs: Vec<VType>,
+    output: VType,
+) -> Builder {
+    Builder::forall_many(inputs, |inputs| {
+        Builder::exists(output, |output| {
+            let mut args = inputs;
+            args.push(output);
+            let f = Val::rel_abs(code).force();
+            f.builder().apply_v(args)
+        })
+    })
+}
+
 /// RelAbs(code)(inputs) == output1 and RelAbs(code)(inputs) ==
 /// output2 implies that output1 == output2.
 pub fn fun_axiom(

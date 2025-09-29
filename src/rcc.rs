@@ -381,19 +381,19 @@ impl Rcc {
         self.sig.0.reg_fn_assume_for(item_fn, call).unwrap();
     }
 
-    pub fn reg_item_declare(&mut self, item: &str) {
+    pub fn reg_item_declare(&mut self, item: &str, is_total: bool) {
         match syn::parse_str(item).unwrap() {
             Item::Const(i) => self.sig.0.reg_const_declare(i).unwrap(),
-            Item::Fn(i) => self.sig.0.reg_fn_declare(i).unwrap(),
+            Item::Fn(i) => self.sig.0.reg_fn_declare(i, is_total).unwrap(),
             Item::Struct(i) => self.sig.0.reg_struct_declare(i).unwrap(),
             Item::Type(i) => self.sig.0.reg_type_declare(i).unwrap(),
             i => todo!("reg_item_declare for {:?}", i),
         }
     }
 
-    pub fn reg_item_define(&mut self, item: &str, is_rec: bool) {
+    pub fn reg_item_define(&mut self, item: &str, is_rec: bool, is_total: bool) {
         match syn::parse_str(item).unwrap() {
-            Item::Fn(i) => self.reg_fn_define(i, is_rec).unwrap(),
+            Item::Fn(i) => self.reg_fn_define(i, is_rec, is_total).unwrap(),
             Item::Enum(i) => self.sig.0.reg_enum_define(i, is_rec).unwrap(),
             Item::Type(i) if !is_rec =>
                 self.sig.0.reg_type_define(i).unwrap(),
@@ -406,6 +406,7 @@ impl Rcc {
         &mut self,
         i: ItemFn,
         is_rec: bool,
+        is_bool: bool,
     ) -> Result<(), String>{
         // Parse the signature into Rir types.
         let i = RirFn::from_syn(i)?;
@@ -455,7 +456,7 @@ impl Rcc {
             .build(&mut g);
 
         if is_rec {
-            self.sig.0.reg_rir_declare(sig)?;
+            self.sig.0.reg_rir_declare(sig, is_bool)?;
             self.defs.insert(ident.clone(), fun);
             Ok(())
         } else {

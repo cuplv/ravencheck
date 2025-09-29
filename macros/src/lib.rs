@@ -39,6 +39,7 @@ enum RvnItemAttr {
     Phantom,
     Recursive,
     ShouldFail,
+    Total,
     Verify,
 }
 
@@ -66,6 +67,7 @@ impl RvnItemAttr {
                     Some("phantom") => Some(RvnItemAttr::Phantom),
                     Some("recursive") => Some(RvnItemAttr::Recursive),
                     Some("should_fail") => Some(RvnItemAttr::ShouldFail),
+                    Some("total") => Some(RvnItemAttr::Total),
                     Some("verify") => Some(RvnItemAttr::Verify),
                     _ => None,
                 }
@@ -132,13 +134,16 @@ enum RccCommand {
     AnnotateMulti(bool, Vec<String>, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
-    /// The boolean is `true` if this is a phantom declaration.
-    Declare(Item, bool),
+    /// The first boolean is `true` if this is a phantom
+    /// declaration. The second is `true` if this should get a
+    /// totality axiom.
+    Declare(Item, bool, bool),
     DeclareType(Ident, usize),
     /// The first boolean is `true` if this is a phantome definition,
     /// and the second boolean is `true` if this is a recursive
-    /// definition.
-    Define(Item, bool, bool),
+    /// definition. The final boolean is `true` if this should get a
+    /// totality axiom (which only makes sense if it's recursive).
+    Define(Item, bool, bool, bool),
     Import(ItemUse),
     /// The boolean is `true` if this should be verified, and `false`
     /// if this should be falsified.
@@ -153,9 +158,11 @@ impl RccCommand {
     ) -> (Option<Self>, Option<Item>) {
         let mut phantom = false;
         let mut recursive = false;
+        let mut total = false;
         for a in ras { match a {
             RvnItemAttr::Phantom => { phantom = true; },
             RvnItemAttr::Recursive if define => { recursive = true; },
+            RvnItemAttr::Total => { total = true; },
             a => panic!(
                 "Unexpected {:?} under #[{}]",
                 a,
@@ -168,9 +175,9 @@ impl RccCommand {
             None
         };
         if define {
-            (Some(Self::Define(item, phantom, recursive)), ret_item)
+            (Some(Self::Define(item, phantom, recursive, total)), ret_item)
         } else {
-            (Some(Self::Declare(item, phantom)), ret_item)
+            (Some(Self::Declare(item, phantom, total)), ret_item)
         }
     }
 
@@ -397,17 +404,19 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            RccCommand::Declare(item, _is_phantom) => {
+            // The effect of 'is_phantom' has already been handled at
+            // the attribute extraction stage.
+            RccCommand::Declare(item, _is_phantom, is_total) => {
                 let item_str = quote!{ #item }.to_string();
                 let s: Stmt = syn::parse2(quote! {
-                    rcc.reg_item_declare(#item_str);
+                    rcc.reg_item_declare(#item_str, #is_total);
                 }).unwrap();
                 out.push(s)
             }
-            RccCommand::Define(item, _is_phantom, is_rec) => {
+            RccCommand::Define(item, _is_phantom, is_rec, is_total) => {
                 let item_str = quote!{ #item }.to_string();
                 let s: Stmt = syn::parse2(quote! {
-                    rcc.reg_item_define(#item_str, #is_rec);
+                    rcc.reg_item_define(#item_str, #is_rec, #is_total);
                 }).unwrap();
                 out.push(s)
             }

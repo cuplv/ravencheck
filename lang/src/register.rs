@@ -15,6 +15,8 @@ use crate::{
     Builder,
     CType,
     Comp,
+    constructions,
+    Gen,
     InstMode,
     InstRule,
     HypotheticalCall,
@@ -310,19 +312,20 @@ impl Sig {
         ))
     }
 
-    pub fn reg_fn_declare(&mut self, f: ItemFn) -> Result<(), String> {
+    pub fn reg_fn_declare(&mut self, f: ItemFn, is_total: bool) -> Result<(), String> {
         // Parse the signature into Rir types, and throw away
         // the body.
         let sig = RirFnSig::from_syn(f.sig)?;
         // Apply type aliases
         let sig = sig.expand_types(&self.type_aliases());
 
-        self.reg_rir_declare(sig)
+        self.reg_rir_declare(sig, is_total)
     }
 
     pub fn reg_rir_declare(
         &mut self,
         sig: RirFnSig,
+        is_total: bool,
     ) -> Result<(), String> {
         // Assume type aliases are already applied
         let RirFnSig{ident, tas, inputs, output} = sig;
@@ -331,13 +334,13 @@ impl Sig {
         let inputs: Vec<VType> =
             inputs.into_iter().map(|(_,t)| t).collect();
     
-        // First, are any inputs thunks, making this a
+        // First, are any input thunks, making this a
         // higher-order function?
-        let op = if !inputs.iter().any(|i| i.contains_thunk()) {
+        let (op, extra_axioms) = if !inputs.iter().any(|i| i.contains_thunk()) {
             // If not, is the output bool?
             if output == VType::prop() {
                 // Then this is a simple predicate.
-                Op::Symbol(PredSymbol{inputs})
+                (Op::Symbol(PredSymbol{inputs}), Vec::new())
             } else {
                 // Else, this is a function. We give it a
                 // single axiom, which relates the inputs and
@@ -353,15 +356,29 @@ impl Sig {
                     path: None,
                 };
                 let axiom = Self::relabs_axiom(
-                    code,
+                    code.clone(),
                     inputs.clone(),
                     output.clone(),
                 );
-                Op::Fun(FunOp{
-                    inputs,
-                    output,
-                    axioms: vec![axiom],
-                })
+                let extra_axioms = if is_total {
+                    vec![
+                        constructions::totality_axiom(
+                            code.clone(),
+                            inputs.clone(),
+                            output.clone(),
+                        ).build(&mut Gen::new())
+                    ]
+                } else {
+                    Vec::new()
+                };
+                (
+                    Op::Fun(FunOp{
+                        inputs,
+                        output,
+                        axioms: vec![axiom],
+                    }),
+                    extra_axioms,
+                )
             }
         } else {
             // If this is a higher-order function, don't give
@@ -370,14 +387,21 @@ impl Sig {
             if output == VType::prop() {
                 todo!("Handle higher-order relations")
             } else {
-                Op::Fun(FunOp{
+                (Op::Fun(FunOp{
                     inputs,
                     output,
                     axioms: Vec::new(),
-                })
+                }), Vec::new())
             }
         };
-        self.ops.push((ident, tas, op));
+        self.ops.push((ident.clone(), tas.clone(), op));
+        for axiom in extra_axioms {
+            self.axioms.push(Axiom {
+                tas: tas.clone(),
+                inst_mode: InstMode::Code(ident.clone()),
+                body: axiom,
+            })
+        }
         Ok(())
     }
 

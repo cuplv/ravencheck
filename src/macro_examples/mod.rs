@@ -15,4 +15,5 @@ mod sets;
 mod sets_using_alias;
 mod sum;
 mod sum_small;
+mod totality;
 mod type_parameter_sets;
