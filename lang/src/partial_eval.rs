@@ -390,29 +390,6 @@ impl Comp {
                         //     self = branch;
                         // }
                         Val::Var(x, types, path, true) => {
-                            // let mut branches = Vec::<Comp>::new();
-                            // for (arm, branch) in arms.into_iter() {
-                            //     // Each branch should start with a
-                            //     // quantification of any values in the
-                            //     // constructor --- or an equation (to
-                            //     // target) if the constructor has no
-                            //     // values.
-                            //     let branch = build_symbolic_branch(
-                            //         Val::Var(
-                            //             x.clone(),
-                            //             types.clone(),
-                            //             path.clone(),
-                            //             true,
-                            //         ),
-                            //         arm,
-                            //         *branch,
-                            //         sig,
-                            //         gen,
-                            //     );
-                            //     branches.push(branch);
-                            // }
-                            // self = build_symbolic_match(branches, sig, gen);
-                            
                             // As with Ite, match cases evaluate in
                             // parallel and don't affect each other,
                             // so we send distinct copies of the stack
@@ -420,6 +397,30 @@ impl Comp {
                             let arms = arms
                                 .into_iter()
                                 .map(|(arm, branch)| {
+                                    // Before evaluating the branch,
+                                    // we need to handle the bound
+                                    // contents of the constructor
+                                    // just like we would from a
+                                    // quantifier.
+
+                                    // First, get the list of inputs
+                                    // types for the arm's
+                                    // constructor.
+
+                                    // Next, zip them with the arm's
+                                    // patterns (unwrapped into
+                                    // vnames).
+
+                                    // But we can't "modify the match
+                                    // signature" like we do for
+                                    // quantifiers... how do we save
+                                    // the fact that tuples have been
+                                    // split?
+
+                                    // I'll leave this for later, and
+                                    // avoid putting tuples in enums
+                                    // for now.
+
                                     let mut branch_cases = branch
                                         .partial_eval_loop(
                                             sig,
