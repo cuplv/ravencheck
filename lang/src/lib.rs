@@ -18,6 +18,7 @@ pub use cbpv::{
 };
 mod constructions;
 mod depth;
+mod eliminate_match;
 pub mod epr_check;
 mod expand_funs;
 mod expand_types;

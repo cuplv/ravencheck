@@ -299,9 +299,8 @@ impl Val {
             // Since this is a negative variable, we can just flip the
             // sign here and make a positive demand.
             Self::Var(x, types, path, false) => {
-                panic!("Huh!");
-                // dem.add_positive(x);
-                // Self::Var(x.clone(), types.clone(), path.clone(), true)
+                dem.add_positive(x);
+                Self::Var(x.clone(), types.clone(), path.clone(), true)
             }
             Self::Literal(Literal::LogTrue) =>
                 Self::Literal(Literal::LogFalse),
