@@ -42,6 +42,7 @@ mod rvn {
         }
     }
 
+    // This is equivalent to the following #[annotate(..)] condition.
     #[annotate_multi]
     #[for_values(a: Nat)]
     #[for_call(get_zero(a) => z)]
@@ -99,6 +100,12 @@ mod rvn {
         }
     }
 
+    // The #[annotate_multi] command allows you to recursively verify
+    // multiple function calls together, allowing for conditions like
+    // commutativity.
+    //
+    // Unlike #[annotate(..)], you must explicitly forall-quantify the
+    // inputs to the calls with the #[for_values] line.
     #[annotate_multi]
     #[for_values(a: Nat, b: Nat)]
     #[for_call(add_alt(a,b) => c)]
