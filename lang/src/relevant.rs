@@ -49,6 +49,9 @@ impl Relevant {
         self
     }
     pub fn add_oc(mut self, oc: OpCode, sig: &Sig) -> Self {
+        if &oc.ident == "special_recursive" {
+            return self;
+        }
         self.ops.insert(oc.clone());
         match sig.get_applied_op_or_con(&oc).unwrap() {
             Oc::Con(ts) => {
@@ -168,7 +171,7 @@ impl Val {
         match self {
             Self::Literal(..) => {},
             Self::OpCode(om, oc) => match om {
-                OpMode::Const | OpMode::ZeroArgAsConst => {
+                OpMode::Const | OpMode::ZeroArgAsConst(_) => {
                     rel = rel.add_oc(oc.clone(), sig);
                 }
                 OpMode::RelAbs => panic!("free RelAbs should be gone before checking 'relevant'"),

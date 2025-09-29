@@ -18,6 +18,7 @@ use ravenlang::{
     HypotheticalCall,
     InstMode,
     Op,
+    OpCode,
     Pattern,
     Quantifier,
     RirFn,
@@ -36,7 +37,7 @@ use std::collections::{HashMap, HashSet};
 pub struct Rcc {
     sig: CheckedSig,
     defs: HashMap<String, Comp>,
-    goals: Vec<Goal>,
+    goals: Vec<(Option<CheckedSig>, Goal)>,
     touched_paths: HashSet<String>,
 }
 
@@ -60,7 +61,7 @@ impl Rcc {
     }
 
     fn get_goal_by_title(&self, title: &str) -> Option<&Goal> {
-        for goal in &self.goals {
+        for (_, goal) in &self.goals {
             if &goal.title == title {
                 return Some(goal);
             }
@@ -73,7 +74,21 @@ impl Rcc {
             Some(_) =>
                 Err(format!("You tried to define '{}' twice", &goal.title)),
             None => {
-                self.goals.push(goal);
+                self.goals.push((None, goal));
+                Ok(())
+            }
+        }
+    }
+    fn push_goal_ctx(
+        &mut self,
+        goal: Goal,
+        sig: CheckedSig
+    ) -> Result<(), String> {
+        match self.get_goal_by_title(&goal.title) {
+            Some(_) =>
+                Err(format!("You tried to define '{}' twice", &goal.title)),
+            None => {
+                self.goals.push((Some(sig), goal));
                 Ok(())
             }
         }
@@ -240,6 +255,7 @@ impl Rcc {
             Builder::seq_many(code_calls, |_| axiom_body)
             .quant(Quantifier::Forall, qsig.clone())
             .build(&mut igen);
+
         // Sanity-check that the generated axiom is well-formed
         axiom.type_check_r(
             &CType::Return(VType::prop()),
@@ -247,8 +263,31 @@ impl Rcc {
                 self.sig.0.clone(),
                 Vec::new(),
             )
-        ).expect("vc type error");
-        // Assume the axiom
+        ).expect(&format!(
+            "type error in generated vc for '{}'",
+            &prop_ident,
+        ));
+
+        let guarded_axiom = axiom
+            .clone()
+            .builder()
+            .guard_recursive()
+            .build(&mut igen);
+
+        // Create a temporary sig which assumes the recursion-guarded
+        // version of the axiom, and is prepared to add recursion
+        // guards to the expanded definitions.
+        let mut vc_sig = self.sig.clone();
+        let recs: HashSet<OpCode> =
+            calls.iter().map(|c| OpCode::fun_types(c.ident.clone(), Vec::new())).collect();
+        vc_sig.0.recs = Some(recs);
+        vc_sig.0.axioms.push(Axiom {
+            tas: Vec::new(),
+            inst_mode: InstMode::Rules(Vec::new()),
+            body: guarded_axiom,            
+        });
+
+        // Assume the non-guarded axiom in the main sig.
         self.sig.0.axioms.push(Axiom {
             tas: Vec::new(),
             inst_mode: InstMode::Rules(Vec::new()),
@@ -295,12 +334,17 @@ impl Rcc {
         ).expect("vc type error");
         println!("Just type-checked this vc: {:?}", vc);
 
-        self.push_goal(Goal {
-            title: prop_ident.clone(),
-            tas: Vec::new(),
-            condition: vc,
-            should_be_valid: true,
-        })?;
+        // Push the goal, using the special vc_sig to eventually
+        // perform the verification.
+        self.push_goal_ctx(
+            Goal {
+                title: prop_ident.clone(),
+                tas: Vec::new(),
+                condition: vc,
+                should_be_valid: true,
+            },
+            vc_sig,
+        )?;
         Ok(())
     }
 
@@ -472,8 +516,12 @@ impl Rcc {
     pub fn check_goals(self) {
         let Rcc{sig, goals, ..} = self;
         let mut failures = Vec::new();
-        for goal in goals.into_iter() {
-            match sig.check_goal(goal) {
+        for (ctx,goal) in goals.into_iter() {
+            let specific_sig = match ctx {
+                Some(goal_sig) => goal_sig,
+                None => sig.clone(),
+            };
+            match specific_sig.check_goal(goal) {
                 Ok(()) => {},
                 Err(e) => failures.push(e),
             }

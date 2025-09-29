@@ -59,6 +59,7 @@ mod vname;
 pub use vname::VName;
 mod gen;
 pub use gen::Gen;
+mod tag_recursive;
 
 mod syn_to_cbpv;
 pub use syn_to_cbpv::{
@@ -128,6 +129,16 @@ impl Comp {
         // Partial evaluation
         let cases = self.partial_eval(sig, gen, starting_name);
         // println!("got {} cases from partial_eval", cases_pe.len());
+
+        // Add recursion guards if defined
+        let cases = match &sig.recs {
+            Some(recs) => cases.into_iter().map(|(name,comp)| {
+                println!("Adding recursion guards for {:?}", &recs);
+                let comp = comp.tag_recursive(sig, gen, recs);
+                (name, comp)
+            }).collect::<Vec<_>>(),
+            None => cases,
+        };
 
         // Match elimination
         let cases = cases.into_iter().map(|(name,comp)| {

@@ -1,41 +1,7 @@
 use crate::cbpv::Comp;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
-
-// /// A sort is a base type
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub enum Sort {
-//     Prop,
-//     UI(String),
-// }
-
-// impl Sort {
-//     pub fn prop() -> Self { Self::Prop }
-//     pub fn string() -> Self { Self::UI(format!("String")) }
-//     pub fn nat() -> Self { Self::UI(format!("Nat")) }
-//     pub fn set() -> Self { Self::UI(format!("Set")) }
-//     pub fn ui<T: ToString>(t: T) -> Self { Self::UI(t.to_string()) }
-//     pub fn as_string(&self) -> String {
-//         match self {
-//             Self::Prop => format!("Bool"),
-//             Self::UI(s) => format!("s_{}", s),
-//         }
-//     }
-//     // This one displays the sort as it would appear in the surface
-//     // language.
-//     pub fn render(&self) -> String {
-//         match self {
-//             Self::Prop => format!("bool"),
-//             Self::UI(s) => format!("{}", s),
-//         }
-//     }
-//     pub fn unwrap_ui(self) -> String {
-//         match self {
-//             Self::UI(s) => s,
-//             _ => panic!("Tried to unwrap non-ui sort"),
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpCode {
@@ -73,6 +39,13 @@ impl fmt::Display for OpCode {
 }
 
 impl OpCode {
+    pub fn special_recursive() -> Self {
+        Self{
+            ident: format!("special_recursive"),
+            types: Vec::new(),
+            path: None,
+        }
+    }
     pub fn fun_types<T: ToString>(
         fun_name: T,
         types: Vec<VType>,
@@ -512,6 +485,10 @@ pub struct Sig {
     pub ops: Vec<(String, Vec<String>, Op)>,
     // Note that axioms here should already be in normal form.
     pub axioms: Vec<Axiom>,
+    // OpCodes that should trigger the recursive flag and force
+    // assumption of the Inductive Hypothesis, in a recursive
+    // annotation problem.
+    pub recs: Option<HashSet<OpCode>>,
 }
 
 impl Sig {
@@ -520,6 +497,7 @@ impl Sig {
             type_defs: HashMap::new(),
             ops: Vec::new(),
             axioms: Vec::new(),
+            recs: Some(HashSet::new()),
         }
     }
     pub fn sorts(&self) -> HashMap<String,usize> {

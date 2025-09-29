@@ -185,7 +185,8 @@ impl Comp {
                                         // self = Comp::return1(Val::EnumCon(oc, vs));
 
                                         if vs.len() == 0 {
-                                            let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            // let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            let ret_v = oc.as_zero_arg_as_const();
                                             self = Comp::return1(ret_v);
                                         } else {
                                             // First, we need to flatten the
@@ -259,7 +260,8 @@ impl Comp {
                                     }
                                     Ok(Oc::Op(Op::Fun(op))) => {
                                         if vs.len() == 0 {
-                                            let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            // let ret_v = Val::OpCode(OpMode::ZeroArgAsConst, oc);
+                                            let ret_v = oc.as_zero_arg_as_const();
                                             self = Comp::return1(ret_v);
                                         } else {
                                             // First, we need to flatten the

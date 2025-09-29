@@ -21,7 +21,7 @@ pub enum Literal {
 pub enum OpMode {
     Const,
     RelAbs,
-    ZeroArgAsConst,
+    ZeroArgAsConst(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,7 +81,7 @@ impl Val {
         Self::OpCode(OpMode::RelAbs, code)
     }
     pub fn zero_arg_as_const(code: OpCode) -> Self {
-        Self::OpCode(OpMode::ZeroArgAsConst, code)
+        Self::OpCode(OpMode::ZeroArgAsConst(true), code)
     }
     pub fn ret(self) -> Comp {
         Comp::return1(self)

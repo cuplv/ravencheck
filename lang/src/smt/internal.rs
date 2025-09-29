@@ -198,6 +198,8 @@ fn declare_con_exclusions(
 }
 
 fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::Result<()> {
+    ctx.declare_const(format!("F_special_recursive____"), ctx.atom("Bool"))?;
+
     let (relevant, inst_axioms) = sig.relevant_with_axioms(term);
 
     for t in relevant.base_types() {
@@ -465,8 +467,12 @@ impl <'a> Context<'a> {
             Val::Literal(Literal::LogFalse) =>
                 Ok(self.ctx.false_()),
             Val::OpCode(om,oc) => match om {
-                OpMode::Const | OpMode::ZeroArgAsConst =>
+                OpMode::Const =>
                     Ok(self.ctx.atom(oc.render_smt())),
+                OpMode::ZeroArgAsConst(true) =>
+                    Ok(self.ctx.atom(oc.render_smt())),
+                OpMode::ZeroArgAsConst(false) =>
+                    Ok(self.ctx.not(self.ctx.atom(oc.render_smt()))),
                 OpMode::RelAbs =>
                     panic!("RelAbs({:?}) should not appear as a value after normalization", oc),
             }

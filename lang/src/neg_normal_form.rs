@@ -2,6 +2,8 @@ use crate::{
     Binder1,
     Comp,
     Literal,
+    OpCode,
+    OpMode,
     Val,
     VName,
     VType,
@@ -306,6 +308,8 @@ impl Val {
                 Self::Literal(Literal::LogFalse),
             Self::Literal(Literal::LogFalse) =>
                 Self::Literal(Literal::LogTrue),
+            Self::OpCode(OpMode::ZeroArgAsConst(b), oc) =>
+                Self::OpCode(OpMode::ZeroArgAsConst(!b), oc.clone()),
             _ => panic!("Can't demand (negative) non-prop value {:?}", self),
         }
     }

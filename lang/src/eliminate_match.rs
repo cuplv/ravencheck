@@ -45,7 +45,7 @@ impl Comp {
             ),
             Self::Match(target, arms) => {
                 match target {
-                    Val::OpCode(OpMode::ZeroArgAsConst, code) => {
+                    Val::OpCode(OpMode::ZeroArgAsConst(_), code) => {
                         let (_,branch) = MatchArm::select(&code.ident, arms)
                             .expect("typed match should have matching arm");
                         branch
@@ -113,7 +113,7 @@ fn build_symbolic_branch(
         Builder::return_(target)
             .eq_ne(
                 true,
-                Builder::return_(Val::OpCode(OpMode::ZeroArgAsConst, arm.code))
+                Builder::return_(arm.code.as_zero_arg_as_const())
             )
     } else {
         // Relate target to the newly quantified vars, using the
