@@ -430,7 +430,7 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 let path_str = quote!{ #path }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     if rcc.touch_new_path(#path_str) {
-                        #path::ravencheck_exports::apply_exports(&mut rcc);
+                        rcc = #path::ravencheck_exports::apply_exports(rcc);
                     }
                 }).unwrap();
                 out.push(s);
@@ -562,8 +562,9 @@ fn process_module(
                     pub mod ravencheck_exports {
                         use #cratename::Rcc;
 
-                        pub fn apply_exports(rcc: &mut Rcc) {
+                        pub fn apply_exports(mut rcc: Rcc) -> Rcc {
                             #(#export_stmts)*
+                            rcc
                         }
                     }
                 };
