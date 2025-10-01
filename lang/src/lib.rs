@@ -133,7 +133,7 @@ impl Comp {
         // Add recursion guards if defined
         let cases = match &sig.recs {
             Some(recs) => cases.into_iter().map(|(name,comp)| {
-                println!("Adding recursion guards for {:?}", &recs);
+                // println!("Adding recursion guards for {:?}", &recs);
                 let comp = comp.tag_recursive(sig, gen, recs);
                 (name, comp)
             }).collect::<Vec<_>>(),
@@ -143,7 +143,7 @@ impl Comp {
         // Match elimination
         let cases = cases.into_iter().map(|(name,comp)| {
             let comp = comp.eliminate_match(sig,gen);
-            println!("After match elimination: {:?}", comp);
+            // println!("After match elimination: {:?}", comp);
             (name, comp)
         }).collect::<Vec<_>>();
 
@@ -411,12 +411,12 @@ Type error in axiom \"{}\": {:?}",
             syn::parse_str(&ty_string.to_string()).unwrap()
         ).unwrap();
         let ty2 = ty.clone().expand_aliases(&self.type_aliases());
-        println!(
-            "Adding alias: {} = {} => {}",
-            alias.to_string(),
-            ty.render(),
-            ty2.render(),
-        );
+        // println!(
+        //     "Adding alias: {} = {} => {}",
+        //     alias.to_string(),
+        //     ty.render(),
+        //     ty2.render(),
+        // );
         self.add_alias(alias, ty2);
     }
 

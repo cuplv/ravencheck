@@ -43,7 +43,7 @@ mod rvn {
     }
 
     #[declare]
-    fn has_length_r(l: &ListR, n: &Nat) -> bool {
+    fn has_length_r(_l: &ListR, _n: &Nat) -> bool {
         todo!()
     }
 
@@ -55,7 +55,7 @@ mod rvn {
     fn length_r(l: &ListR) -> Nat {
         match l {
             ListR::Nil => Nat::Z,
-            ListR::Cons(n, l2) => Nat::S(Box::new(length_r(l2)))
+            ListR::Cons(_n, l2) => Nat::S(Box::new(length_r(l2)))
         }
     }
 

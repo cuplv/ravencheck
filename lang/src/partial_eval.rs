@@ -38,7 +38,7 @@ impl Comp {
     pub fn partial_eval(self, sig: &Sig, gen: &mut Gen, name: CaseName) -> Vec<(CaseName,Self)> {
         let cases = self.partial_eval_loop(sig, gen, Stack::new(), Vec::new(), name);
         // println!("partial_eval passing up {} cases", cases.len());
-        println!("\npartial_eval returning {:?}\n", cases);
+        // println!("\npartial_eval returning {:?}\n", cases);
         cases
     }
 

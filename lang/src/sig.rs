@@ -570,7 +570,7 @@ impl Sig {
             s,
         );
         let def = TypeDef::Enum(variants);
-        println!("Defined sum {} with tas {:?} as {:?}", &s, tas, def);
+        // println!("Defined sum {} with tas {:?} as {:?}", &s, tas, def);
         self.type_defs.insert(s, (tas, def));
     }
     pub fn get_op(&self, s: &str) -> Option<(&Vec<String>, &Op)> {

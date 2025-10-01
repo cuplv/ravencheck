@@ -182,13 +182,13 @@ fn declare_con_exclusions(
             .build(&mut igen)
             .normal_form_single_case(&sig, &mut igen);
         let mut builder = Context::new(ctx);
-        println!(
-            "SMT Axiom [Rel-Con-Diff for {} vs. {}]...",
-            code1, code2,
-        );
+        // println!(
+        //     "SMT Axiom [Rel-Con-Diff for {} vs. {}]...",
+        //     code1, code2,
+        // );
         let e = builder.smt(&axiom)?;
         println!(
-            "SMT Axiom [Rel-Con-Diff for {} vs. {}]: {}",
+            "SMT Axiom [Rel-Con-Diff for {} vs. {}]: {}\n",
             code1, code2,
             ctx.display(e[0])
         );
@@ -207,7 +207,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
             ctx.declare_sort(format!("{}", t.render_smt()), 0)?;
             println!("Declared {} as {}", t, t.render_smt());
         } else {
-            println!("Ignoring relevant type Bool");
+            // println!("Ignoring relevant type Bool");
         }
     }
 
@@ -281,7 +281,7 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
     for a in &inst_axioms {
         let mut builder = Context::new(ctx);
         let e = builder.smt(a)?;
-        println!("SMT Axiom: {}", ctx.display(e[0]));
+        println!("SMT Axiom: {}\n", ctx.display(e[0]));
         ctx.assert(e[0])?;
     }
     Ok(())
@@ -308,7 +308,7 @@ pub fn check_sat_of_normal(
     // println!("Normal: {:?}", term_normal);
     let mut builder = Context::new(&mut ctx);
     let e = builder.smt(&term)?;
-    println!("SMT: {}", ctx.display(e[0]));
+    println!("SMT VC: {}\n", ctx.display(e[0]));
     ctx.assert(e[0])?;
     return ctx.check()    
 }
@@ -425,7 +425,7 @@ impl <'a> Context<'a> {
     }
 
     pub fn smt(&mut self, term: &Comp) -> std::io::Result<Vec<SExpr>> {
-        println!("\n\nCalled smt on {:?}\n\n", term);
+        // println!("\n\nCalled smt on {:?}\n\n", term);
         self.smt_comp(term)
     }
 

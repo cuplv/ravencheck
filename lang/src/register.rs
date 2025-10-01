@@ -153,7 +153,7 @@ impl Sig {
             inst_mode: InstMode::Rules(inst_rules.clone()),
             body,
         };
-        println!("Pushing axiom with rules {:?}", inst_rules);
+        // println!("Pushing axiom with rules {:?}", inst_rules);
         self.axioms.push(axiom);
         Ok(())
     }

@@ -227,7 +227,7 @@ impl Sig {
                     for (_code, inputs) in cs {
                         for i in inputs {
                             for a_t in i.clone().flatten() {
-                                println!("Adding {} due to association with {}", a_t.render(), t);
+                                // println!("Adding {} due to association with {}", a_t.render(), t);
                                 relevant =
                                     relevant.add_base_type(
                                         a_t.unwrap_base().unwrap()
@@ -273,13 +273,13 @@ impl Sig {
 
         // Add relevant items from axioms
         for a in &inst_axioms {
-            println!("axiom: {:?}", &a);
+            // println!("axiom: {:?}", &a);
             relevant = relevant.union(a.relevant(self));
         }
 
         // Do not recurse...
 
-        println!("Got relevant: {:?}", relevant);
+        // println!("Got relevant: {:?}", relevant);
         (relevant, inst_axioms)
     }
 }
@@ -296,7 +296,7 @@ impl Axiom {
             let r = right;
             match (l,b) {
                 (BType::UI(name_l, args_l), BType::UI(name, args)) if name_l == name => {
-                    println!("Matching {} with {}", l, b);
+                    // println!("Matching {} with {}", l, b);
                     let mut matches: HashMap<String,VType> = HashMap::new();
                     for (a_l,a) in args_l.iter().zip(args) {
                         match a_l.clone().unwrap_base().unwrap().get_ta() {
@@ -311,16 +311,16 @@ impl Axiom {
                         args.push(t.expand_types(&matches));
                     }
                     // args.push(r.clone().expand_types(&matches));
-                    println!("Subbing types {:?} for {:?}", &args, &self.tas);
+                    // println!("Subbing types {:?} for {:?}", &args, &self.tas);
                     let body = self.body.clone().expand_types_from_call(
                         &args,
                         &self.tas
                     ).unwrap();
-                    println!("Inst axiom body: {:?}", &body);
+                    // println!("Inst axiom body: {:?}", &body);
                     return Some(body);
                 }
-                (l,b) => {
-                    println!("Did not match {} with {}", l, b);
+                (_l,_b) => {
+                    // println!("Did not match {} with {}", l, b);
                 }
             }
         }

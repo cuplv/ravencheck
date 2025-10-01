@@ -144,7 +144,7 @@ impl Comp {
                                     panic!("Got direct fun {:?} in Pred", oc)
                                 }
                                 Oc::Op(Op::Pred(op)) => {
-                                    println!("Expanding pred {}...", &oc.ident);
+                                    // println!("Expanding pred {}...", &oc.ident);
                                     self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
                                     break;
                                 }
@@ -211,11 +211,11 @@ impl Comp {
                                 output.clone(),
                             );
                             let op = FunOp{inputs, output, axioms: vec![axiom]};
-                            println!("Expanding call {}...", &oc);
+                            // println!("Expanding call {}...", &oc);
                             self = expand_fun(op, vs, xs, *m, sig, gen);
                         }
                         Oc::Op(Op::Fun(op)) => {
-                            println!("Expanding call {}...", &oc);
+                            // println!("Expanding call {}...", &oc);
                             self = expand_fun(op, vs, xs, *m, sig, gen);
                             break;
                         }
@@ -223,7 +223,7 @@ impl Comp {
                             panic!("Got pred op {:?} in Fun", oc)
                         }
                         Oc::Op(Op::Rec(op)) => {
-                            println!("Expanding call {}...", &oc);
+                            // println!("Expanding call {}...", &oc);
                             self = expand_fun(op.as_fun_op(), vs, xs, *m, sig, gen);
                             break;
                         }
