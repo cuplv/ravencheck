@@ -179,47 +179,66 @@ mod rvn {
         )
     }
 
-    // #[assume]
-    // fn add_commutative() -> bool {
-    //     forall(|a: Nat, b: Nat| {
-    //         add(a,b) == add(b,a)
-    //     })
-    // }
+    // Now, let's look at a simpler example of quantifier
+    // instantiation *without* induction.
+    //
+    // First, verify the following property:
 
-    // #[annotate_multi]
-    // #[for_values(a: Nat, b: Nat, b_plus: Nat)]
-    // #[for_call(add(a,b) => c)]
-    // #[for_call(add(a,b_plus) => c_plus)]
-    // fn add_s() -> bool {
-    //     implies(
-    //         b_plus == Nat::S(b),
-    //         c_plus == Nat::S(c),
-    //     )
-    // }
+    #[annotate_multi]
+    #[for_values(a: Nat, b: Nat, b_plus: Nat)]
+    #[for_call(add(a,b) => c)]
+    #[for_call(add(a,b_plus) => c_plus)]
+    fn add_s() -> bool {
+        implies(
+            b_plus == Nat::S(b),
+            c_plus == Nat::S(c),
+        )
+    }
 
-    // #[annotate_multi]
-    // #[for_values(a: Nat, a_plus: Nat, b: Nat, b_plus: Nat)]
-    // #[for_call(add(a,b) => c)]
-    // #[for_call(add(a_plus,b) => c_plus)]
-    // #[for_inst(add(b, a_plus))]
-    // #[for_inst(Nat::S(add(b,a)))]
-    // fn add_s2() -> bool {
-    //     implies(
-    //         a_plus == Nat::S(a),
-    //         c_plus == Nat::S(c),
-    //     )
-    // }
+    // Then, verify the following property non-inductively, just using
+    // the assumptions and verified annotations we have on 'add' so
+    // far (no unrolling).
+    //
+    // This problem can be solved by applying 'add_commutative' and
+    // 'add_s' to transform one side of the equation. But once again,
+    // the solver doesn't know that the intermediate expression
+    // 'add(b, Nat::S(a))' actually has a defined value, so it can't
+    // apply the rules: we need an instantiation.
+    //
 
-    // #[verify]
-    // fn add_s_c() -> bool {
-    //     forall(|a: Nat, b: Nat| {
-    //         let _ = add(b, Nat::S(a));
-    //         let _ = Nat::S(add(b,a));
+    #[verify]
+    fn add_s_c2() -> bool {
+        forall(|a: Nat, b: Nat, a_minus: Nat| {
+            // Since we are not in an inductive proof, we can simply
+            // let-bind the expressions that need instantiation, and
+            // ignore what those values actually are.
+            let _ = add(b, Nat::S(a));
+            // Since we aren't unrolling 'add' in this problem, the
+            // solver doesn't even know that Nat::S(add(b,a)) has a
+            // value! We need to instantiate that as well.
+            let _ = Nat::S(add(b,a));
 
-    //         add(Nat::S(a), b) == Nat::S(add(a,b))
-    //     })
-    // }
+            let goal =
+                add(Nat::S(a), b) == Nat::S(add(a,b));
 
+            // Finally, to prove the goal, we need to match on
+            // 'a'. This instructs the solver to only consider the
+            // cases in which 'a' is Z or S of something, and to
+            // ignore the case in which it is neither. That case isn't
+            // real, of course, but once again, the solver doesn't
+            // know.
+            match a {
+                Nat::Z => goal,
+                Nat::S(a_minus) => goal,
+            }
+        })
+    }
+
+    // This version of 'add' is more verbose than the original, but
+    // makes verification of 'commute' more straightforward, because
+    // after unrolling, the two calls to 'add_alt' both apply to the
+    // same pair of values---a_minus and b_minus---just in different
+    // orders.
     #[define]
     #[recursive]
     fn add_alt(a: Nat, b: Nat) -> Nat {
