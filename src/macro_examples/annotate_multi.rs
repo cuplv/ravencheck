@@ -72,7 +72,7 @@ mod rvn {
     // directly verify, but the same property for 'add_alt' does
     // directly verify.
     //
-    //     add(a,b) == a(b,a)
+    //     add(a,b) == add(b,a)
     //
     // We need to do some preliminary work to verify the unmodified
     // 'add'.
