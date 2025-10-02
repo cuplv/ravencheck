@@ -68,19 +68,156 @@ mod rvn {
         }
     }
 
-    // The following commutativity property for 'add' does not
+    // The following 'add_commutativity' property for 'add' does not
     // directly verify, but the same property for 'add_alt' does
     // directly verify.
     //
-    // What extra annotation(s) would let us verify 'add' without
-    // modifying it?
+    //     add(a,b) == a(b,a)
+    //
+    // We need to do some preliminary work to verify the unmodified
+    // 'add'.
+
+
+    // First, we need two lemmas. We'll just assume these for now, but
+    // we should ultimately verify them.
+    //
+    // First, assume that you can commute an S from one argument to
+    // the other, without moving the arguments themselves:
+    //
+    //     add(a, S(b)) == add(S(a), b)
+    //
+    #[assume]
+    fn add_commute_s() -> bool {
+        forall(|a: Nat, b: Nat| {
+            add(a, Nat::S(b))
+                == add(Nat::S(a), b)
+        })
+    }
+
+    // Then, assume that adding a Z on the right produces the left
+    // argument unchanged. We only need this for the right
+    // side. Because the definition of 'add' pattern-matches the left
+    // argument, it's "immediately obvious" from the 'add' definition
+    // that Z on the right produces the left argument.
+    //
+    //     add(a, Z) == a
+    #[assume]
+    fn add_z_right() -> bool {
+        forall(|a: Nat| {
+            add(a, Nat::Z) == a
+        })
+    }
+
+    // Now we can verify add_commutative. But to do so, we need to add
+    // a "quantifier instantiation".
+    //
+    // In the inductive verification condition, the calls to both
+    // add(a,b) and add(b,a) are unrolled by one step.
+    //
+    // When a=Z, and b=S(b_minus), this unrolling produces the
+    // verification condition:
+    //
+    //     b == S(add(b_minus, Z))
+    //
+    // Our 'add_z_right' assumption takes care of that! It allows the
+    // solver to tranform the condition to:
+    //
+    //     b == S(b_minus)
+    //
+    // and we know that's true by construction. When b=Z, we get the
+    // same thing but flipped, which 'add_z_right' can equally take
+    // care of.
+    //
+    // The tricky case is a=S(a_minus) and b=S(b_minus), which after
+    // unrolling gives us the condition:
+    //
+    //     S(add(a_minus, S(b_minus))) ==
+    //     S(add(b_minus, S(a_minus)))
+    //
+    // If we were writing a manual proof, we could solve this in two
+    // steps. First, apply our assumed 'add_commute_s' rule to move
+    // the S:
+    //
+    //     S(add(a_minus,    S(b_minus))) ==
+    //     S(add(S(b_minus), a_minus   ))
+    //
+    // Second, apply our add_commutative assumption, which is valid
+    // for both adds since each has a structurally-smaller argument
+    // than the original call.
+    //
+    //     S(add(S(b_minus), a_minus)) ==
+    //     S(add(S(b_minus), a_minus))
+    //
+    // Done! Unfortunately, the solver can't take that first step,
+    // using 'add_commute_s'. The reason is that it isn't sure that
+    // the call 'add(S(b_minus), a_minus)' actually produces a
+    // value. We have't called 'add' with those specific arguments
+    // anywhere in our verification condition or in the
+    // single-unrolling of either call to 'add', and so (for
+    // decidability reasons), it assumes that 'add(S(b_minus),
+    // a_minus)' is undefined, and that 'add_commute_s' cannot be
+    // applied.
+    //
+    // We fix this by telling the solver that 'add(S(b_minus),
+    // a_minus)' is indeed defined, using the 'for_inst' line below.
+    #[annotate_multi]
+    // In order to make the 'for_inst' call, we quantify a_minus.
+    #[for_values(a: Nat, a_minus: Nat, b: Nat)]
+    #[for_call(add(a,b) => c)]
+    #[for_call(add(b,a) => d)]
+    // Assert that 'add(b, a_minus)' has a value. We don't need to
+    // actually reference that value in the verification condition.
+    #[for_inst(add(b, a_minus))]
+    fn add_commutative() -> bool {
+        // First consider the a == Z case.
+        implies(a == Nat::Z, c == d) &&
+        // Then, for the a == S(a_minus) case, assume the relation
+        // between a and a_minus.
+        implies(
+            a == Nat::S(a_minus),
+            c == d,
+        )
+    }
+
+    // #[assume]
+    // fn add_commutative() -> bool {
+    //     forall(|a: Nat, b: Nat| {
+    //         add(a,b) == add(b,a)
+    //     })
+    // }
 
     // #[annotate_multi]
-    // #[for_values(a: Nat, b: Nat)]
+    // #[for_values(a: Nat, b: Nat, b_plus: Nat)]
     // #[for_call(add(a,b) => c)]
-    // #[for_call(add(b,a) => d)]
-    // fn add_commutative() -> bool {
-    //     c == d
+    // #[for_call(add(a,b_plus) => c_plus)]
+    // fn add_s() -> bool {
+    //     implies(
+    //         b_plus == Nat::S(b),
+    //         c_plus == Nat::S(c),
+    //     )
+    // }
+
+    // #[annotate_multi]
+    // #[for_values(a: Nat, a_plus: Nat, b: Nat, b_plus: Nat)]
+    // #[for_call(add(a,b) => c)]
+    // #[for_call(add(a_plus,b) => c_plus)]
+    // #[for_inst(add(b, a_plus))]
+    // #[for_inst(Nat::S(add(b,a)))]
+    // fn add_s2() -> bool {
+    //     implies(
+    //         a_plus == Nat::S(a),
+    //         c_plus == Nat::S(c),
+    //     )
+    // }
+
+    // #[verify]
+    // fn add_s_c() -> bool {
+    //     forall(|a: Nat, b: Nat| {
+    //         let _ = add(b, Nat::S(a));
+    //         let _ = Nat::S(add(b,a));
+
+    //         add(Nat::S(a), b) == Nat::S(add(a,b))
+    //     })
     // }
 
     #[define]

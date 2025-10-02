@@ -1,4 +1,5 @@
 use syn::{
+    Expr,
     Item,
     ItemFn,
     parse::Parser,
@@ -28,6 +29,7 @@ use ravenlang::{
     VName,
     VType,
     Val,
+    syn_to_builder,
 };
 
 use std::collections::{HashMap, HashSet};
@@ -168,11 +170,12 @@ impl Rcc {
         Ok(())
     }
 
-    pub fn reg_fn_annotate_multi<const N1: usize, const N2: usize>(
+    pub fn reg_fn_annotate_multi<const N1: usize, const N2: usize, const N3: usize>(
         &mut self,
         should_fail: bool,
         value_lines: [&str; N1],
         call_lines: [&str; N2],
+        inst_lines: [&str; N3],
         item_fn: &str,
     ) -> Result<(), String> {
         // Parse syn values from strs
@@ -207,6 +210,20 @@ impl Rcc {
                  }
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let insts: Vec<Expr> = inst_lines
+            .into_iter()
+            .map(|inst| {
+                match syn::parse_str(inst) {
+                    Ok(inst) => Ok(inst),
+                    Err(e) => Err(format!(
+                        "Failed to parse #[for_inst({})] on item '{}'. This should be a Rust expression. Error: {}",
+                        inst,
+                        item_fn.sig.ident.to_string(),
+                        e,
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Parse the signature into Rir types, and keep the body.
         let i = RirFn::from_syn(item_fn)?;
@@ -226,6 +243,14 @@ impl Rcc {
             .map(|call| {
                 let call = call.into_rir();
                 call
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let insts: Vec<Builder> = insts
+            .into_iter()
+            .map(|inst| {
+                let b = syn_to_builder(inst)?;
+                Ok::<Builder, String>(b)
             })
             .collect::<Result<Vec<_>, _>>()?;
         // Apply type aliases
@@ -324,8 +349,19 @@ impl Rcc {
                 Ok::<(Builder,VName), String>((b, VName::new(&call.output)))
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        // In the verification condition, we bind the
+        // quantifier-instantiation expressions to fresh variables
+        // that are then never referenced in the body.
+        //
+        // These come after the inductive-expansion calls, so that
+        // they can reference the outputs of those.
         let vc =
-            Builder::seq_many(def_calls, |_| i.body.builder())
+            Builder::seq_many(def_calls, |_| {
+                Builder::seq_many_gen(insts, |_| {
+                    i.body.builder()
+                })
+            })
             .quant(Quantifier::Forall, qsig)
             .build(&mut igen);
         // Sanity-check that the generated vc is well-formed

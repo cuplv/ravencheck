@@ -33,6 +33,7 @@ enum RvnItemAttr {
     Define,
     Falsify,
     ForCall(String),
+    ForInst(String),
     ForValues(String),
     Import,
     InstRule(String),
@@ -85,6 +86,8 @@ impl RvnItemAttr {
                     }
                     Some("for_call") =>
                         Some(RvnItemAttr::ForCall(l.tokens.to_string())),
+                    Some("for_inst") =>
+                        Some(RvnItemAttr::ForInst(l.tokens.to_string())),
                     Some("for_type") => Some(RvnItemAttr::InstRule(l.tokens.to_string())),
                     Some("for_values") =>
                         Some(RvnItemAttr::ForValues(l.tokens.to_string())),
@@ -131,7 +134,7 @@ impl RvnItemAttr {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
-    AnnotateMulti(bool, Vec<String>, Vec<String>, ItemFn),
+    AnnotateMulti(bool, Vec<String>, Vec<String>, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The first boolean is `true` if this is a phantom
@@ -226,10 +229,12 @@ impl RccCommand {
             AnnotateMulti => match item {
                 Item::Fn(i) => {
                     let mut call_lines = Vec::new();
+                    let mut inst_lines = Vec::new();
                     let mut value_lines = Vec::new();
                     let mut should_fail = false;
                     for a in ras { match a {
                         RvnItemAttr::ForCall(c) => { call_lines.push(c); },
+                        RvnItemAttr::ForInst(i) => { inst_lines.push(i); },
                         RvnItemAttr::ForValues(l) => { value_lines.push(l); },
                         RvnItemAttr::ShouldFail => { should_fail = true; },
                         a => panic!(
@@ -242,6 +247,7 @@ impl RccCommand {
                         should_fail,
                         value_lines,
                         call_lines,
+                        inst_lines,
                         i
                     );
                     (Some(c), None)
@@ -378,13 +384,14 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 }).unwrap();
                 out.push(s);
             }
-            RccCommand::AnnotateMulti(should_fail, value_strs, call_strs, item_fn) => {
+            RccCommand::AnnotateMulti(should_fail, value_strs, call_strs, inst_strs, item_fn) => {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_annotate_multi(
                         #should_fail,
                         [#(#value_strs),*],
                         [#(#call_strs),*],
+                        [#(#inst_strs),*],
                         #item_str
                     ).unwrap();
                 }).unwrap();
