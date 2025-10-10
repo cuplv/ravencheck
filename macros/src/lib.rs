@@ -4,12 +4,14 @@ use quote::quote;
 
 use syn::{
     Attribute,
+    FnArg,
     Ident,
     Item,
     ItemFn,
     ItemMod,
     ItemUse,
     Meta,
+    Pat,
     Path,
     PathArguments,
     PathSegment,
@@ -17,6 +19,7 @@ use syn::{
     Stmt,
     Token,
     UseTree,
+    parse_quote,
 };
 use syn::ext::IdentExt;
 use syn::parse::Parser;
@@ -37,6 +40,8 @@ enum RvnItemAttr {
     ForValues(String),
     Import,
     InstRule(String),
+    // (State type, init, cond, step, finish)
+    Loopify(Ident, Ident, Ident, Ident, Ident, Ident),
     Phantom,
     Recursive,
     ShouldFail,
@@ -91,6 +96,27 @@ impl RvnItemAttr {
                     Some("for_type") => Some(RvnItemAttr::InstRule(l.tokens.to_string())),
                     Some("for_values") =>
                         Some(RvnItemAttr::ForValues(l.tokens.to_string())),
+                    Some("loopify") => {
+                        let parser =
+                            Punctuated
+                            ::<Ident,syn::Token![,]>
+                            ::parse_separated_nonempty;
+                        // let types = parser
+                        //     .parse2(l.tokens.clone())
+                        //     .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
+                        let idents: Punctuated<Ident,Token![,]> =
+                            parser.parse2(l.tokens.clone())
+                            .expect("the #[loopify(..)] attribute expects six Ident arguments");
+                        let idents: Vec<Ident> = idents.iter().cloned().collect();
+                        Some(RvnItemAttr::Loopify(
+                            idents[0].clone(),
+                            idents[1].clone(),
+                            idents[2].clone(),
+                            idents[3].clone(),
+                            idents[4].clone(),
+                            idents[5].clone(),
+                        ))
+                    }
                     _ => None,
                 }
             }
@@ -158,7 +184,7 @@ impl RccCommand {
         ras: Vec<RvnItemAttr>,
         item: Item,
         define: bool,
-    ) -> (Option<Self>, Option<Item>) {
+    ) -> (Vec<Self>, Option<Item>) {
         let mut phantom = false;
         let mut recursive = false;
         let mut total = false;
@@ -178,17 +204,107 @@ impl RccCommand {
             None
         };
         if define {
-            (Some(Self::Define(item, phantom, recursive, total)), ret_item)
+            (vec![Self::Define(item, phantom, recursive, total)], ret_item)
         } else {
-            (Some(Self::Declare(item, phantom, total)), ret_item)
+            (vec![Self::Declare(item, phantom, total)], ret_item)
         }
+    }
+
+    fn mk_loop(
+        state_type: Ident,
+        cond_type: Ident,
+        init: Ident,
+        comp: Ident,
+        step: Ident,
+        finish: Ident,
+        item: ItemFn,
+    ) -> (Vec<Self>, Option<Item>) {
+        // The given ItemFn should have an empty body, which we will fill in two ways.
+        assert!(
+            item.block.stmts.len() == 0,
+            "loopify function stub should have empty body",
+        );
+
+        // Get names of function args.
+        //
+        // This fails if args have complex patterns like _ or (a,b).
+        let arg_names: Vec<Ident> = item.sig.inputs
+            .iter()
+            .map(|a| match a {
+                FnArg::Typed(a) => match a.pat.as_ref() {
+                    Pat::Ident(p) => Some(p.ident.clone()),
+                    _ => None,
+                }
+                _ => None,
+            })
+            .collect::<Option<Vec<Ident>>>()
+            .expect("loopify function arg names should be simple idents, not complex patterns");
+
+        let wrapper_name = item.sig.ident.clone();
+        let tail_rec_name = Ident::new(&format!("{}_tail_rec", wrapper_name), Span::call_site());
+
+        let tail_rec_item: Item = parse_quote! {
+            fn #tail_rec_name(s: #state_type) -> #state_type {
+                match #comp(&s) {
+                    Option::<#cond_type>::Some(c) => {
+                        let s2 = #step(c, s);
+                        #tail_rec_name(s2)
+                    }
+                    Option::<#cond_type>::None => s
+                }
+            }
+        };
+        let mut wrapper_item = item.clone();
+        wrapper_item.block.stmts.push(parse_quote! {
+            let s_init = #init(#(#arg_names),*);
+        });
+        wrapper_item.block.stmts.push(parse_quote! {
+            let s_final = #tail_rec_name(s_init);
+        });
+        wrapper_item.block.stmts.push(Stmt::Expr(
+            parse_quote! { #finish(s_final) },
+            None,
+        ));
+        
+        let mut loop_item = item;
+        loop_item.block.stmts.push(parse_quote! {
+            let mut s_mut = #init(#(#arg_names),*);
+        });
+        loop_item.block.stmts.push(parse_quote! {
+            while let Some(c) = #comp(&s_mut) {
+                s_mut = #step(c, s_mut);
+            }
+        });
+        loop_item.block.stmts.push(Stmt::Expr(
+            parse_quote! { #finish(s_mut) },
+            None,
+        ));
+        // println!("Loop: {}", quote!{#loop_item});
+        // println!("Stepper: {}", quote!{#tail_rec_item});
+        // println!("Rec: {}", quote!{#wrapper_item});
+
+        // let ret_item = if !phantom {
+        //     Some(item.clone())
+        // } else {
+        //     None
+        // };
+        // if define {
+        //     (Some(Self::Define(item, phantom, recursive, total)), ret_item)
+        // } else {
+        //     (Some(Self::Declare(item, phantom, total)), ret_item)
+        // }
+        let commands = vec![
+            Self::Define(tail_rec_item, true, true, false),
+            Self::Define(Item::Fn(wrapper_item), true, false, false),
+        ];
+        (commands, Some(Item::Fn(loop_item)))
     }
 
     fn mk_goal(
         ras: Vec<RvnItemAttr>,
         item: Item,
         should_be_valid: bool,
-    ) -> (Option<Self>, Option<Item>) {
+    ) -> (Vec<Self>, Option<Item>) {
         assert!(
             ras.len() == 0,
             "#[verify] and #[falsify] should not have further attributes beneath them",
@@ -200,14 +316,14 @@ impl RccCommand {
                 item,
             ),
         };
-        (Some(Self::Goal(should_be_valid, item)), None)
+        (vec![Self::Goal(should_be_valid, item)], None)
     }
 
-    /// Attempt to extract a `RccCommand` from an [`Item`], also
+    /// Attempt to extract `RccCommand`s from an [`Item`], also
     /// returning the original (possibly modified) [`Item`] if it
     /// should remain in the module and be passed along to the Rust
     /// compiler.
-    fn from_item(mut item: Item) -> (Option<RccCommand>, Option<Item>) {
+    fn from_item(mut item: Item) -> (Vec<RccCommand>, Option<Item>) {
         use RvnItemAttr::*;
 
         let ras = RvnItemAttr::extract_from_item(&mut item);
@@ -215,14 +331,14 @@ impl RccCommand {
         // If there are no Ravencheck attrs, return the item
         // unchanged.
         if ras.len() == 0 {
-            return (None, Some(item));
+            return (Vec::new(), Some(item));
         }
         let mut ras = VecDeque::from(ras);
         match ras.pop_front().unwrap() {
             Annotate(call) => match item {
                 Item::Fn(i) => {
                     let c = RccCommand::Annotate(call, i);
-                    (Some(c), None)
+                    (vec![c], None)
                 }
                 item => panic!("Can't use #[annotate(..)] on {:?}", item),
             }
@@ -250,7 +366,7 @@ impl RccCommand {
                         inst_lines,
                         i
                     );
-                    (Some(c), None)
+                    (vec![c], None)
                 }
                 item => panic!("Can't use #[annotate_multi(..)] on {:?}", item),
             }
@@ -266,14 +382,14 @@ impl RccCommand {
                         ),
                     }}
                     let c = RccCommand::Assume(rules, i);
-                    (Some(c), None)
+                    (vec![c], None)
                 }
                 item => panic!("Can't use #[assume] on {:?}", item),
             }
             AssumeFor(call) => match item {
                 Item::Fn(i) => {
                     let c = RccCommand::AssumeFor(call, i);
-                    (Some(c), None)
+                    (vec![c], None)
                 }
                 item => panic!("Can't use #[assume(..)] on {:?}", item),
             }
@@ -283,12 +399,16 @@ impl RccCommand {
             Import => match item {
                 Item::Use(i) => {
                     let c = RccCommand::Import(i.clone());
-                    (Some(c), Some(Item::Use(i)))
+                    (vec![c], Some(Item::Use(i)))
                 }
                 item => panic!("Can't use #[import] on {:?}", item),
             }
             InstRule(_) =>
                 panic!("#[for_type(..)] should only appear under #[assume]"),
+            Loopify(st,ct,i,c,s,f) => match item {
+                Item::Fn(item) => Self::mk_loop(st,ct,i,c,s,f,item),
+                _ => panic!("#[loopify(..)] can only be used on a fn item"),
+            }
             Phantom =>
                 panic!("#[phantom] should only appear under #[declare] or #[define]"),
             Verify => Self::mk_goal(Vec::from(ras), item, true),
@@ -347,10 +467,11 @@ impl RccCommand {
         let mut commands: Vec<Self> = Vec::new();
         let mut items_out: Vec<Item> = Vec::new();
         for item in items.clone() {
-            let (c,i) = Self::from_item(item);
-            if let Some(c) = c {
-                commands.push(c);
-            }
+            let (mut c,i) = Self::from_item(item);
+            commands.append(&mut c);
+            // if let Some(c) = c {
+            //     commands.push(c);
+            // }
             if let Some(i) = i {
                 items_out.push(i);
             }
