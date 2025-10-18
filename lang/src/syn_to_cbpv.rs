@@ -454,6 +454,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         }
         Expr::If(ExprIf{ cond, mut then_branch, else_branch, .. }) => {
             let cond = syn_to_builder(*cond)?;
+            then_branch.stmts.reverse();
             let then_branch = match then_branch.stmts.pop() {
                 Some(s) => stmts_to_builder(s, then_branch.stmts)?,
                 None => Builder::return_(Val::unit()),
