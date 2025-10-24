@@ -160,7 +160,10 @@ impl Comp {
 
 impl MatchArm {
     // For now, this does nothing
-    fn expand_types(self, _subs: &Subs) -> Self { self }
+    fn expand_types(mut self, subs: &Subs) -> Self {
+        self.code = self.code.expand_types(subs);
+        self
+    }
 }
 
 impl Val {

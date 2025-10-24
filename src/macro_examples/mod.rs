@@ -10,6 +10,7 @@ mod minimal_filter;
 mod annotate_multi;
 mod annotate_nat;
 mod recursive;
+mod loopify;
 mod nat;
 mod nat_u32;
 mod sets;

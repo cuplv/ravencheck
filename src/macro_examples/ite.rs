@@ -4,9 +4,9 @@
 mod my_mod {
     #[define]
     pub fn foo(u1: u32, u2: u32) -> u32 {
-        let (a, b, c) = (u1, u1, u1);
+        let (a, b, _c) = (u1, u1, u1);
         if a == b {
-            let (x, y, z) = (u2, u2, u2);
+            let (_x, y, _z) = (u2, u2, u2);
             y
         } else {
             a
