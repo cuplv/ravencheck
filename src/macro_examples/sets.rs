@@ -63,16 +63,12 @@ pub mod my_mod {
     }
 
     #[verify]
-    fn union_preserves_member() -> bool {
-        forall(|e:Elem,s:Set| {
-            !member(e,s) || member(e, union(s,s))
-        })
+    fn union_preserves_member(e: Elem, s: Set) -> bool {
+        !member(e,s) || member(e, union(s,s))
     }
 
     #[verify]
-    fn union_self_is_self() -> bool {
-        forall(|s:Set| union(s,s) == s)
-    }
+    fn union_self_is_self(s: Set) -> bool { union(s,s) == s }
 
     #[verify]
     fn union_empty_set() -> bool {

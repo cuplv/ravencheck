@@ -29,13 +29,11 @@ mod rvn {
     }
 
     #[verify]
-    fn prop1() -> bool {
-        forall(|x: u32| {
-            implies(
-                le(x, ZERO),
-                x == ZERO
-            )
-        })
+    fn prop1(x: u32) -> bool {
+        implies(
+            le(x, ZERO),
+            x == ZERO
+        )
     }
 }
 ```

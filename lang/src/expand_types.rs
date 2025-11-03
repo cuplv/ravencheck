@@ -2,6 +2,7 @@ use crate::{
     BType,
     Binder1,
     BinderN,
+    Builder,
     CType,
     Comp,
     LogOpN,
@@ -67,6 +68,13 @@ impl Binder1 {
                 vs.into_iter().map(|v| v.expand_types(subs)).collect(),
             ),
         }
+    }
+}
+
+impl Builder {
+    pub fn expand_types(self, subs: &Subs) -> Self {
+        let subs = subs.clone();
+        self.map(move |c: Comp| c.expand_types(&subs))
     }
 }
 

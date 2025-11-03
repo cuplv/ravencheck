@@ -92,6 +92,14 @@ impl Builder {
     {
         Self{fun: Box::new(f)}
     }
+    pub fn map<F>(self, f: F) -> Self
+    where
+        F: FnOnce(Comp) -> Comp + 'static
+    {
+        Self::new(|igen| {
+            f(self.build(igen))
+        })
+    }
     pub fn bind<F>(self, f: F) -> Self
     where
         F: FnOnce(Comp) -> Self + 'static,

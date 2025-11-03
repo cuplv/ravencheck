@@ -755,6 +755,26 @@ pub struct RirFn {
 }
 
 impl RirFn {
+    /// Return a `Builder` that uses the fn item's arguments
+    /// as the signature of a universal quantifier.
+    pub fn into_uni_formula(
+        self
+    ) -> Result<(String, Vec<String>, Builder), String> {
+        let Self{sig, body} = self;
+        // The output type is expected to be bool, but we don't
+        // check/enforce that here.
+        let RirFnSig{ident, tas, inputs, ..} = sig;
+        let inputs = inputs
+            .into_iter()
+            .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
+            .collect::<Result<Vec<_>,String>>()?;
+        let formula = Builder::lift(body).quant(
+            Quantifier::Forall,
+            inputs,
+        );
+        Ok((ident, tas, formula))
+    }
+
     pub fn from_syn(
         ItemFn{sig, block, ..}: ItemFn,
     ) -> Result<Self, Error> {

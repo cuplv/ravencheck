@@ -8,6 +8,8 @@ use crate::{
     LogOpN,
     MatchArm,
     OpCode,
+    RirFn,
+    RirFnSig,
     Sig,
     TypeDef,
     Val,
@@ -443,6 +445,12 @@ impl CType {
     }
 }
 
+fn err_ctx<A,T: ToString>(s: T, r: Result<A, String>) -> Result<A, String> {
+    r.map_err(|e| {
+        format!("{}: {}", s.to_string(), e)
+    })
+}
+
 impl VType {
     pub fn validate(&self, sig: &Sig, type_bindings: &Vec<String>) -> Result<(), TypeError> {
         match self {
@@ -470,5 +478,72 @@ impl VType {
             .map(|(s,t)| (s.clone(), t.clone()))
             .collect();
         &self.expand_types(&unshadowed_aliases) == other
+    }
+}
+
+impl RirFnSig {
+    /// Assumes that type aliases have been applied first.
+    pub fn validate(&self, sig: &Sig) -> Result<(), TypeError> {
+        // For now, ignore the input patterns. Eventually, we should
+        // validate these against the input types.
+
+        let errc = &format!("Type error in signature of '{}'", self.ident);
+
+        for (_p, t) in &self.inputs {
+            err_ctx(errc, t.validate(sig, &self.tas))?;
+        }
+        err_ctx(errc, self.output.validate(sig, &self.tas))?;
+
+        Ok(())
+    }
+}
+
+impl RirFn {
+    /// Assumes that type aliases have been applied first.
+    pub fn type_check(
+        &self,
+        sig: &Sig,
+        is_rec: bool,
+    ) -> Result<(), TypeError> {
+        let errc = &format!(
+            "Type error in signature of '{}'",
+            &self.sig.ident,
+        );
+
+        // Validate declared input and output types.
+        self.sig.validate(sig)?;
+
+        // Type context includes the fn item's declared type
+        // arguments.
+        let mut tc = TypeContext::new_types(
+            sig.clone(),
+            self.sig.tas.clone()
+        );
+
+        // Add the fn item's arguments to the type context.
+        for (p,t) in self.sig.inputs.clone() {
+            let x = err_ctx(errc, p.unwrap_vname())?;
+            tc = tc.plus(x, t);
+        }
+
+        // If this is a recursive function, add it to the context.
+        if is_rec {
+            let f_type = VType::fun_v(
+                self.sig.inputs
+                    .clone()
+                    .into_iter()
+                    .map(|(_,t)| t)
+                    .collect::<Vec<_>>(),
+                self.sig.output.clone(),
+            );
+            tc = tc.plus(VName::new(self.sig.ident.clone()), f_type);
+        }
+
+        err_ctx(errc, self.body.type_check_r(
+            &CType::Return(self.sig.output.clone()),
+            tc,
+        ))?;
+
+        Ok(())
     }
 }

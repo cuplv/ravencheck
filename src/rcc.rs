@@ -14,6 +14,7 @@ use ravenlang::{
     Comp,
     CType,
     CheckedSig,
+    Gen,
     Goal,
     HypotheticalCallSyntax,
     HypotheticalCall,
@@ -506,47 +507,34 @@ impl Rcc {
     }
 
     pub fn reg_fn_goal(&mut self, should_be_valid: bool, item_fn: &str) {
+        let attr_str = if should_be_valid {
+            "#[verify]"
+        } else {
+            "#[falsify]"
+        };
+
         let i = syn::parse_str(item_fn).unwrap();
         // Parse the ItemFn into Rir types, and keep the body.
         let i = RirFn::from_syn(i).unwrap();
         // Apply type aliases
         let i = i.expand_types(&self.sig.0.type_aliases());
-        // Unpack
-        let RirFn{sig, body} = i;
-        let RirFnSig{ident, tas, inputs, output} = sig;
+        // Typecheck as bool
+        i.type_check(&self.sig.0, false).unwrap();
+        assert!(
+            i.sig.output == VType::prop(),
+            "{attr_str} items should have output type 'bool', but {} had {}",
+            i.sig.ident,
+            i.sig.output.render(),
+        );
 
-        // For now, don't allow inputs
-        if inputs.len() != 0 {
-            panic!(
-                "#[verify] items should have zero inputs, but '{}' has {} inputs.",
-                ident,
-                inputs.len()
-            );
-        }
-
-        // Declared output must be bool. Consider type aliases and
-        // type abstractions when checking.
-        if !output.clone().type_match(&VType::prop(), &self.sig.0, &tas) {
-            panic!(
-                "#[assume] items must have bool output, but '{}' has '{}' output.",
-                ident,
-                output.render(),
-            );
-        }
-
-        // Body must also type-check as bool
-        let tc = TypeContext::new_types(self.sig.0.clone(), tas.clone());
-        match body.type_check_r(&CType::Return(VType::prop()), tc) {
-            Ok(()) => {},
-            Err(e) => panic!(
-                "Type error in '{}': {}", ident, e
-            ),
-        }
+        // Create a forall-quantified formula, which quantifies the fn
+        // item's arguments.
+        let (ident, tas, formula) = i.into_uni_formula().unwrap();
 
         let goal = Goal {
-            title: ident.to_string(),
+            title: ident,
             tas,
-            condition: body,
+            condition: formula.build(&mut Gen::new()),
             should_be_valid,
             
         };
