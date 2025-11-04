@@ -1,8 +1,8 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[allow(dead_code)]
 mod my_mod {
     #[import]
-    use crate::macro_examples::nat::my_nat_mod::{Nat, le};
+    use crate::nat::my_nat_mod::{Nat, le};
 
     #[define]
     fn in_range(min: Nat<u32>, max: Nat<u32>, x: Nat<u32>) -> bool {

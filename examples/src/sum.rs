@@ -1,4 +1,4 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[declare_types(usize)]
 #[allow(dead_code)]
 mod rvn {

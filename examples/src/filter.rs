@@ -1,4 +1,4 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[declare_types(u32)]
 #[allow(dead_code)]
 mod my_mod {

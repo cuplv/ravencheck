@@ -1,4 +1,4 @@
-#[crate::export_module(crate)]
+#[ravencheck::export_module]
 #[declare_types(u32)]
 #[allow(dead_code)]
 pub mod my_nat_mod {

@@ -1,4 +1,4 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[declare_types(u32, HashSet<_>)]
 #[allow(dead_code)]
 pub mod my_mod {

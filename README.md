@@ -8,8 +8,8 @@ First, make sure you have the [CVC5](https://cvc5.github.io/) SMT
 solver available. You should be able to run `cvc5 --version` in your
 dev environment.
 
-Then, you can add `ravencheck` as a dependency in your Cargo.toml
-file, in three different ways:
+Then, add `ravencheck` as a dependency in your Cargo.toml file, using
+one of these three methods:
 
 ### Depend on crates.io package (v0.4.1)
 
@@ -52,8 +52,46 @@ This allows you to choose which commit in the repo to use.
 
 You use `ravencheck` by adding the `#[ravencheck::check_module]` macro
 attribute at the top of modules in which you want to use
-verification. See [examples/sets.rs](./examples/sets.rs) for an
-example.
+verification. 
+
+```
+#[ravencheck::check_module]
+#[declare_types(u32)]
+mod rvn {
+    #[declare]
+    const ZERO: u32 = 0;
+
+    #[declare]
+    fn le(a: u32, b: u32) -> bool {
+        a <= b
+    }
+
+    #[assume]
+    fn le_anti_symmetric() -> bool {
+        forall(|x: u32, y: u32| {
+            implies(
+                le(x,y) && le(y,x),
+                x == y
+            )
+        })
+    }
+
+    #[assume]
+    fn zero_is_least() -> bool {
+        forall(|x: u32| le(ZERO, x))
+    }
+
+    #[verify]
+    fn prop1(x: u32) -> bool {
+        implies(
+            le(x, ZERO),
+            x == ZERO
+        )
+    }
+}
+```
+
+See the [examples directory][https://github.com/cuplv/ravencheck/tree/main/examples/] for more documentation.
 
 ## About
 

@@ -1,18 +1,11 @@
-// This is the main macro call that tells ravencheck to use
-// verification in this module.
-//
-// Because this example file is inside the ravencheck library, we call
-// it using 'crate'.
-//
-// When using it in your own library, you would call it as:
-//
-//     #[ravencheck::check_module]
-//     mod my_mod { .. }
-//
-#[crate::check_module(crate)]
+// The 'check_module' macro generates a test module that verifies the
+// specified goal properties using an SMT solver. To run the
+// verification, simply use 'cargo test'. Just like normal Rust tests,
+// the verification-specific code is erased when compiling for
+// release.
+#[ravencheck::check_module]
 // This command declares the uninterpreted type 'u32' to the solver.
 #[declare_types(u32)]
-#[allow(dead_code)]
 mod my_mod {
     use std::collections::HashSet;
 
@@ -30,7 +23,7 @@ mod my_mod {
     // Declare an uninterpreted relation (boolean-output function) on
     // 'u32' and 'MySet'.
     #[declare]
-    fn member(e: u32, s: MySet) -> bool {
+    pub fn member(e: u32, s: MySet) -> bool {
         s.contains(&e)
     }
 
@@ -50,7 +43,7 @@ mod my_mod {
     // Here, 'declare' tells the solver that we have an uninterpreted
     // constant called 'empty_set' with type 'MySet'.
     #[declare]
-    fn empty_set() -> MySet {
+    pub fn empty_set() -> MySet {
         HashSet::new()
     }
 
@@ -63,13 +56,13 @@ mod my_mod {
 
     // Declare an uninterpreted function on 'MySet'.
     #[declare]
-    fn union(a: MySet, b: MySetAlias) -> MySetAlias {
+    pub fn union(a: MySet, b: MySetAlias) -> MySetAlias {
         a.union(&b).cloned().collect()
     }
 
     // This is a special form of 'assume' that uses the function body
     // as an axiom on (a,b,c) that must be true when union(a,b) = c.
-    #[assume(union(a,b) => c)]
+    #[assume(union(a, b) => c)]
     fn union_def() -> bool {
         // Condition that relates the inputs and output
         forall(|e: u32| {
@@ -91,12 +84,12 @@ mod my_mod {
     }
 
     #[declare]
-    fn insert(e: u32, mut s: MySet) -> MySet {
+    pub fn insert(e: u32, mut s: MySet) -> MySet {
         s.insert(e);
         s
     }
 
-    #[assume(insert(e,s1) => s2)]
+    #[assume(insert(e, s1) => s2)]
     fn insert_def() -> bool {
         forall(|x:u32| member(x,s2) == (member(x,s1) || x == e))
     }
@@ -120,7 +113,7 @@ mod my_mod {
     // * No mutation or method calls
     // * No recursion
     #[define]
-    fn singleton(e: u32) -> MySet {
+    pub fn singleton(e: u32) -> MySet {
         insert(e, empty_set())
     }
 
@@ -160,4 +153,17 @@ mod my_mod {
             )
         }
     }
+}
+
+// Now we can use the definitions from above the module in normal Rust
+// code.
+#[allow(dead_code)]
+fn main() {
+    let s = my_mod::empty_set();
+    let result1 = my_mod::union(s.clone(), s.clone()) == s;
+    println!("Result #1 is {}", result1);
+
+    let s2 = my_mod::insert(2, my_mod::singleton(1));
+    let result2 = my_mod::member(1, s2.clone()) && my_mod::member(2, s2);
+    println!("Result #2 is {}", result2);
 }

@@ -1,4 +1,4 @@
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 #[allow(dead_code)]
 pub mod my_mod {
     use std::collections::HashSet;

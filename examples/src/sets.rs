@@ -1,17 +1,4 @@
-// When using this macro within this crate, call it as:
-//
-// #[crate::check_module(crate)]
-//
-// When using it in another crate that has ravencheck as a dependency,
-// call it as:
-//
-// #[ravencheck::check_module]
-//
-// If you rename the ravencheck dependency, for example as "my_dep",
-// then call this macro as:
-//
-// #[my_dep::check_module(my_dep)]
-#[crate::check_module(crate)]
+#[ravencheck::check_module]
 pub mod my_mod {
     use std::collections::HashSet;
 
