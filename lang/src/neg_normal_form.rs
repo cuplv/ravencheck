@@ -4,7 +4,7 @@ use crate::{
     Literal,
     OpMode,
     Val,
-    VName,
+    Ident,
     VType,
     Gen,
     Sig,
@@ -15,22 +15,22 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DemandVal {
     Positive,
-    Negative(VName),
-    Both(VName),
+    Negative(Ident),
+    Both(Ident),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DemandSet(HashMap<VName, DemandVal>);
+pub struct DemandSet(HashMap<Ident, DemandVal>);
 
 impl DemandSet {
     pub fn empty() -> Self { DemandSet(HashMap::new()) }
-    pub fn get(&self, x: &VName) -> Option<DemandVal> {
+    pub fn get(&self, x: &Ident) -> Option<DemandVal> {
         match self.0.get(x) {
             Some(y) => Some(y.clone()),
             None => None,
         }
     }
-    pub fn add_positive(&mut self, x: &VName) {
+    pub fn add_positive(&mut self, x: &Ident) {
         match self.0.get(x) {
             Some(DemandVal::Both(_y)) => {},
             Some(DemandVal::Positive) => {},
@@ -42,10 +42,10 @@ impl DemandSet {
             }
         }
     }
-    /// First VName arg is the demanded name, second is the what the
+    /// First Ident arg is the demanded name, second is the what the
     /// negation should be named as.  The returned value is what the
     /// negation has already been named as, if any.
-    pub fn add_negative(&mut self, x: &VName, y: &VName) -> VName {
+    pub fn add_negative(&mut self, x: &Ident, y: &Ident) -> Ident {
         match self.0.get(x) {
             Some(DemandVal::Both(y2)) => y2.clone(),
             Some(DemandVal::Negative(y2)) => y2.clone(),
@@ -59,11 +59,11 @@ impl DemandSet {
             }
         }
     }
-    /// Adds a negative demand for the given VName. If a negative
+    /// Adds a negative demand for the given Ident. If a negative
     /// demand already exists, add return the negative version's
     /// name. If not, generate a unique name for the negative version
     /// and return it.
-    pub fn add_negative_gen(&mut self, x: &VName, gen: &mut Gen) -> VName {
+    pub fn add_negative_gen(&mut self, x: &Ident, gen: &mut Gen) -> Ident {
         match self.0.get(x) {
             Some(DemandVal::Both(x2)) => x2.clone(),
             Some(DemandVal::Negative(x2)) => x2.clone(),

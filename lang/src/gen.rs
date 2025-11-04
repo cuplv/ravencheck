@@ -4,7 +4,7 @@ use crate::{
     Comp,
     Pattern,
     Val,
-    VName,
+    Ident,
 };
 
 /// A bit of state used to auto-generate fresh variable names.
@@ -12,22 +12,22 @@ use crate::{
 pub struct Gen(u32);
 
 impl Gen {
-    pub fn next(&mut self) -> VName {
-        let n = VName::Auto(self.0);
+    pub fn next(&mut self) -> Ident {
+        let n = Ident::Auto(self.0);
         self.0 = self.0 + 1;
         n
     }
-    pub fn next_many(&mut self, n: usize) -> Vec<VName> {
+    pub fn next_many(&mut self, n: usize) -> Vec<Ident> {
         let mut names = Vec::with_capacity(n);
         for _ in 0..n {
             names.push(self.next());
         }
         names
     }
-    fn advance(&mut self, x: &VName) {
+    fn advance(&mut self, x: &Ident) {
         match x {
-            VName::Manual(_s) => {},
-            VName::Auto(n) => {
+            Ident::Manual(_s) => {},
+            Ident::Auto(n) => {
                 self.0 = self.0.max(n + 1);
             }
         }
@@ -76,7 +76,7 @@ impl BinderN {
 }
 
 impl Comp {
-    /// Advance the given Gen past any VName appearing in the
+    /// Advance the given Gen past any Ident appearing in the
     /// computation.
     pub fn advance_gen(&self, gen: &mut Gen) {
         match self {
@@ -129,7 +129,7 @@ impl Comp {
             // c => todo!("advance_gen {:?}", c),
         }
     }
-    /// Returns a Gen that has advanced beyond any VName
+    /// Returns a Gen that has advanced beyond any Ident
     /// appearing in the computation.
     pub fn get_gen(&self) -> Gen {
         let mut gen = Gen::new();

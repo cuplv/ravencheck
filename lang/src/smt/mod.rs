@@ -11,7 +11,7 @@ use crate::{
     Sig,
     TypeContext,
     Val,
-    VName,
+    Ident,
     VType
 };
 use easy_smt::Response;
@@ -253,7 +253,7 @@ Error in type-checking definition of \"{}\": {:?}",
             a.advance_gen(&mut gn);
         }
         let mut input_args: Vec<Val> = Vec::new();
-        let mut q_sig: Vec<(VName, VType)> = Vec::new();
+        let mut q_sig: Vec<(Ident, VType)> = Vec::new();
         for i in op.inputs {
             let x = gn.next();
             input_args.push(x.clone().val());
@@ -334,7 +334,7 @@ Error in type-checking definition of \"{}\": {:?}",
             a.advance_gen(&mut gn);
         }
         let mut input_args: Vec<Val> = Vec::new();
-        let mut q_sig: Vec<(VName, VType)> = Vec::new();
+        let mut q_sig: Vec<(Ident, VType)> = Vec::new();
         for i in op.inputs {
             let x = gn.next();
             input_args.push(x.clone().val());

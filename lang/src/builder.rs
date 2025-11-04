@@ -1,5 +1,5 @@
 use crate::sig::VType;
-use crate::vname::VName;
+use crate::ident::Ident;
 use crate::gen::Gen;
 use crate::cbpv::{
     Binder1,
@@ -43,7 +43,7 @@ impl Builder {
     pub fn gen<F1,F2>(self, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
-        F2: FnOnce(VName) -> Self,
+        F2: FnOnce(Ident) -> Self,
     {
         Self::new(|gen| {
             let m = self.build(gen);
@@ -53,7 +53,7 @@ impl Builder {
     }
 
     pub fn with_x<F>(f: F) -> Self
-    where F: FnOnce(VName) -> Self + 'static,
+    where F: FnOnce(Ident) -> Self + 'static,
     {
         Self::new(move |igen| {
             let x = igen.next();
@@ -62,7 +62,7 @@ impl Builder {
     }
 
     pub fn with_x_many<F>(n: usize, f: F) -> Self
-    where F: FnOnce(Vec<VName>) -> Self + 'static,
+    where F: FnOnce(Vec<Ident>) -> Self + 'static,
     {
         Self::new(move |igen| {
             let xs = igen.next_many(n);
@@ -73,7 +73,7 @@ impl Builder {
     pub fn gen_many<F1,F2>(self, n: usize, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
-        F2: FnOnce(Vec<VName>) -> Self,
+        F2: FnOnce(Vec<Ident>) -> Self,
     {
         Self::new(move |gen| {
             let m = self.build(gen);
@@ -132,7 +132,7 @@ impl Builder {
     pub fn force<V: Into<Val>>(v: V) -> Self {
         Self::lift(Comp::force(v))
     }
-    pub fn seq<F1>(self, cont: F1) -> impl FnOnce(VName) -> Self
+    pub fn seq<F1>(self, cont: F1) -> impl FnOnce(Ident) -> Self
     where
         F1: FnOnce(Val) -> Self + 'static,
     {
@@ -163,7 +163,7 @@ impl Builder {
             b.seq(cont)(x)
         })
     }
-    pub fn seq_many<F>(bxs: Vec<(Self, VName)>, cont: F) -> Self
+    pub fn seq_many<F>(bxs: Vec<(Self, Ident)>, cont: F) -> Self
     where
         F: FnOnce(Vec<Val>) -> Self + 'static,
     {
@@ -354,7 +354,7 @@ impl Builder {
 
     pub fn quant<Xs>(self, q: Quantifier, xs: Xs) -> Self
     where
-        Xs: Into<Vec<(VName,VType)>> + 'static,
+        Xs: Into<Vec<(Ident,VType)>> + 'static,
     {
         Self::new(move |gen: &mut Gen| {
             let x_result = gen.next();
@@ -383,7 +383,7 @@ impl Builder {
     {
         let ts_q: Vec<VType> = ts_q.into();
         Self::with_x_many(ts_q.len(), move |xs_q| {
-            let qs: Vec<(VName,VType)> =
+            let qs: Vec<(Ident,VType)> =
                 xs_q.clone().into_iter().zip(ts_q).collect();
             let vs_q = xs_q.into_iter().map(|x| x.val()).collect();
             let body = f(vs_q);
@@ -423,7 +423,7 @@ impl Builder {
 
     pub fn fun<Xs>(self, xs: Xs) -> Self
     where
-        Xs: Into<Vec<(VName,Option<VType>)>> + 'static,
+        Xs: Into<Vec<(Ident,Option<VType>)>> + 'static,
     {
         Self::new(move |gen: &mut Gen| {
             Comp::Fun(xs.into(), Box::new(self.build(gen)))

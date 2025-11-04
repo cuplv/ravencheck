@@ -10,14 +10,14 @@ use crate::{
     Quantifier,
     Rebuild,
     Sig,
-    VName,
+    Ident,
     VType,
     Val,
     FunOp,
     PredOp,
 };
 
-fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<VName>, m: Comp, sig: &Sig, gen: &mut Gen) -> Comp {
+fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, gen: &mut Gen) -> Comp {
     assert!(
         !op.output.contains_prop(),
         "Can't have bool-output primitive function. Define a predicate instead."
@@ -60,7 +60,7 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<VName>, m: Comp, sig: &Sig, gen: 
 }
 
 #[allow(dead_code)]
-fn expand_pred(op: PredOp, vs: Vec<Val>, x: VName, m: Comp, sig: &Sig, gen: &mut Gen, is_pos: bool) -> Comp {
+fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut Gen, is_pos: bool) -> Comp {
     let sig_clone1 = sig.clone();
     let sig_clone2 = sig.clone();
 

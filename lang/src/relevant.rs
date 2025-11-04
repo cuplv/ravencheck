@@ -13,7 +13,7 @@ use crate::{
     OpMode,
     Sig,
     Val,
-    VName,
+    Ident,
     VType,
 };
 
@@ -184,7 +184,7 @@ impl Val {
             }
             Self::Var(name, types, None, _is_neg) => {
                 match name {
-                    VName::Manual(s) => {
+                    Ident::Manual(s) => {
                         let code = OpCode {
                             ident: s.clone(),
                             types: types.clone(),

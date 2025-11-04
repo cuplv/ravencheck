@@ -1,6 +1,6 @@
 use syn::{
     Fields,
-    Ident,
+    Ident as SynIdent,
     ItemConst,
     ItemEnum,
     ItemFn,
@@ -35,7 +35,7 @@ use crate::{
         RirFnSig,
     },
     type_check::TypeContext,
-    VName,
+    Ident as RirIdent,
     VType,
 };
 
@@ -223,11 +223,11 @@ impl Sig {
             c_inputs
                 .iter()
                 .zip(applied_op.inputs.iter())
-                .map(|(a,b)| (VName::new(a.clone()), b.clone()))
+                .map(|(a,b)| (RirIdent::new(a.clone()), b.clone()))
                 .collect()
         );
         tc = tc.plus(
-            VName::new(c_output.clone()),
+            RirIdent::new(c_output.clone()),
             applied_op.output.clone(),
         );
         match body.type_check_r(&CType::Return(VType::prop()), tc) {
@@ -237,12 +237,12 @@ impl Sig {
             )),
         }
 
-        let f_inputs: Vec<(VName, Option<VType>)> = c_inputs
+        let f_inputs: Vec<(RirIdent, Option<VType>)> = c_inputs
             .iter()
             .zip(applied_op.inputs.iter())
-            .map(|(a,b)| (VName::new(a.clone()), Some(b.clone())))
+            .map(|(a,b)| (RirIdent::new(a.clone()), Some(b.clone())))
             .collect();
-        let f_output = (VName::new(c_output.clone()), Some(applied_op.output.clone()));
+        let f_output = (RirIdent::new(c_output.clone()), Some(applied_op.output.clone()));
         let mut g = body.get_gen();
         let f_axiom: Comp =
             Builder::return_thunk(
@@ -405,64 +405,6 @@ impl Sig {
         Ok(())
     }
 
-    // /// Note that the 'is_rec' argument only affects how the function
-    // /// is type-checked. Whether recursive or not, a normal direct
-    // /// function is registered.
-    // pub fn reg_fn_define(&mut self, i: ItemFn, is_rec: bool) -> Result<(), String> {
-    //     // Parse the signature into Rir types.
-    //     let i = RirFn::from_syn(i)?;
-    //     // Apply type aliases
-    //     let i = i.expand_types(&self.type_aliases);
-    //     // Unpack
-    //     let RirFn{sig, body} = i;
-    //     let RirFnSig{ident, tas, inputs, output} = sig.clone();
-
-    //     // Simplify inputs to VNames (someday I'd like to support
-    //     // patterns...)
-    //     let inputs: Vec<(VName, VType)> = inputs
-    //         .into_iter()
-    //         .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
-    //         .collect::<Result<Vec<_>, String>>()?;
-
-    //     // Typecheck body, given typed inputs
-    //     let mut tc = TypeContext::new_types(self.clone(), tas.clone());
-    //     for (x,t) in inputs.clone().into_iter() {
-    //         tc = tc.plus(x, t);
-    //     }
-
-    //     if is_rec {
-    //         let f_type = VType::fun_v(
-    //             inputs
-    //                 .clone()
-    //                 .into_iter()
-    //                 .map(|(_,t)| t)
-    //                 .collect::<Vec<_>>(),
-    //             output.clone(),
-    //         );
-    //         tc = tc.plus(VName::new(ident.clone()), f_type);
-    //     }
-
-    //     body.type_check_r(&CType::Return(output.clone()), tc)?;
-
-    //     if is_rec {
-    //         self.reg_rir_declare(sig)
-    //     } else {
-    //         let inputs: Vec<(VName, Option<VType>)> = inputs
-    //             .into_iter()
-    //             .map(|(x,t)| (x, Some(t)))
-    //             .collect();
-    //         // Construct function for given typed inputs
-    //         let mut g = body.get_gen();
-    //         let fun: Comp =
-    //             Builder::return_thunk(
-    //                 Builder::lift(body).fun(inputs)
-    //             )
-    //             .build(&mut g);
-    //         self.ops.push((ident, tas, Op::Direct(fun)));
-    //         Ok(())
-    //     }
-    // }
-
     pub fn reg_struct_declare(&mut self, i: ItemStruct) -> Result<(), String> {
         self.declare_type_or_struct(i.ident, i.generics)
     }
@@ -472,7 +414,7 @@ impl Sig {
 
     pub fn declare_type_or_struct(
         &mut self,
-        ident: Ident,
+        ident: SynIdent,
         generics: Generics,
     ) -> Result<(), String> {
         // Check that only Types are given as GenericParams.

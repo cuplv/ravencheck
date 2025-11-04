@@ -4,11 +4,11 @@ use crate::{
     Comp,
     Pattern,
     Val,
-    VName,
+    Ident,
 };
 
 impl Binder1 {
-    fn substitute(self, x: &VName, v: &Val) -> Self {
+    fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
             Self::Eq(pos, args1, args2) => {
                 let args1 =
@@ -39,7 +39,7 @@ impl Binder1 {
 }
 
 impl BinderN {
-    fn substitute(self, x: &VName, v: &Val) -> Self {
+    fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
             Self::Call(oc,vs) => Self::Call(
                 oc,
@@ -51,7 +51,7 @@ impl BinderN {
 }
 
 impl Comp {
-    pub fn substitute(self, x: &VName, v: &Val) -> Self {
+    pub fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
             Self::Apply(m, targs, vs) => {
                 Self::apply(
@@ -91,7 +91,7 @@ impl Comp {
             }
             Self::Force(v1) => Self::Force(v1.substitute(x,v)),
             Self::Fun(xs, m) => {
-                let names: Vec<&VName> = xs.iter().map(|(x,_)| x).collect();
+                let names: Vec<&Ident> = xs.iter().map(|(x,_)| x).collect();
                 if !names.contains(&x) {
                     Self::Fun(xs, Box::new(m.substitute(x,v)))
                 } else {
@@ -127,7 +127,7 @@ impl Comp {
             // c => todo!("substitute for {:?}", c)
         }
     }
-    pub fn substitute_many(mut self, ss: &Vec<(VName,Val)>) -> Self {
+    pub fn substitute_many(mut self, ss: &Vec<(Ident,Val)>) -> Self {
         for (x,v) in ss {
             self = self.substitute(x,v)
         }
@@ -136,7 +136,7 @@ impl Comp {
 }
 
 impl Pattern {
-    fn contains(&self, x: &VName) -> bool {
+    fn contains(&self, x: &Ident) -> bool {
         match self {
             Self::NoBind => false,
             Self::Atom(y) => x == y,
@@ -146,7 +146,7 @@ impl Pattern {
 }
 
 impl Val {
-    fn substitute(self, x: &VName, v: &Val) -> Self {
+    fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
             // It seems like it should matter whether this var that is
             // being substituted-into is positive or negative... but

@@ -12,7 +12,7 @@ use crate::{
     RirFn,
     RirFnSig,
     Val,
-    VName,
+    Ident,
     VType,
 };
 
@@ -21,8 +21,8 @@ use std::collections::HashMap;
 type Subs = HashMap<String, VType>;
 
 fn expand_types_sig(
-    xs: Vec<(VName,Option<VType>)>, subs: &Subs
-) -> Vec<(VName,Option<VType>)> {
+    xs: Vec<(Ident,Option<VType>)>, subs: &Subs
+) -> Vec<(Ident,Option<VType>)> {
     xs.into_iter().map(|(x,t)| {
         let t = match t {
             Some(t) => Some(t.expand_aliases(subs)),
@@ -33,8 +33,8 @@ fn expand_types_sig(
 }
 
 fn expand_types_q(
-    xs: Vec<(VName,VType)>, subs: &Subs
-) -> Vec<(VName,VType)> {
+    xs: Vec<(Ident,VType)>, subs: &Subs
+) -> Vec<(Ident,VType)> {
     xs.into_iter().map(|(x,t)| {
         (x,t.expand_aliases(subs))
     }).collect()

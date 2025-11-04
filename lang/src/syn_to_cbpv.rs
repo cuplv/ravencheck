@@ -14,7 +14,7 @@ use syn::{
     ExprParen,
     ExprUnary,
     FnArg,
-    Ident,
+    Ident as SynIdent,
     ItemFn,
     GenericArgument,
     GenericParam,
@@ -51,7 +51,7 @@ use crate::{
     Pattern,
     Quantifier,
     Val,
-    VName,
+    Ident as RirIdent,
     VType,
 };
 
@@ -65,7 +65,7 @@ fn mk_err<A,T: ToString>(s: T) -> Result<A,Error> {
 pub struct HypotheticalCallSyntax {
     pub call: ExprCall,
     pub arrow: Token![=>],
-    pub output: Ident,
+    pub output: SynIdent,
 }
 
 impl Parse for HypotheticalCallSyntax {
@@ -213,9 +213,9 @@ fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
     }
 }
 
-impl From<PatIdent> for VName {
+impl From<PatIdent> for RirIdent {
     fn from(p: PatIdent) -> Self {
-        VName::new(p.ident)
+        RirIdent::new(p.ident)
     }
 }
 
@@ -683,7 +683,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                 );
                 let code = OpCode::enum_con(ident1, types, ident2);
                 Ok(code.as_fun().builder())
-                // Ok(Builder::return_(Val::Var(VName::new(ident2), types, Some(ident1.to_string()))))
+                // Ok(Builder::return_(Val::Var(RirIdent::new(ident2), types, Some(ident1.to_string()))))
             } else {
                 panic!("Got path with more than 2 segments: {:?}", ep.path)
             }

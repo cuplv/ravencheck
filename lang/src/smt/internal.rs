@@ -15,7 +15,7 @@ use crate::{
     Quantifier,
     Sig,
     Val,
-    VName,
+    Ident,
     VType,
     constructions,
 };
@@ -365,7 +365,7 @@ enum Assignment {
 
 struct Context<'a> {
     ctx: &'a mut easy_smt::Context,
-    assign: Vec<(VName,Assignment)>,
+    assign: Vec<(Ident,Assignment)>,
 }
 
 impl <'a> Context<'a> {
@@ -376,7 +376,7 @@ impl <'a> Context<'a> {
         }
     }
 
-    fn get_assign(&self, v: &VName) -> Option<Assignment> {
+    fn get_assign(&self, v: &Ident) -> Option<Assignment> {
         for (v2,e) in self.assign.iter().rev() {
             if v2 == v {
                 return Some(e.clone())
@@ -385,11 +385,11 @@ impl <'a> Context<'a> {
         None
     }
 
-    fn define(&mut self, v: &VName, e: &SExpr) {
+    fn define(&mut self, v: &Ident, e: &SExpr) {
         self.assign.push((v.clone(), Assignment::Defined(e.clone())));
     }
 
-    fn with_define<F,A>(&mut self, v: &VName, e: &SExpr, f: F) -> A
+    fn with_define<F,A>(&mut self, v: &Ident, e: &SExpr, f: F) -> A
     where F: Fn(&mut Self) -> A {
         // println!("Defining {:?}", v);
         self.define(v,e);
@@ -398,11 +398,11 @@ impl <'a> Context<'a> {
         a
     }
 
-    fn quantify(&mut self, v: &VName) {
+    fn quantify(&mut self, v: &Ident) {
         self.assign.push((v.clone(), Assignment::Quantified));
     }
 
-    fn with_quantify<F,A,S>(&mut self, xs: &Vec<(VName,S)>, f: F) -> A
+    fn with_quantify<F,A,S>(&mut self, xs: &Vec<(Ident,S)>, f: F) -> A
     where F: Fn(&mut Self) -> A {
         for (x,_) in xs {
             self.quantify(x);
@@ -450,7 +450,7 @@ impl <'a> Context<'a> {
                 // variables.  This must be a constant.
                 None => {
                     match &n {
-                        VName::Auto(_) =>
+                        Ident::Auto(_) =>
                             panic!("Ident {:?} seems to be unbound: {:?}", &n, &self.assign),
                         _ => {}
                     }

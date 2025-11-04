@@ -13,7 +13,7 @@ use crate::{
     Sig,
     TypeDef,
     Val,
-    VName,
+    Ident,
     VType,
     Pattern,
 };
@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 #[derive(Clone,Debug)]
 pub struct TypeContext {
-    bindings: HashMap<VName, VType>,
+    bindings: HashMap<Ident, VType>,
     type_bindings: Vec<String>,
     sig: Sig,
 }
@@ -42,15 +42,15 @@ impl TypeContext {
             sig,
         }
     }
-    pub fn plus(mut self, x: VName, t: VType) -> Self {
+    pub fn plus(mut self, x: Ident, t: VType) -> Self {
         self.bindings.insert(x,t);
         self
     }
-    pub fn append(mut self, c: Vec<(VName,VType)>) -> Self {
+    pub fn append(mut self, c: Vec<(Ident,VType)>) -> Self {
         self.bindings.extend(c.into_iter());
         self
     }
-    fn get(&self, x: &VName) -> Result<VType, TypeError> {
+    fn get(&self, x: &Ident) -> Result<VType, TypeError> {
         match self.bindings.get(x) {
             Some(t) => Ok(t.clone()),
             None => Err(format!("Unbound identifier {:?}", x)),
@@ -309,7 +309,7 @@ impl CType {
 }
 
 impl Pattern {
-    fn bindings(self, t: VType) -> Result<Vec<(VName,VType)>, TypeError> {
+    fn bindings(self, t: VType) -> Result<Vec<(Ident,VType)>, TypeError> {
         match (self, t) {
             (Pattern::NoBind, _) => Ok(Vec::new()),
             (Pattern::Atom(x), t) => Ok(vec![(x,t)]),
@@ -380,7 +380,7 @@ impl Val {
                 match tc.get(x) {
                     Ok(t) => Ok(t),
                     Err(_) => match x {
-                        VName::Manual(s) => {
+                        Ident::Manual(s) => {
                             let oc = OpCode {
                                 ident: s.clone(),
                                 types: types.clone(),
@@ -388,7 +388,7 @@ impl Val {
                             };
                             tc.sig.get_type(&oc, tc.type_bindings.clone())
                         }
-                        VName::Auto(_n) => panic!("Unbound auto var {:?}", x),
+                        Ident::Auto(_n) => panic!("Unbound auto var {:?}", x),
                     }
                 }
             }
@@ -536,7 +536,7 @@ impl RirFn {
                     .collect::<Vec<_>>(),
                 self.sig.output.clone(),
             );
-            tc = tc.plus(VName::new(self.sig.ident.clone()), f_type);
+            tc = tc.plus(Ident::new(self.sig.ident.clone()), f_type);
         }
 
         err_ctx(errc, self.body.type_check_r(

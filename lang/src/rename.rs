@@ -6,7 +6,7 @@ use crate::{
     MatchArm,
     Pattern,
     Val,
-    VName,
+    Ident,
     VType,
 };
 
@@ -30,15 +30,15 @@ impl Binder1 {
                 // Start with xs = [(x1,s1), (x2,s2), ...]
 
                 // Create ys = [y1, y2, ...]
-                let ys: Vec<VName> = gen.next_many(xs.len());
+                let ys: Vec<Ident> = gen.next_many(xs.len());
                 // Then subs = [(x1, Var(y1)), (x2, Var(y2)), ...]
-                let subs: Vec<(VName,Val)> = xs
+                let subs: Vec<(Ident,Val)> = xs
                     .iter()
                     .zip(&ys)
                     .map(|((x,_),y)| (x.clone(), y.clone().val()))
                     .collect();
                 // And new_sig = [(y1,s1), (y2,s2), ...]
-                let new_sig: Vec<(VName,VType)> = xs
+                let new_sig: Vec<(Ident,VType)> = xs
                     .into_iter()
                     .zip(ys)
                     .map(|((_,s),y)| (y, s))
@@ -165,7 +165,7 @@ impl Comp {
 }
 
 impl Pattern {
-    fn rename_r(self, gen: &mut Gen) -> (Self, Vec<(VName,Val)>) {
+    fn rename_r(self, gen: &mut Gen) -> (Self, Vec<(Ident,Val)>) {
         match self {
             Self::NoBind => (Self::NoBind, Vec::new()),
             Self::Atom(x) => {

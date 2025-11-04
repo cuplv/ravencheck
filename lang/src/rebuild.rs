@@ -7,18 +7,18 @@ use crate::{
     Pattern,
     Quantifier,
     Val,
-    VName,
+    Ident,
     VType,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rebuild {
     Call(OpCode, Vec<Val>, Vec<Pattern>),
-    Eq(bool, Vec<Val>, Vec<Val>, VName),
-    Quantifier(Quantifier, Vec<(VName,VType)>, Comp, VName),
-    Not(Val, VName),
-    LogOpN(LogOpN, Vec<Val>, VName),
-    Bind1(Binder1, VName),
+    Eq(bool, Vec<Val>, Vec<Val>, Ident),
+    Quantifier(Quantifier, Vec<(Ident,VType)>, Comp, Ident),
+    Not(Val, Ident),
+    LogOpN(LogOpN, Vec<Val>, Ident),
+    Bind1(Binder1, Ident),
 }
 
 impl Comp {

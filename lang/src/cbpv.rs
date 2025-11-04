@@ -1,8 +1,8 @@
 use crate::sig::{OpCode, VType};
-use crate::vname::VName;
+use crate::ident::Ident;
 use std::fmt;
 
-impl VName {
+impl Ident {
     pub fn val(self) -> Val {
         Val::var(self)
     }
@@ -34,17 +34,17 @@ pub enum Val {
     ///
     /// is_positive should only equal `false` when types and path are
     /// both empty.
-    Var(VName, Vec<VType>, Option<String>, bool),
+    Var(Ident, Vec<VType>, Option<String>, bool),
 }
 
 impl Val {
-    pub fn var(v: VName) -> Self {
+    pub fn var(v: Ident) -> Self {
         Self::Var(v, Vec::new(), None, true)
     }
-    pub fn into_var<T: Into<VName>>(v: T) -> Self {
+    pub fn into_var<T: Into<Ident>>(v: T) -> Self {
         Self::var(v.into())
     }
-    pub fn var_negative(v: VName) -> Self {
+    pub fn var_negative(v: Ident) -> Self {
         Self::Var(v, Vec::new(), None, false)
     }
     pub fn thunk(c: &Comp) -> Self {
@@ -75,7 +75,7 @@ impl Val {
         Self::Tuple(Vec::new())
     }
     pub fn op(OpCode{ident, types, path}: OpCode) -> Self {
-        Self::Var(VName::new(ident), types, path, true)
+        Self::Var(Ident::new(ident), types, path, true)
     }
     pub fn rel_abs(code: OpCode) -> Self {
         Self::OpCode(OpMode::RelAbs, code)
@@ -91,8 +91,8 @@ impl Val {
     }
 }
 
-impl From<VName> for Val {
-    fn from(x: VName) -> Self {
+impl From<Ident> for Val {
+    fn from(x: Ident) -> Self {
         x.val()
     }
 }
@@ -128,18 +128,18 @@ impl HypotheticalCall {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
     NoBind,
-    Atom(VName),
+    Atom(Ident),
     Tuple(Vec<Pattern>),
 }
 
 impl Pattern {
-    pub fn unwrap_vname(self) -> Result<VName, String> {
+    pub fn unwrap_vname(self) -> Result<Ident, String> {
         match self {
             Pattern::Atom(x) => Ok(x),
             p => Err(format!("Got complex pattern {:?} that should be a plain identifier", p)),
         }
     }
-    pub fn unwrap_atom(self) -> Option<VName> {
+    pub fn unwrap_atom(self) -> Option<Ident> {
         match self {
             Pattern::NoBind => None,
             Pattern::Atom(x) => Some(x),
@@ -184,7 +184,7 @@ impl Quantifier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Binder1 {
     Eq(bool, Vec<Val>, Vec<Val>),
-    LogQuantifier(Quantifier, Vec<(VName, VType)>, Box<Comp>),
+    LogQuantifier(Quantifier, Vec<(Ident, VType)>, Box<Comp>),
     LogNot(Val),
     LogOpN(LogOpN, Vec<Val>),
 }
@@ -205,7 +205,7 @@ impl MatchArm {
     pub fn select(
         con: &str,
         arms: Vec<(MatchArm, Box<Comp>)>
-    ) -> Option<(Vec<VName>,Comp)> {
+    ) -> Option<(Vec<Ident>,Comp)> {
         for (m,c) in arms.into_iter() {
             if con == &m.constructor() {
                 let xs = m.binders
@@ -225,9 +225,9 @@ impl MatchArm {
 pub enum Comp {
     Apply(Box<Comp>, Vec<VType>, Vec<Val>),
     BindN(BinderN, Vec<Pattern>, Box<Comp>),
-    Bind1(Binder1, VName, Box<Comp>),
+    Bind1(Binder1, Ident, Box<Comp>),
     Force(Val),
-    Fun(Vec<(VName, Option<VType>)>, Box<Comp>),
+    Fun(Vec<(Ident, Option<VType>)>, Box<Comp>),
     Ite(Val, Box<Comp>, Box<Comp>),
     // Todo: we don't need the Box in the Match variant, since the
     // Comps are already in a Vec.
@@ -251,7 +251,7 @@ impl Comp {
     pub fn return_many<Vs: Into<Vec<Val>>>(vs: Vs) -> Self {
         Self::Return(vs.into())
     }
-    pub fn seq<C1,C2>(m1: C1, x: VName, m2: C2) -> Self
+    pub fn seq<C1,C2>(m1: C1, x: Ident, m2: C2) -> Self
     where C1: Into<Self>, C2: Into<Self>
     {
         Self::BindN(
@@ -260,7 +260,7 @@ impl Comp {
             Box::new(m2.into()),
         )
     }
-    pub fn seq1_many(ms: Vec<Self>, xs: Vec<VName>, m2: Self) -> Self {
+    pub fn seq1_many(ms: Vec<Self>, xs: Vec<Ident>, m2: Self) -> Self {
         assert!(
             ms.len() == xs.len(),
             "seq1_many with mismatched comp and name vecs"
@@ -276,7 +276,7 @@ impl Comp {
         m
     }
 
-    pub fn eq_ne<V1,V2,C>(pos: bool, v1: V1, v2: V2, x: VName, m: C) -> Self
+    pub fn eq_ne<V1,V2,C>(pos: bool, v1: V1, v2: V2, x: Ident, m: C) -> Self
     where
         V1: Into<Vec<Val>>,
         V2: Into<Vec<Val>>,
@@ -292,9 +292,9 @@ impl Comp {
     pub fn quant<C1: Into<Comp>, C2: Into<Comp>>(
         q: Quantifier,
         s: VType,
-        x_quant: VName,
+        x_quant: Ident,
         m_body: C1,
-        x_result: VName,
+        x_result: Ident,
         m2: C2,
     ) -> Self {
         Self::Bind1(
@@ -306,9 +306,9 @@ impl Comp {
 
     pub fn quant_many<C1: Into<Comp>, C2: Into<Comp>>(
         q: Quantifier,
-        xs: Vec<(VName,VType)>,
+        xs: Vec<(Ident,VType)>,
         m_body: C1,
-        x_result: VName,
+        x_result: Ident,
         m2: C2,
     ) -> Self {
         Self::Bind1(
@@ -320,9 +320,9 @@ impl Comp {
 
     pub fn exists<C: Into<Comp>>(
         s: VType,
-        x_quant: VName,
+        x_quant: Ident,
         m_body: C,
-        x_result: VName,
+        x_result: Ident,
         m2: C,
     ) -> Self {
         Self::quant(Quantifier::Exists, s, x_quant, m_body, x_result, m2)
@@ -330,15 +330,15 @@ impl Comp {
 
     pub fn forall<C: Into<Comp>>(
         s: VType,
-        x_quant: VName,
+        x_quant: Ident,
         m_body: C,
-        x_result: VName,
+        x_result: Ident,
         m2: C,
     ) -> Self {
         Self::quant(Quantifier::Forall, s, x_quant, m_body, x_result, m2)
     }
 
-    pub fn not<V: Into<Val>, C: Into<Comp>>(v: V, x: VName, m: C) -> Self {
+    pub fn not<V: Into<Val>, C: Into<Comp>>(v: V, x: Ident, m: C) -> Self {
         Self::Bind1(Binder1::LogNot(v.into()), x, Box::new(m.into()))
     }
 }

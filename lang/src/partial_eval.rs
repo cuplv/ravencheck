@@ -15,7 +15,7 @@ use crate::{
     Rebuild,
     Sig,
     Val,
-    VName,
+    Ident,
     VType,
 };
 
@@ -166,7 +166,7 @@ impl Comp {
                         "Should not force a bool, but {:?} was negated, which should only happen if it's a bool",
                         Val::Var(x, types, path, false),
                     ),
-                    Val::Var(VName::Manual(s), types, path, true) => {
+                    Val::Var(Ident::Manual(s), types, path, true) => {
                         let oc = OpCode { ident: s.clone(), types, path };
 
                         match stack.0.pop() {
@@ -483,7 +483,7 @@ impl Comp {
 }
 
 impl Pattern {
-    fn subs(self, v: Val) -> Vec<(VName, Val)> {
+    fn subs(self, v: Val) -> Vec<(Ident, Val)> {
         match self {
             Self::NoBind => Vec::new(),
             Self::Atom(x) => vec![(x,v)],
@@ -515,7 +515,7 @@ impl Pattern {
 }
 
 impl Gen {
-    fn flatten_sig(&mut self, t: VType) -> (Vec<(VName,VType)>, Val) {
+    fn flatten_sig(&mut self, t: VType) -> (Vec<(Ident,VType)>, Val) {
         match t {
             VType::Base(s) => {
                 let x = self.next();

@@ -27,7 +27,7 @@ use ravenlang::{
     RirFnSig,
     InstRuleSyntax,
     TypeContext,
-    VName,
+    Ident as RirIdent,
     VType,
     Val,
     syn_to_builder,
@@ -264,15 +264,15 @@ impl Rcc {
         // Sequence each call to the given output variable.
 
         // The fn item body goes on bottom.
-        let code_calls: Vec<(Builder, VName)> = calls
+        let code_calls: Vec<(Builder, RirIdent)> = calls
             .iter()
             .map(|call| {
                 let vs = call.inputs
                     .iter()
-                    .map(|s| VName::new(s).val())
+                    .map(|s| RirIdent::new(s).val())
                     .collect::<Vec<_>>();
                 let b = call.code().as_fun().builder().apply_rt(vs);
-                (b, VName::new(&call.output))
+                (b, RirIdent::new(&call.output))
             })
             .collect();
 
@@ -333,12 +333,12 @@ impl Rcc {
         // output variable.
 
         // The fn item body goes on bottom, again.
-        let def_calls: Vec<(Builder, VName)> = calls
+        let def_calls: Vec<(Builder, RirIdent)> = calls
             .iter()
             .map(|call| {
                 let vs = call.inputs
                     .iter()
-                    .map(|s| VName::new(s).val())
+                    .map(|s| RirIdent::new(s).val())
                     .collect();
                 let def = match self.defs.get(&call.ident) {
                     Some(def) => Ok(def.clone()),
@@ -347,7 +347,7 @@ impl Rcc {
                 let def = def.rename(&mut igen);
                 def.advance_gen(&mut igen);
                 let b = def.builder().apply_rt(vs);
-                Ok::<(Builder,VName), String>((b, VName::new(&call.output)))
+                Ok::<(Builder,RirIdent), String>((b, RirIdent::new(&call.output)))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -453,9 +453,9 @@ impl Rcc {
         let RirFn{sig, body} = i;
         let RirFnSig{ident, tas, inputs, output} = sig.clone();
 
-        // Simplify inputs to VNames (someday I'd like to support
+        // Simplify inputs to RirIdents (someday I'd like to support
         // patterns...)
-        let inputs: Vec<(VName, VType)> = inputs
+        let inputs: Vec<(RirIdent, VType)> = inputs
             .into_iter()
             .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
             .collect::<Result<Vec<_>, String>>()?;
@@ -475,12 +475,12 @@ impl Rcc {
                     .collect::<Vec<_>>(),
                 output.clone(),
             );
-            tc = tc.plus(VName::new(ident.clone()), f_type);
+            tc = tc.plus(RirIdent::new(ident.clone()), f_type);
         }
 
         body.type_check_r(&CType::Return(output.clone()), tc)?;
 
-        let inputs: Vec<(VName, Option<VType>)> = inputs
+        let inputs: Vec<(RirIdent, Option<VType>)> = inputs
             .into_iter()
             .map(|(x,t)| (x, Some(t)))
             .collect();
