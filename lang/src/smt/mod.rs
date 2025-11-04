@@ -4,7 +4,7 @@ use crate::{
     parse_str_cbpv,
     Builder,
     Comp,
-    Gen,
+    IGen,
     Goal,
     Op,
     Quantifier,
@@ -247,10 +247,10 @@ Error in type-checking definition of \"{}\": {:?}",
             type_args.push(VType::ui(t));
         }
 
-        let mut gn = Gen::new();
-        op.def.advance_gen(&mut gn);
+        let mut gn = IGen::new();
+        op.def.advance_igen(&mut gn);
         for a in &op.axioms {
-            a.advance_gen(&mut gn);
+            a.advance_igen(&mut gn);
         }
         let mut input_args: Vec<Val> = Vec::new();
         let mut q_sig: Vec<(Ident, VType)> = Vec::new();
@@ -262,7 +262,7 @@ Error in type-checking definition of \"{}\": {:?}",
         let m =
             Builder::lift(op.def.clone())
             .apply_rt(input_args.clone())
-            .seq_gen(move |x| {
+            .seq_igen(move |x| {
                 Builder::lift(op.axioms[op.axioms.len() - 1].clone())
                     .apply_rt(input_args)
                     .apply_rt(vec![x])
@@ -328,10 +328,10 @@ Error in type-checking definition of \"{}\": {:?}",
             (_, Op::Rec(op)) => op,
             _ => panic!(),
         };
-        let mut gn = Gen::new();
-        op.def.advance_gen(&mut gn);
+        let mut gn = IGen::new();
+        op.def.advance_igen(&mut gn);
         for a in &op.axioms {
-            a.advance_gen(&mut gn);
+            a.advance_igen(&mut gn);
         }
         let mut input_args: Vec<Val> = Vec::new();
         let mut q_sig: Vec<(Ident, VType)> = Vec::new();
@@ -343,7 +343,7 @@ Error in type-checking definition of \"{}\": {:?}",
         let m =
             Builder::lift(op.def.clone())
             .apply_rt(input_args.clone())
-            .seq_gen(move |x| {
+            .seq_igen(move |x| {
                 Builder::lift(op.axioms[0].clone())
                     .apply_rt(input_args)
                     .apply_rt(vec![x])

@@ -2,7 +2,7 @@ use crate::{
     Builder,
     Binder1,
     Comp,
-    Gen,
+    IGen,
     LogOpN,
     MatchArm,
     Oc,
@@ -13,7 +13,7 @@ use crate::{
 };
 
 impl Binder1 {
-    pub fn eliminate_match(self, sig: &Sig, igen: &mut Gen) -> Self {
+    pub fn eliminate_match(self, sig: &Sig, igen: &mut IGen) -> Self {
         match self {
             Self::LogQuantifier(q, xs, m) => Self::LogQuantifier(
                 q, xs, Box::new(m.eliminate_match(sig,igen))
@@ -24,7 +24,7 @@ impl Binder1 {
 }
 
 impl Comp {
-    pub fn eliminate_match(self, sig: &Sig, igen: &mut Gen) -> Self {
+    pub fn eliminate_match(self, sig: &Sig, igen: &mut IGen) -> Self {
         match self {
             Self::Bind1(b, x, m) => Self::Bind1(
                 b.eliminate_match(sig,igen),
@@ -96,7 +96,7 @@ fn build_symbolic_branch(
     arm: MatchArm,
     branch: Comp,
     sig: &Sig,
-    igen: &mut Gen,
+    igen: &mut IGen,
 ) -> Comp {
     let types = match sig.get_applied_op_or_con(&arm.code) {
         Ok(Oc::Con(ts)) => ts,
@@ -133,7 +133,7 @@ fn build_symbolic_branch(
 fn build_symbolic_match(
     mut branches: Vec<Comp>,
     sig: &Sig,
-    igen: &mut Gen,
+    igen: &mut IGen,
 ) -> Comp {
     if branches.len() == 1 {
         let b = branches.pop().unwrap().partial_eval_single_case(sig, igen);

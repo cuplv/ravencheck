@@ -3,19 +3,19 @@ use crate::{
     Comp,
     LogOpN,
     neg_normal_form::DemandSet,
-    Gen,
+    IGen,
     Sig,
 };
 
 impl Binder1 {
-    pub fn negate(&self, sig: &Sig, dem: &mut DemandSet, gen: &mut Gen) -> Self {
+    pub fn negate(&self, sig: &Sig, dem: &mut DemandSet, igen: &mut IGen) -> Self {
         match self {
             Self::Eq(is_pos, vs1, vs2) =>
                 Self::Eq(!is_pos, vs1.clone(), vs2.clone()),
             Self::LogQuantifier(q, xs, m) => {
                 let m_neg = m
-                    .negate_with(gen)
-                    .partial_eval_single_case(sig,gen);
+                    .negate_with(igen)
+                    .partial_eval_single_case(sig,igen);
                 Self::LogQuantifier(
                     q.invert(),
                     xs.clone(),
@@ -27,12 +27,12 @@ impl Binder1 {
             Self::LogOpN(op, vs) => match op {
                 LogOpN::And => {
                     let vs_neg =
-                        vs.iter().map(|v| v.demand_negative(dem,gen)).collect();
+                        vs.iter().map(|v| v.demand_negative(dem,igen)).collect();
                     Self::LogOpN(LogOpN::Or, vs_neg)
                 }
                 LogOpN::Or => {
                     let vs_neg =
-                        vs.iter().map(|v| v.demand_negative(dem,gen)).collect();
+                        vs.iter().map(|v| v.demand_negative(dem,igen)).collect();
                     Self::LogOpN(LogOpN::And, vs_neg)
                 }
                 LogOpN::Pred(s,is_neg) =>
@@ -46,13 +46,13 @@ impl Binder1 {
 impl Comp {
     /// Negate a prop-type Comp.
     pub fn negate(&self) -> Self {
-        let mut gen = self.get_gen();
-        self.negate_with(&mut gen)
+        let mut igen = self.get_igen();
+        self.negate_with(&mut igen)
     }
     
-    pub fn negate_with(&self, gen: &mut Gen) -> Self {
-        let x1 = gen.next();
-        let x2 = gen.next();
+    pub fn negate_with(&self, igen: &mut IGen) -> Self {
+        let x1 = igen.next();
+        let x2 = igen.next();
         // Simply sequence the Comp into a new LogNot node. Later,
         // normalization will eliminate this node by inverting logical
         // operators and quantifiers.

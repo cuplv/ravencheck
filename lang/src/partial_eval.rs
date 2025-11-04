@@ -4,7 +4,7 @@ use crate::{
     Builder,
     CaseName,
     Comp,
-    Gen,
+    IGen,
     Literal,
     LogOpN,
     Oc,
@@ -35,8 +35,8 @@ impl Stack {
 }
 
 impl Comp {
-    pub fn partial_eval(self, sig: &Sig, gen: &mut Gen, name: CaseName) -> Vec<(CaseName,Self)> {
-        let cases = self.partial_eval_loop(sig, gen, Stack::new(), Vec::new(), name);
+    pub fn partial_eval(self, sig: &Sig, igen: &mut IGen, name: CaseName) -> Vec<(CaseName,Self)> {
+        let cases = self.partial_eval_loop(sig, igen, Stack::new(), Vec::new(), name);
         // println!("partial_eval passing up {} cases", cases.len());
         // println!("\npartial_eval returning {:?}\n", cases);
         cases
@@ -44,12 +44,12 @@ impl Comp {
 
     /// Only use this on comps that don't have contain case-splitting
     /// constructs (if-then-else and match).
-    pub fn partial_eval_single_case(self, sig: &Sig, gen: &mut Gen) -> Self {
+    pub fn partial_eval_single_case(self, sig: &Sig, igen: &mut IGen) -> Self {
         // Give the partial_eval_loop the root() case name, which we
         // will discard.
         let mut cases = self.partial_eval_loop(
             sig,
-            gen,
+            igen,
             Stack::new(),
             Vec::new(),
             CaseName::root()
@@ -67,7 +67,7 @@ impl Comp {
     fn partial_eval_loop(
         mut self,
         sig: &Sig,
-        gen: &mut Gen,
+        igen: &mut IGen,
         mut stack: Stack,
         mut anti_stack: Vec<Rebuild>,
         case_name: CaseName,
@@ -119,7 +119,7 @@ impl Comp {
                             match t.unwrap_base() {
                                 Ok(s) => sig2.push((x, VType::Base(s))),
                                 Err(t) => {
-                                    let (mut ss,v) = gen.flatten_sig(t);
+                                    let (mut ss,v) = igen.flatten_sig(t);
                                     sig2.append(&mut ss);
                                     body = body.substitute(&x, &v);
                                 }
@@ -133,7 +133,7 @@ impl Comp {
                         // body.
 
                         // Problem here: how can we split cases when inside a quantifier?
-                        let mut body_cases = body.partial_eval_loop(sig, gen, Stack(Vec::new()), Vec::new(), case_name.clone());
+                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone());
                         assert!(
                             body_cases.len() == 1,
                             "For now, quantifier body should only have one case, but it had {} cases",
@@ -195,7 +195,7 @@ impl Comp {
                                             let ts = output.flatten();
                                             // We generate an ident for each
                                             // atomic type.
-                                            let xs = gen.next_many(ts.len());
+                                            let xs = igen.next_many(ts.len());
                                             // Then make a pattern to bind each ident.
                                             let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
                                             // And a return value that gathers
@@ -212,12 +212,12 @@ impl Comp {
                                         oc,
                                     ),
                                     Ok(Oc::Op(Op::Direct(f))) => {
-                                        self = Builder::lift(f.clone().rename(gen))
+                                        self = Builder::lift(f.clone().rename(igen))
                                             .apply_rt(vs)
-                                            .build(gen);
+                                            .build(igen);
                                     }
                                     Ok(Oc::Op(Op::Symbol(..))) => {
-                                        let x_result = gen.next();
+                                        let x_result = igen.next();
                                         let mut flat_vs = Vec::new();
                                         for v in vs {
                                             flat_vs.append(&mut v.flatten());
@@ -230,7 +230,7 @@ impl Comp {
                                         self = Comp::return1(x_result);
                                     }
                                     Ok(Oc::Op(Op::Pred(..))) => {
-                                        let x_result = gen.next();
+                                        let x_result = igen.next();
                                         anti_stack.push(Rebuild::LogOpN(
                                             LogOpN::Pred(oc,true),
                                             vs,
@@ -247,7 +247,7 @@ impl Comp {
                                         let ts = op.output.clone().flatten();
                                         // We generate an ident for each
                                         // atomic type.
-                                        let xs = gen.next_many(ts.len());
+                                        let xs = igen.next_many(ts.len());
                                         // Then make a pattern to bind each ident.
                                         let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
                                         // And a return value that gathers
@@ -269,7 +269,7 @@ impl Comp {
                                             let ts = op.output.clone().flatten();
                                             // We generate an ident for each
                                             // atomic type.
-                                            let xs = gen.next_many(ts.len());
+                                            let xs = igen.next_many(ts.len());
                                             // Then make a pattern to bind each ident.
                                             let ps = xs.clone().into_iter().map(Pattern::Atom).collect();
                                             // And a return value that gathers
@@ -301,7 +301,7 @@ impl Comp {
                     Val::OpCode(OpMode::RelAbs, oc) => {
                         match stack.0.pop() {
                             Some(Frame::Args(_,vs)) => {
-                                let x_result = gen.next();
+                                let x_result = igen.next();
                                 let mut flat_vs = Vec::new();
                                 for v in vs {
                                     flat_vs.append(&mut v.flatten());
@@ -356,7 +356,7 @@ impl Comp {
                             // that vars are still unique across both
                             // branches.
                             let mut then_cases = then_b
-                                .partial_eval_loop(sig, gen, stack.clone(), Vec::new(), case_name.clone());
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone());
                             assert!(
                                 then_cases.len() == 1,
                                 "For now, then-branch should have 1 case, but it had {} cases",
@@ -365,7 +365,7 @@ impl Comp {
                             let then_b = then_cases.pop().unwrap().1;
 
                             let mut else_cases = else_b
-                                .partial_eval_loop(sig, gen, stack.clone(), Vec::new(), case_name.clone());
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone());
                             assert!(
                                 else_cases.len() == 1,
                                 "For now, else-branch should have 1 case, but it had {} cases",
@@ -424,7 +424,7 @@ impl Comp {
                                     let mut branch_cases = branch
                                         .partial_eval_loop(
                                             sig,
-                                            gen,
+                                            igen,
                                             stack.clone(),
                                             Vec::new(),
                                             case_name.clone(),
@@ -514,7 +514,7 @@ impl Pattern {
     }
 }
 
-impl Gen {
+impl IGen {
     fn flatten_sig(&mut self, t: VType) -> (Vec<(Ident,VType)>, Val) {
         match t {
             VType::Base(s) => {

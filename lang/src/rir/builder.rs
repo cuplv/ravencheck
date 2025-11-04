@@ -1,34 +1,28 @@
-use crate::VType;
-use crate::Ident;
-use crate::Gen;
 use crate::{
     Binder1,
     BinderN,
     Comp,
+    IGen,
+    Ident,
     LogOpN,
     MatchArm,
     Pattern,
     Quantifier,
-    Val
+    VType,
+    Val,
 };
 
 pub struct Builder {
-    fun: Box<dyn FnOnce(&mut Gen) -> Comp>,
+    fun: Box<dyn FnOnce(&mut IGen) -> Comp>,
 }
 
 impl Comp {
     pub fn builder(self) -> Builder {
         Builder{
-            fun: Box::new(|_gen: &mut Gen| self)
+            fun: Box::new(|_igen: &mut IGen| self)
         }
     }
 }
-
-// impl Into<Builder> for Comp {
-//     fn into(self) -> Builder {
-//         self.builder()
-//     }
-// }
 
 impl From<Comp> for Builder {
     fn from(comp: Comp) -> Self {
@@ -37,18 +31,18 @@ impl From<Comp> for Builder {
 }
 
 impl Builder {
-    pub fn build(self, gen: &mut Gen) -> Comp {
-        (self.fun)(gen)
+    pub fn build(self, igen: &mut IGen) -> Comp {
+        (self.fun)(igen)
     }
-    pub fn gen<F1,F2>(self, f: F1) -> Self
+    pub fn igen<F1,F2>(self, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
         F2: FnOnce(Ident) -> Self,
     {
-        Self::new(|gen| {
-            let m = self.build(gen);
-            let x = gen.next();
-            f(Builder::lift(m))(x).build(gen)
+        Self::new(|igen| {
+            let m = self.build(igen);
+            let x = igen.next();
+            f(Builder::lift(m))(x).build(igen)
         })
     }
 
@@ -70,25 +64,25 @@ impl Builder {
         })
     }
 
-    pub fn gen_many<F1,F2>(self, n: usize, f: F1) -> Self
+    pub fn igen_many<F1,F2>(self, n: usize, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
         F2: FnOnce(Vec<Ident>) -> Self,
     {
-        Self::new(move |gen| {
-            let m = self.build(gen);
-            let xs = gen.next_many(n);
-            f(Builder::lift(m))(xs).build(gen)
+        Self::new(move |igen| {
+            let m = self.build(igen);
+            let xs = igen.next_many(n);
+            f(Builder::lift(m))(xs).build(igen)
         })
     }
     pub fn lift(m: Comp) -> Self {
         Self{
-            fun: Box::new(|_gen: &mut Gen| m)
+            fun: Box::new(|_igen: &mut IGen| m)
         }
     }
     pub fn new<F>(f: F) -> Self
     where
-        F: FnOnce(&mut Gen) -> Comp + 'static
+        F: FnOnce(&mut IGen) -> Comp + 'static
     {
         Self{fun: Box::new(f)}
     }
@@ -104,28 +98,28 @@ impl Builder {
     where
         F: FnOnce(Comp) -> Self + 'static,
     {
-        Self::new(|gen| {
-            f(self.build(gen)).build(gen)
+        Self::new(|igen| {
+            f(self.build(igen)).build(igen)
         })
     }
     pub fn bind_many<F>(bs: Vec<Self>, f: F) -> Self
     where
         F: FnOnce(Vec<Comp>) -> Self + 'static,
     {
-        Self::new(|gen| {
+        Self::new(|igen| {
             let cs = bs
                 .into_iter()
-                .map(|b| b.build(gen))
+                .map(|b| b.build(igen))
                 .collect();
-            f(cs).build(gen)
+            f(cs).build(igen)
         })
     }
     pub fn return_<V: Into<Val>>(v: V) -> Self {
         Self::lift(Comp::return1(v))
     }
     pub fn return_thunk(b: Self) -> Self {
-        Self::new(|gen| {
-            let m = b.build(gen);
+        Self::new(|igen| {
+            let m = b.build(igen);
             Comp::return1(Val::thunk(&m))
         })
     }
@@ -137,29 +131,29 @@ impl Builder {
         F1: FnOnce(Val) -> Self + 'static,
     {
         |x|
-        Self::new(|gen: &mut Gen| {
-            let m1 = self.build(gen);
-            let m2 = cont(x.clone().val()).build(gen);
+        Self::new(|igen: &mut IGen| {
+            let m1 = self.build(igen);
+            let m2 = cont(x.clone().val()).build(igen);
             Comp::seq(m1, x, m2)
         })
     }
     pub fn seq_pat(self, cont: Self) -> impl FnOnce(Pattern) -> Self
     {
         |p|
-        Self::new(|gen: &mut Gen| {
-            let m1 = self.build(gen);
+        Self::new(|igen: &mut IGen| {
+            let m1 = self.build(igen);
             Comp::BindN(
                 BinderN::Seq(Box::new(m1)),
                 vec![p],
-                Box::new(cont.build(gen)),
+                Box::new(cont.build(igen)),
             )
         })
     }
-    pub fn seq_gen<F>(self, cont: F) -> Self
+    pub fn seq_igen<F>(self, cont: F) -> Self
     where
         F: FnOnce(Val) -> Self + 'static
     {
-        self.gen(|b||x| {
+        self.igen(|b||x| {
             b.seq(cont)(x)
         })
     }
@@ -183,53 +177,53 @@ impl Builder {
             })
         })
     }
-    pub fn seq_many_gen<Cs,F>(bs: Cs, cont: F) -> Self
+    pub fn seq_many_igen<Cs,F>(bs: Cs, cont: F) -> Self
     where
         Cs: Into<Vec<Self>> + 'static,
         F: FnOnce(Vec<Val>) -> Self + 'static,
     {
-        Self::new(|gen: &mut Gen| {
+        Self::new(|igen: &mut IGen| {
             let ms: Vec<Comp> =
-                bs.into().into_iter().map(|b| b.build(gen)).collect();
-            let xs = gen.next_many(ms.len());
+                bs.into().into_iter().map(|b| b.build(igen)).collect();
+            let xs = igen.next_many(ms.len());
             let m2 =
                 cont(xs.clone().into_iter().map(|x| x.val()).collect())
-                .build(gen);
+                .build(igen);
             Comp::seq1_many(ms, xs, m2)
         })
     }
 
-    pub fn fun_gen<F>(t: VType, cont: F) -> Self
+    pub fn fun_igen<F>(t: VType, cont: F) -> Self
     where
         F: FnOnce(Val) -> Self + 'static,
     {
-        Self::new(|vgen: &mut Gen| {
-            let x = vgen.next();
+        Self::new(|igen: &mut IGen| {
+            let x = igen.next();
             let v = x.clone().val();
-            Comp::Fun(vec![(x, Some(t))], Box::new(cont(v).build(vgen)))
+            Comp::Fun(vec![(x, Some(t))], Box::new(cont(v).build(igen)))
         })
     }
 
-    pub fn fun_many_gen<Ts,F>(ts: Ts, cont: F) -> Self
+    pub fn fun_many_igen<Ts,F>(ts: Ts, cont: F) -> Self
     where
         Ts: Into<Vec<VType>> + 'static,
         F: FnOnce(Vec<Val>) -> Self + 'static,
     {
-        Self::new(|vgen: &mut Gen| {
+        Self::new(|igen: &mut IGen| {
             let ts = ts.into();
 
-            let xs = vgen.next_many(ts.len());
+            let xs = igen.next_many(ts.len());
             let vs = xs.clone().into_iter().map(|x| x.val()).collect();
             let xts = xs.into_iter().zip(ts).map(|(x,t)| (x,Some(t))).collect();
-            Comp::Fun(xts, Box::new(cont(vs).build(vgen)))
+            Comp::Fun(xts, Box::new(cont(vs).build(igen)))
         })
     }
 
     pub fn eq_ne(self, pos: bool, other: Self) -> Self {
-        self.seq_gen(move |x| {
-             other.seq_gen(move |y| {
-                Self::new(move |gen: &mut Gen| {
-                    let x_result = gen.next();
+        self.seq_igen(move |x| {
+             other.seq_igen(move |y| {
+                Self::new(move |igen: &mut IGen| {
+                    let x_result = igen.next();
                     Comp::eq_ne(
                         pos,
                         [x],
@@ -244,15 +238,15 @@ impl Builder {
 
     pub fn log_op<Bs: Into<Vec<Self>>>(op: LogOpN, bs: Bs) -> Builder {
         let mut bs: Vec<Self> = bs.into();
-        Self::new(|gen: &mut Gen| {
+        Self::new(|igen: &mut IGen| {
             bs.reverse();
             let mut ms = Vec::new();
             for b in bs {
-                ms.push(b.build(gen));
+                ms.push(b.build(igen));
             }
-            let xs = gen.next_many(ms.len());
+            let xs = igen.next_many(ms.len());
             let vs = xs.clone().into_iter().map(|x| x.val()).collect();
-            let y = gen.next();
+            let y = igen.next();
             Comp::seq1_many(
                 ms,
                 xs,
@@ -294,7 +288,7 @@ impl Builder {
     }
 
     pub fn ite(self, then_branch: Self, else_branch: Self) -> Self {
-        self.seq_gen(|v_cond| {
+        self.seq_igen(|v_cond| {
             then_branch.bind(|m_then| {
                 else_branch.bind(|m_else| {
                     Self::lift(Comp::ite(v_cond, m_then, m_else))
@@ -310,7 +304,7 @@ impl Builder {
             matchers.push(m);
             comps.push(c);
         }
-        self.seq_gen(|v_target| {
+        self.seq_igen(|v_target| {
             Self::bind_many(comps, |comps| {
                 let comps = comps
                     .into_iter()
@@ -329,26 +323,26 @@ impl Builder {
     where
         Bs: Into<Vec<Self>> + 'static
     {
-        Self::seq_many_gen(bs, |xs| {
+        Self::seq_many_igen(bs, |xs| {
             Self::return_(Val::Tuple(xs))
         })
     }
 
 
     pub fn not(self) -> Self {
-        self.seq_gen(|x| Builder::new(|gen: &mut Gen| {
-            let x_neg = gen.next();
+        self.seq_igen(|x| Builder::new(|igen: &mut IGen| {
+            let x_neg = igen.next();
             Comp::not(x, x_neg.clone(), Comp::return1(x_neg))
         }))
     }
     pub fn flatten(self) -> Self {
-        self.seq_gen(|x_thunk| {
+        self.seq_igen(|x_thunk| {
             Builder::lift(Comp::force(x_thunk))
         })
     }
     pub fn ret_thunk(self) -> Self {
-        Self::new(|vgen: &mut Gen| {
-            Comp::Return(vec![Val::Thunk(Box::new(self.build(vgen)))])
+        Self::new(|igen: &mut IGen| {
+            Comp::Return(vec![Val::Thunk(Box::new(self.build(igen)))])
         })
     }
 
@@ -356,12 +350,12 @@ impl Builder {
     where
         Xs: Into<Vec<(Ident,VType)>> + 'static,
     {
-        Self::new(move |gen: &mut Gen| {
-            let x_result = gen.next();
+        Self::new(move |igen: &mut IGen| {
+            let x_result = igen.next();
             Comp::quant_many(
                 q,
                 xs.into(),
-                self.build(gen),
+                self.build(igen),
                 x_result.clone(),
                 Comp::return1(x_result),
             )
@@ -425,8 +419,8 @@ impl Builder {
     where
         Xs: Into<Vec<(Ident,Option<VType>)>> + 'static,
     {
-        Self::new(move |gen: &mut Gen| {
-            Comp::Fun(xs.into(), Box::new(self.build(gen)))
+        Self::new(move |igen: &mut IGen| {
+            Comp::Fun(xs.into(), Box::new(self.build(igen)))
         })
     }
 
@@ -434,8 +428,8 @@ impl Builder {
     where
         Vs: Into<Vec<Val>> + 'static
     {
-        Self::new(|gen: &mut Gen| {
-            Comp::apply(self.build(gen), Vec::new(), vs)
+        Self::new(|igen: &mut IGen| {
+            Comp::apply(self.build(igen), Vec::new(), vs)
         })
     }
 
@@ -443,15 +437,15 @@ impl Builder {
     where
         Bs: Into<Vec<Self>> + 'static,
     {
-        Self::seq_many_gen(bs, |xs| {
+        Self::seq_many_igen(bs, |xs| {
             self.apply_v(xs)
         })
     }
 
     pub fn apply_rt(self, vs: Vec<Val>) -> Self {
-        Self::new(|gen: &mut Gen| {
-            let m = self.build(gen);
-            let x_thunk = gen.next();
+        Self::new(|igen: &mut IGen| {
+            let m = self.build(igen);
+            let x_thunk = igen.next();
             Comp::seq(
                 m,
                 x_thunk.clone(),

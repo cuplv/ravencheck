@@ -9,9 +9,9 @@ use crate::{
 
 /// A bit of state used to auto-generate fresh variable names.
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Gen(u32);
+pub struct IGen(u32);
 
-impl Gen {
+impl IGen {
     pub fn next(&mut self) -> Ident {
         let n = Ident::Auto(self.0);
         self.0 = self.0 + 1;
@@ -33,31 +33,31 @@ impl Gen {
         }
     }
     pub fn new() -> Self {
-        Gen(0)
+        IGen(0)
     }
 }
 
 impl Binder1 {
-    fn advance_gen(&self, gen: &mut Gen) {
+    fn advance_igen(&self, igen: &mut IGen) {
         match self {
             Self::Eq(_, vs1, vs2) => {
                 for v in vs1 {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
                 for v in vs2 {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
             }
             Self::LogQuantifier(_q, xs, m) => {
                 for (x,_) in xs {
-                    gen.advance(x);
+                    igen.advance(x);
                 }
-                m.advance_gen(gen);
+                m.advance_igen(igen);
             }
-            Self::LogNot(v) => v.advance_gen(gen),
+            Self::LogNot(v) => v.advance_igen(igen),
             Self::LogOpN(_op, vs) => {
                 for v in vs {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
             }
         }
@@ -65,89 +65,88 @@ impl Binder1 {
 }
 
 impl BinderN {
-    fn advance_gen(&self, gen: &mut Gen) {
+    fn advance_igen(&self, igen: &mut IGen) {
         match self {
             Self::Call(_oc, _vs) => todo!(),
             Self::Seq(m) => {
-                m.advance_gen(gen);
+                m.advance_igen(igen);
             }
         }
     }
 }
 
 impl Comp {
-    /// Advance the given Gen past any Ident appearing in the
+    /// Advance the given IGen past any Ident appearing in the
     /// computation.
-    pub fn advance_gen(&self, gen: &mut Gen) {
+    pub fn advance_igen(&self, igen: &mut IGen) {
         match self {
             Self::Apply(m,_,vs) => {
-                m.advance_gen(gen);
+                m.advance_igen(igen);
                 for v in vs {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
             }
             Self::Bind1(b, x, m) => {
-                b.advance_gen(gen);
-                gen.advance(&x);
-                m.advance_gen(gen);
+                b.advance_igen(igen);
+                igen.advance(&x);
+                m.advance_igen(igen);
             }
             Self::BindN(b, ps, m) => {
-                b.advance_gen(gen);
+                b.advance_igen(igen);
                 for p in ps {
-                    p.advance_gen(gen);
+                    p.advance_igen(igen);
                 }
-                m.advance_gen(gen);
+                m.advance_igen(igen);
             }
             Self::Force(v) => {
-                v.advance_gen(gen);
+                v.advance_igen(igen);
             }
             Self::Fun(xs, m) => {
                 for (x,_) in xs {
-                    gen.advance(x);
+                    igen.advance(x);
                 }
-                m.advance_gen(gen);
+                m.advance_igen(igen);
             }
             Self::Ite(cond, then_b, else_b) => {
-                cond.advance_gen(gen);
-                then_b.advance_gen(gen);
-                else_b.advance_gen(gen);
+                cond.advance_igen(igen);
+                then_b.advance_igen(igen);
+                else_b.advance_igen(igen);
             }
             Self::Match(v, arms) => {
-                v.advance_gen(gen);
+                v.advance_igen(igen);
                 for (arm, comp) in arms.iter() {
                     for p in arm.binders.iter() {
-                        p.advance_gen(gen);
+                        p.advance_igen(igen);
                     }
-                    comp.advance_gen(gen);
+                    comp.advance_igen(igen);
                 }
             }
             Self::Return(vs) => {
                 for v in vs {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
             }
-            // c => todo!("advance_gen {:?}", c),
         }
     }
-    /// Returns a Gen that has advanced beyond any Ident
+    /// Returns an `IGen` that has advanced beyond any `Ident`
     /// appearing in the computation.
-    pub fn get_gen(&self) -> Gen {
-        let mut gen = Gen::new();
-        self.advance_gen(&mut gen);
-        gen
+    pub fn get_igen(&self) -> IGen {
+        let mut igen = IGen::new();
+        self.advance_igen(&mut igen);
+        igen
     }
 }
 
 impl Pattern {
-    fn advance_gen(&self, gen: &mut Gen) {
+    fn advance_igen(&self, igen: &mut IGen) {
         match self {
             Pattern::NoBind => {}
             Pattern::Atom(x) => {
-                gen.advance(x);
+                igen.advance(x);
             }
             Pattern::Tuple(ps) => {
                 for p in ps {
-                    p.advance_gen(gen);
+                    p.advance_igen(igen);
                 }
             }
         }
@@ -155,17 +154,17 @@ impl Pattern {
 }
 
 impl Val {
-    fn advance_gen(&self, gen: &mut Gen) {
+    fn advance_igen(&self, igen: &mut IGen) {
         match self {
             Val::Literal(_l) => {},
             Val::OpCode(..) => {},
-            Val::Thunk(m) => m.advance_gen(gen),
+            Val::Thunk(m) => m.advance_igen(igen),
             Val::Tuple(vs) => {
                 for v in vs {
-                    v.advance_gen(gen);
+                    v.advance_igen(igen);
                 }
             }
-            Val::Var(x,_,_,_) => gen.advance(x),
+            Val::Var(x,_,_,_) => igen.advance(x),
         }
     }
 }

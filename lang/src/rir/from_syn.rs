@@ -46,7 +46,7 @@ use crate::{
     BType,
     Comp,
     InstRule,
-    Gen,
+    IGen,
     HypotheticalCall,
     LogOpN,
     MatchArm,
@@ -783,7 +783,7 @@ impl RirFn {
     ) -> Result<Self, Error> {
         let sig = RirFnSig::from_syn(sig)?;
         let body = match block_to_builder(*block) {
-            Ok(b) => Ok(b.build(&mut Gen::new())),
+            Ok(b) => Ok(b.build(&mut IGen::new())),
             Err(e) => Err(e),
         }?;
         Ok(RirFn{sig, body})

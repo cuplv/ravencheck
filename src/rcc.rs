@@ -14,7 +14,7 @@ use ravenlang::{
     Comp,
     CType,
     CheckedSig,
-    Gen,
+    IGen,
     Goal,
     HypotheticalCallSyntax,
     HypotheticalCall,
@@ -276,7 +276,7 @@ impl Rcc {
             })
             .collect();
 
-        let mut igen = i.body.get_gen();
+        let mut igen = i.body.get_igen();
         let axiom_body = i.body.clone().builder();
         let axiom =
             Builder::seq_many(code_calls, |_| axiom_body)
@@ -345,7 +345,7 @@ impl Rcc {
                     None => Err(format!("Cannot check annotation '{}', because no definition found for '{}'. Did you forget to use #[recursive]?", prop_ident, &call.ident)),
                 }?;
                 let def = def.rename(&mut igen);
-                def.advance_gen(&mut igen);
+                def.advance_igen(&mut igen);
                 let b = def.builder().apply_rt(vs);
                 Ok::<(Builder,RirIdent), String>((b, RirIdent::new(&call.output)))
             })
@@ -359,7 +359,7 @@ impl Rcc {
         // they can reference the outputs of those.
         let vc =
             Builder::seq_many(def_calls, |_| {
-                Builder::seq_many_gen(insts, |_| {
+                Builder::seq_many_igen(insts, |_| {
                     i.body.builder()
                 })
             })
@@ -485,7 +485,7 @@ impl Rcc {
             .map(|(x,t)| (x, Some(t)))
             .collect();
         // Construct function for given typed inputs
-        let mut g = body.get_gen();
+        let mut g = body.get_igen();
         let fun: Comp =
             Builder::return_thunk(
                 Builder::lift(body).fun(inputs)
@@ -534,7 +534,7 @@ impl Rcc {
         let goal = Goal {
             title: ident,
             tas,
-            condition: formula.build(&mut Gen::new()),
+            condition: formula.build(&mut IGen::new()),
             should_be_valid,
             
         };
@@ -581,8 +581,8 @@ impl Rcc {
             None => Err(format!("Cannot check annotation on '{}', because no definition found for '{}'. Did you forget to use #[recursive]?", ident, ident)),
         }?;
 
-        let mut igen = def.get_gen();
-        f_axiom.advance_gen(&mut igen);
+        let mut igen = def.get_igen();
+        f_axiom.advance_igen(&mut igen);
 
         // Define a condition that...
         //
@@ -597,7 +597,7 @@ impl Rcc {
         // function axiom has already subbed those in.
         let f_axiom = f_axiom.builder();
         let input_count = input_types.len();
-        let vc = def.builder().gen_many(
+        let vc = def.builder().igen_many(
             input_count,
             |def| |xs| {
                 let input_vals: Vec<Val> = xs
@@ -611,7 +611,7 @@ impl Rcc {
                     .collect::<Vec<_>>();
                 def
                     .apply_rt(input_vals.clone())
-                    .seq_gen(|output| {
+                    .seq_igen(|output| {
                         f_axiom.apply_rt(input_vals).apply_rt(vec![output])
                     })
                     .quant(

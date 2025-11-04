@@ -2,7 +2,7 @@ use crate::{
     Binder1,
     BinderN,
     Comp,
-    Gen,
+    IGen,
     MatchArm,
     Pattern,
     Val,
@@ -11,18 +11,18 @@ use crate::{
 };
 
 impl Binder1 {
-    fn rename_r(self, gen: &mut Gen) -> Self {
+    fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
             Self::Eq(pos, vs1, vs2) => Self::Eq(
                 pos,
-                vs1.into_iter().map(|v| v.rename_r(gen)).collect(),
-                vs2.into_iter().map(|v| v.rename_r(gen)).collect(),
+                vs1.into_iter().map(|v| v.rename_r(igen)).collect(),
+                vs2.into_iter().map(|v| v.rename_r(igen)).collect(),
             ),
-            Self::LogNot(v) => Self::LogNot(v.rename_r(gen)),
+            Self::LogNot(v) => Self::LogNot(v.rename_r(igen)),
             Self::LogOpN(op, vs) => {
                 let vs2 = vs
                     .into_iter()
-                    .map(|v| v.rename_r(gen))
+                    .map(|v| v.rename_r(igen))
                     .collect();
                 Self::LogOpN(op, vs2)
             }
@@ -30,7 +30,7 @@ impl Binder1 {
                 // Start with xs = [(x1,s1), (x2,s2), ...]
 
                 // Create ys = [y1, y2, ...]
-                let ys: Vec<Ident> = gen.next_many(xs.len());
+                let ys: Vec<Ident> = igen.next_many(xs.len());
                 // Then subs = [(x1, Var(y1)), (x2, Var(y2)), ...]
                 let subs: Vec<(Ident,Val)> = xs
                     .iter()
@@ -44,7 +44,7 @@ impl Binder1 {
                     .map(|((_,s),y)| (y, s))
                     .collect();
                 Self::LogQuantifier(q, new_sig, Box::new(
-                    m.rename_r(gen).substitute_many(&subs)
+                    m.rename_r(igen).substitute_many(&subs)
                 ))
             }
         }
@@ -52,79 +52,79 @@ impl Binder1 {
 }
 
 impl BinderN {
-    fn rename_r(self, gen: &mut Gen) -> Self {
+    fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
             Self::Call(..) => todo!(),
-            Self::Seq(m) => Self::Seq(Box::new(m.rename_r(gen))),
+            Self::Seq(m) => Self::Seq(Box::new(m.rename_r(igen))),
         }
     }
 }
 
 impl Comp {
     /// Replace all variables in a comp with unique auto-generated
-    /// variables, using the given Gen.  The given Gen will
+    /// variables, using the given IGen.  The given IGen will
     /// be advanced to cover the new names.
-    pub fn rename(self, gen: &mut Gen) -> Self {
-        self.advance_gen(gen);
-        self.rename_r(gen)
+    pub fn rename(self, igen: &mut IGen) -> Self {
+        self.advance_igen(igen);
+        self.rename_r(igen)
     }
 
-    pub fn rename_r(self, gen: &mut Gen) -> Self {
+    pub fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
             Self::Apply(m, targs, vs) => {
-                let m2 = m.rename_r(gen);
+                let m2 = m.rename_r(igen);
                 let mut vs2 = Vec::new();
                 for v in vs.into_iter() {
-                    vs2.push(v.rename_r(gen));
+                    vs2.push(v.rename_r(igen));
                 }
                 Self::apply(m2, targs, vs2)
             }
             Self::Return(vs) => {
                 let vs2 = vs
                     .into_iter()
-                    .map(|v| v.rename_r(gen))
+                    .map(|v| v.rename_r(igen))
                     .collect();
                 Self::Return(vs2)
             }
             Self::Bind1(b,x,m) => {
                 // Rename any vars introduced within the binder.
-                let b2 = b.rename_r(gen);
+                let b2 = b.rename_r(igen);
                 // Create a fresh replacement for the bound variable.
-                let x2 = gen.next();
+                let x2 = igen.next();
                 let m2 = m
                     // Rename any vars introduced in the sub-comp.
-                    .rename_r(gen)
+                    .rename_r(igen)
                     // Substitute the replacement into the sub-comp.
                     .substitute(&x, &x2.clone().val());
                 Self::Bind1(b2,x2,Box::new(m2))
             }
             Self::BindN(b,ps,m) => {
                 // Rename any vars introduced within the binder.
-                let b2 = b.rename_r(gen);
+                let b2 = b.rename_r(igen);
 
                 // Create a renamed pattern, and collect all
                 // substitutions that occured.
                 let mut ps2 = Vec::new();
                 let mut subs = Vec::new();
                 for p in ps {
-                    let (p2, mut ss) = p.rename_r(gen);
+                    let (p2, mut ss) = p.rename_r(igen);
                     ps2.push(p2);
                     subs.append(&mut ss);
                 }
 
                 let m2 = m
                     // Rename any vars introduced in the sub-comp.
-                    .rename_r(gen)
+                    .rename_r(igen)
                     // Substitute the replacements into the sub-comp.
                     .substitute_many(&subs);
                 Self::BindN(b2, ps2, Box::new(m2))
             }
-            Self::Force(v) => Self::Force(v.rename_r(gen)),
+            Self::Force(v) => Self::Force(v.rename_r(igen)),
             Self::Fun(names, m) => {
-                let mut new_m = m.rename_r(gen);
+                let mut new_m = m.rename_r(igen);
                 let mut new_names = Vec::new();
                 for (name,t) in names {
-                    let new_name = gen.next();
+                    let new_name = igen.next();
                     new_m = new_m.substitute(&name, &new_name.clone().val());
                     new_names.push((new_name,t));
                 }
@@ -132,13 +132,13 @@ impl Comp {
             }
             Self::Ite(cond, then_b, else_b) => {
                 Self::ite(
-                    cond.rename_r(gen),
-                    then_b.rename_r(gen),
-                    else_b.rename_r(gen),
+                    cond.rename_r(igen),
+                    then_b.rename_r(igen),
+                    else_b.rename_r(igen),
                 )
             }
             Self::Match(target, arms) => {
-                let target = target.rename_r(gen);
+                let target = target.rename_r(igen);
                 let arms = arms
                     .into_iter()
                     .map(|(a,m)| {
@@ -148,12 +148,12 @@ impl Comp {
                         // the subs that have occured.
                         let mut binders2 = Vec::new();
                         for p in binders {
-                            let (p2, mut ss) = p.rename_r(gen);
+                            let (p2, mut ss) = p.rename_r(igen);
                             binders2.push(p2);
                             subs.append(&mut ss);
                         }
                         let m = m
-                            .rename_r(gen)
+                            .rename_r(igen)
                             .substitute_many(&subs);
                         (MatchArm{code, binders: binders2}, Box::new(m))
                     })
@@ -165,18 +165,18 @@ impl Comp {
 }
 
 impl Pattern {
-    fn rename_r(self, gen: &mut Gen) -> (Self, Vec<(Ident,Val)>) {
+    fn rename_r(self, igen: &mut IGen) -> (Self, Vec<(Ident,Val)>) {
         match self {
             Self::NoBind => (Self::NoBind, Vec::new()),
             Self::Atom(x) => {
-                let y = gen.next();
+                let y = igen.next();
                 (Self::Atom(y.clone()), vec![(x,y.val())])
             }
             Self::Tuple(ps) => {
                 let mut ps2 = Vec::new();
                 let mut ss = Vec::new();
                 for p in ps.into_iter() {
-                    let (p2, mut ss_p) = p.rename_r(gen);
+                    let (p2, mut ss_p) = p.rename_r(igen);
                     ps2.push(p2);
                     ss.append(&mut ss_p);
                 }
@@ -187,13 +187,13 @@ impl Pattern {
 }
 
 impl Val {
-    fn rename_r(self, gen: &mut Gen) -> Self {
+    fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
             Self::Literal(l) => Self::Literal(l),
             Self::OpCode(om,oc) => Self::OpCode(om,oc),
-            Self::Thunk(m) => Self::Thunk(Box::new(m.rename_r(gen))),
+            Self::Thunk(m) => Self::Thunk(Box::new(m.rename_r(igen))),
             Self::Tuple(vs) => Self::Tuple(
-                vs.into_iter().map(|v| v.rename_r(gen)).collect()
+                vs.into_iter().map(|v| v.rename_r(igen)).collect()
             ),
             // Remember, vars get renamed at their introduction point,
             // not at their use-points. So here, we make no change.

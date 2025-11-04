@@ -6,7 +6,7 @@ use crate::{
     FunOp,
     LogOpN,
     Comp,
-    Gen,
+    IGen,
     Literal,
     Oc,
     Op,
@@ -122,7 +122,7 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Ve
             )?;
             println!("Declared {} as absrel {}", code, op_smt);
 
-            let mut igen = Gen::new();
+            let mut igen = IGen::new();
 
             // Include a functionality axiom for any op that has a
             // relational abstraction.
@@ -151,7 +151,7 @@ fn declare_con_exclusions(
 ) -> std::io::Result<()> {
     // Declare same-constructor exclusion axioms.
     for (code,inputs) in cons.clone() {
-        let mut igen = Gen::new();
+        let mut igen = IGen::new();
         let axiom = constructions::same_con_exclusion_axiom(
             code.clone(),
             inputs,
@@ -171,7 +171,7 @@ fn declare_con_exclusions(
     let con_pairs = crate::utility::unordered_cross(cons);
     // Declare different-constructor exclusion axioms.
     for ((code1,inputs1), (code2, inputs2)) in con_pairs {
-        let mut igen = Gen::new();
+        let mut igen = IGen::new();
         let axiom = constructions::diff_con_exclusion_axiom(
             code1.clone(),
             inputs1,

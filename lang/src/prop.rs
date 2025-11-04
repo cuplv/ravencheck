@@ -2,7 +2,7 @@ use crate::{
     CaseName,
     Comp,
     CType,
-    Gen,
+    IGen,
     parse_str_cbpv,
     Sig,
 };
@@ -12,7 +12,7 @@ use std::fmt;
 /// The Comp cases in a Prop are normal-form and prop-type.
 pub struct Prop {
     pub cases: Vec<(CaseName, Comp)>,
-    vgen: Gen,
+    igen: IGen,
 }
 
 pub enum Error {
@@ -43,7 +43,7 @@ impl Prop {
 
     pub fn negate(&mut self, sig: &Sig) {
         for (_,c) in self.cases.iter_mut() {
-            *c = c.negate().normal_form_single_case(sig, &mut self.vgen);
+            *c = c.negate().normal_form_single_case(sig, &mut self.igen);
         }
     }
 
@@ -57,13 +57,13 @@ impl Comp {
         self = self.expand_types(&sig.type_aliases());
         match self.type_check(&CType::return_prop(), sig) {
             Ok(()) => {
-                let mut vgen = self.get_gen();
+                let mut igen = self.get_igen();
                 let cases = self.normal_form_x(
                     sig,
-                    &mut vgen,
+                    &mut igen,
                     CaseName::root()
                 );
-                Ok(Prop{cases, vgen})
+                Ok(Prop{cases, igen})
             }
             Err(e) => Err(Error::Type(e)),
         }

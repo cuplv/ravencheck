@@ -3,7 +3,7 @@ use crate::{
     Binder1,
     BinderN,
     Comp,
-    Gen,
+    IGen,
     LogOpN,
     OpCode,
     Sig,
@@ -16,7 +16,7 @@ type Recs = HashSet<OpCode>;
 impl Binder1 {
     pub fn tag_recursive(
         self, sig: &Sig,
-        igen: &mut Gen,
+        igen: &mut IGen,
         recs: &Recs
     ) -> Self {
         match self {
@@ -45,7 +45,7 @@ impl Comp {
     pub fn tag_recursive(
         self,
         sig: &Sig,
-        igen: &mut Gen,
+        igen: &mut IGen,
         recs: &Recs,
     ) -> Self {
         match self {

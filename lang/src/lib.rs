@@ -53,7 +53,7 @@ mod type_check;
 pub use type_check::TypeContext;
 mod utility;
 pub use rir::ident::Ident;
-pub use rir::igen::Gen;
+pub use rir::igen::IGen;
 mod tag_recursive;
 
 pub use rir::from_syn::{
@@ -81,8 +81,8 @@ pub fn parse_str_cbpv(input: &str) -> syn::Result<Comp> {
     match syn::parse_str(input) {
         Ok(expr) => match syn_to_builder(expr) {
             Ok(b) => {
-                let mut gen = Gen::new();
-                Ok(b.build(&mut gen))
+                let mut igen = IGen::new();
+                Ok(b.build(&mut igen))
             }
             Err(e) => panic!("syn_to_builder error: {}", e),
         }
@@ -98,15 +98,15 @@ impl Comp {
         }
     }
     pub fn normal_form(self, sig: &Sig) -> Cases {
-        let mut gen = self.get_gen();
-        self.normal_form_x(sig, &mut gen, CaseName::root())
+        let mut igen = self.get_igen();
+        self.normal_form_x(sig, &mut igen, CaseName::root())
     }
     pub fn normal_form_single_case(
         self,
         sig: &Sig,
-        gen: &mut Gen,
+        igen: &mut IGen,
     ) -> Self {
-        let mut cases = self.normal_form_x(sig, gen, CaseName::root());
+        let mut cases = self.normal_form_x(sig, igen, CaseName::root());
         assert!(
             cases.len() == 1,
             "normal_form_single_case should only be called on comps that produce 1 case, but comp produced {} cases",
@@ -117,18 +117,18 @@ impl Comp {
     pub fn normal_form_x(
         self,
         sig: &Sig,
-        gen: &mut Gen,
+        igen: &mut IGen,
         starting_name: CaseName,
     ) -> Cases {
         // Partial evaluation
-        let cases = self.partial_eval(sig, gen, starting_name);
+        let cases = self.partial_eval(sig, igen, starting_name);
         // println!("got {} cases from partial_eval", cases_pe.len());
 
         // Add recursion guards if defined
         let cases = match &sig.recs {
             Some(recs) => cases.into_iter().map(|(name,comp)| {
                 // println!("Adding recursion guards for {:?}", &recs);
-                let comp = comp.tag_recursive(sig, gen, recs);
+                let comp = comp.tag_recursive(sig, igen, recs);
                 (name, comp)
             }).collect::<Vec<_>>(),
             None => cases,
@@ -136,19 +136,19 @@ impl Comp {
 
         // Match elimination
         let cases = cases.into_iter().map(|(name,comp)| {
-            let comp = comp.eliminate_match(sig,gen);
+            let comp = comp.eliminate_match(sig,igen);
             // println!("After match elimination: {:?}", comp);
             (name, comp)
         }).collect::<Vec<_>>();
 
         // Negation normal form (NNF)
         let cases = cases.into_iter().map(|(name,comp)| {
-            (name, comp.neg_normal_form(sig,gen))
+            (name, comp.neg_normal_form(sig,igen))
         }).collect::<Vec<_>>();
 
         // Function expansion
         let cases = cases.into_iter().map(|(name,comp)| {
-            (name, comp.expand_funs(sig, gen, Vec::new()))
+            (name, comp.expand_funs(sig, igen, Vec::new()))
         }).collect::<Vec<_>>();
 
         // println!("normal_form_x passing on {} cases", cases_exp.len());
@@ -516,16 +516,16 @@ Type error in def of \"{}\": {:?}",
 
         // let output_clone = output.clone();
         Builder::ret_thunk(
-            Builder::fun_many_gen(inputs, |in_xs| {
+            Builder::fun_many_igen(inputs, |in_xs| {
                 Builder::ret_thunk(
-                    Builder::fun_gen(output, |out_x| {
+                    Builder::fun_igen(output, |out_x| {
                         let mut args = in_xs;
                         args.push(out_x);
                         Builder::force(rel_abs).apply_v(args)
                     })
                 )
             })
-        ).build(&mut Gen::new())
+        ).build(&mut IGen::new())
     }
 
     pub fn declare_op_parsed(&mut self, name: String, targs: Vec<String>, inputs: Vec<VType>, output: VType) {

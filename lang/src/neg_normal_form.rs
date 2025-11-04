@@ -6,7 +6,7 @@ use crate::{
     Val,
     Ident,
     VType,
-    Gen,
+    IGen,
     Sig,
 };
 
@@ -63,17 +63,17 @@ impl DemandSet {
     /// demand already exists, add return the negative version's
     /// name. If not, generate a unique name for the negative version
     /// and return it.
-    pub fn add_negative_gen(&mut self, x: &Ident, gen: &mut Gen) -> Ident {
+    pub fn add_negative_igen(&mut self, x: &Ident, igen: &mut IGen) -> Ident {
         match self.0.get(x) {
             Some(DemandVal::Both(x2)) => x2.clone(),
             Some(DemandVal::Negative(x2)) => x2.clone(),
             Some(DemandVal::Positive) => {
-                let x2 = gen.next();
+                let x2 = igen.next();
                 self.0.insert(x.clone(), DemandVal::Both(x2.clone()));
                 x2
             }
             None => {
-                let x2 = gen.next();
+                let x2 = igen.next();
                 self.0.insert(x.clone(), DemandVal::Negative(x2.clone()));
                 x2
             }
@@ -82,7 +82,7 @@ impl DemandSet {
 }
 
 impl Binder1 {
-    fn neg_normal_form_r(&self, sig: &Sig, dem: &mut DemandSet, gen: &mut Gen) -> Self {
+    fn neg_normal_form_r(&self, sig: &Sig, dem: &mut DemandSet, igen: &mut IGen) -> Self {
         match self {
             Self::Eq(pos, vs1, vs2) => {
                 for v in vs1 {
@@ -94,7 +94,7 @@ impl Binder1 {
                 Self::Eq(*pos, vs1.clone(), vs2.clone())
             }
             Self::LogQuantifier(q, xs, m) => {
-                let mut m2 = m.neg_normal_form_r(sig, dem, gen);
+                let mut m2 = m.neg_normal_form_r(sig, dem, igen);
                 for (x,t) in xs {
                     match dem.get(x) {
                         Some(DemandVal::Negative(y)) => {
@@ -134,33 +134,6 @@ impl Binder1 {
                 for v in vs {
                     v.demand_positive(dem);
                 }
-
-                // let mut vs2 = Vec::new();
-                // for v in vs {
-                //     match v {
-                //         Val::Var(n) => {
-                //             dem.add_positive(n);
-                //             vs2.push(Val::Var(n.clone()));
-                //         }
-                //         Val::Literal(l) => {
-                //             vs2.push(Val::Literal(l.clone()));
-                //         },
-                //         // I'm worried about the demand-set here, but
-                //         // normalization itself for the body of a
-                //         // thunk is not necessary, since it will be
-                //         // normalized later when it is forced.
-                //         //
-                //         // Val::Thunk(m) => {
-                //         //     let v2 = Val::Thunk(Box::new(
-                //         //         m.neg_normal_form_r(dem,gen)
-                //         //     ));
-                //         //     vs2.push(v2);
-                //         // }
-                //         Val::Thunk(m) => {
-                //             vs2.push(Val::Thunk(m.clone()));
-                //         }
-                //     }
-                // }
                 Self::LogOpN(op.clone(), vs.clone())
             }
             _ => todo!("neg_normal_form_r for {:?}", self),
@@ -170,12 +143,12 @@ impl Binder1 {
 
 impl Comp {
     /// Convert a computation into normal form.  This may require the
-    /// creation of new variables, so we require a Gen.
-    pub fn neg_normal_form(self, sig: &Sig, gen: &mut Gen) -> Self {
-        self.neg_normal_form_r(sig, &mut DemandSet::empty(), gen)
+    /// creation of new variables, so we require a IGen.
+    pub fn neg_normal_form(self, sig: &Sig, igen: &mut IGen) -> Self {
+        self.neg_normal_form_r(sig, &mut DemandSet::empty(), igen)
     }
 
-    fn neg_normal_form_r(&self, sig: &Sig, dem: &mut DemandSet, gen: &mut Gen) -> Self {
+    fn neg_normal_form_r(&self, sig: &Sig, dem: &mut DemandSet, igen: &mut IGen) -> Self {
         match self {
             Self::Return(vs) => {
                 for v in vs {
@@ -187,14 +160,14 @@ impl Comp {
                 Self::Return(vs.clone())
             }
             Self::Bind1(Binder1::LogNot(v), x, m) => {
-                let m2 = m.neg_normal_form_r(sig,dem,gen);
+                let m2 = m.neg_normal_form_r(sig,dem,igen);
                 match dem.get(x) {
                     None => m2,
                     Some(DemandVal::Positive) => {
                         // Get the negative version of the value,
                         // recording a negative demand if it's a
                         // variable.
-                        let v_neg = v.demand_negative(dem,gen);
+                        let v_neg = v.demand_negative(dem,igen);
                         // Replace x's with the negative value.
                         m2.substitute(x, &v_neg)
                     }
@@ -210,7 +183,7 @@ impl Comp {
                     }
                     Some(DemandVal::Both(y1)) => {
                         v.demand_positive(dem);
-                        let v_neg = v.demand_negative(dem,gen);
+                        let v_neg = v.demand_negative(dem,igen);
                         m2
                             .substitute(&y1,v)
                             .substitute(x,&v_neg)
@@ -218,23 +191,23 @@ impl Comp {
                 }
             }
             Self::Bind1(b, x, m) => {
-                let m2 = m.neg_normal_form_r(sig,dem,gen);
+                let m2 = m.neg_normal_form_r(sig,dem,igen);
                 match dem.get(x) {
                     None => {
                         // println!("{:?} was not demanded by {:?}", x, m2);
                         m2
                     }
                     Some(DemandVal::Positive) => {
-                        let b2p = b.neg_normal_form_r(sig,dem,gen);
+                        let b2p = b.neg_normal_form_r(sig,dem,igen);
                         Self::Bind1(b2p, x.clone(), Box::new(m2))
                     }
                     Some(DemandVal::Negative(y)) => {
-                        let b2n = b.negate(sig,dem,gen).neg_normal_form_r(sig,dem,gen);
+                        let b2n = b.negate(sig,dem,igen).neg_normal_form_r(sig,dem,igen);
                         Self::Bind1(b2n, y.clone(), Box::new(m2))
                     }
                     Some(DemandVal::Both(y)) => {
-                        let b2p = b.neg_normal_form_r(sig,dem,gen);
-                        let b2n = b.negate(sig,dem,gen).neg_normal_form_r(sig,dem,gen);
+                        let b2p = b.neg_normal_form_r(sig,dem,igen);
+                        let b2n = b.negate(sig,dem,igen).neg_normal_form_r(sig,dem,igen);
                         Self::Bind1(b2p, x.clone(), Box::new(
                             Self::Bind1(b2n, y.clone(), Box::new(m2))
                         ))
@@ -247,15 +220,15 @@ impl Comp {
                 Self::BindN(
                     b.clone(),
                     ps.clone(),
-                    Box::new(m.neg_normal_form_r(sig,dem,gen)),
+                    Box::new(m.neg_normal_form_r(sig,dem,igen)),
                 )
             }
             Self::Ite(cond, then_b, else_b) => {
                 cond.demand_positive(dem);
                 Self::ite(
                     cond.clone(),
-                    then_b.neg_normal_form_r(sig,dem,gen),
-                    else_b.neg_normal_form_r(sig,dem,gen),
+                    then_b.neg_normal_form_r(sig,dem,igen),
+                    else_b.neg_normal_form_r(sig,dem,igen),
                 )
             }
             Self::Apply(_m, _targs, _vs) => {
@@ -285,16 +258,16 @@ impl Val {
             _ => {},
         }
     }
-    /// Generate the negation of the value, recording a negative
+    /// IGenerate the negation of the value, recording a negative
     /// demand if it's a Var.
     pub fn demand_negative(
         &self,
         dem: &mut DemandSet,
-        gen: &mut Gen
+        igen: &mut IGen,
     ) -> Self {
         match self {
             Self::Var(x, types, path, true) => {
-                let x2 = dem.add_negative_gen(&x,gen);
+                let x2 = dem.add_negative_igen(&x,igen);
                 Self::Var(x2, types.clone(), path.clone(), true)
             }
             // Since this is a negative variable, we can just flip the

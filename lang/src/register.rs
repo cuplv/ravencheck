@@ -16,7 +16,7 @@ use crate::{
     CType,
     Comp,
     rir::constructions,
-    Gen,
+    IGen,
     InstMode,
     InstRule,
     HypotheticalCall,
@@ -243,7 +243,7 @@ impl Sig {
             .map(|(a,b)| (RirIdent::new(a.clone()), Some(b.clone())))
             .collect();
         let f_output = (RirIdent::new(c_output.clone()), Some(applied_op.output.clone()));
-        let mut g = body.get_gen();
+        let mut g = body.get_igen();
         let f_axiom: Comp =
             Builder::return_thunk(
                 Builder::return_thunk(
@@ -366,7 +366,7 @@ impl Sig {
                             code.clone(),
                             inputs.clone(),
                             output.clone(),
-                        ).build(&mut Gen::new())
+                        ).build(&mut IGen::new())
                     ]
                 } else {
                     Vec::new()

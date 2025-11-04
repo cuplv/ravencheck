@@ -244,14 +244,14 @@ impl Sig {
         let mut inst_axioms: Vec<Comp> = Vec::new();
         for a in &self.axioms {
             if a.tas.len() == 0 {
-                let mut g = a.body.get_gen();
+                let mut g = a.body.get_igen();
                 let a = a.body.clone().normal_form_single_case(self, &mut g);
                 inst_axioms.push(a);
             } else {
                 for t in &relevant.base_types().clone() {
                     match a.inst_for_type(t) {
                         Some(a) => {
-                            let mut g = a.get_gen();
+                            let mut g = a.get_igen();
                             let a = a.normal_form_single_case(self, &mut g);
                             inst_axioms.push(a);
                         }
@@ -261,7 +261,7 @@ impl Sig {
                 for c in relevant.ops() {
                     match a.inst_for_code(c) {
                         Some(a) => {
-                            let mut g = a.get_gen();
+                            let mut g = a.get_igen();
                             let a = a.normal_form_single_case(self, &mut g);
                             inst_axioms.push(a);
                         }

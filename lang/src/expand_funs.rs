@@ -3,7 +3,7 @@ use crate::{
     BinderN,
     Builder,
     Comp,
-    Gen,
+    IGen,
     LogOpN,
     Oc,
     Op,
@@ -17,7 +17,7 @@ use crate::{
     PredOp,
 };
 
-fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, gen: &mut Gen) -> Comp {
+fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, igen: &mut IGen) -> Comp {
     assert!(
         !op.output.contains_prop(),
         "Can't have bool-output primitive function. Define a predicate instead."
@@ -36,7 +36,7 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, gen: 
     let q_sig = xs.into_iter().zip(flat_output).collect();
 
     let mut disjuncts: Vec<Builder> = op.axioms.into_iter().map(|axiom| {
-        Builder::new(|gen| axiom.rename(gen))
+        Builder::new(|igen| axiom.rename(igen))
             .flatten()
             .apply_v(vs.clone())
             .flatten()
@@ -45,14 +45,14 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, gen: 
     }).collect();
     disjuncts.push(Builder::lift(m));
     let new_body =
-        Builder::log_op(LogOpN::Or, disjuncts).build(gen);
+        Builder::log_op(LogOpN::Or, disjuncts).build(igen);
 
-    let x_result = gen.next();
+    let x_result = igen.next();
     let new_m =
         Comp::quant_many(
             Quantifier::Forall,
             q_sig,
-            new_body.normal_form_single_case(sig,gen),
+            new_body.normal_form_single_case(sig,igen),
             x_result.clone(),
             Comp::return1(x_result),
         );
@@ -60,7 +60,7 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, gen: 
 }
 
 #[allow(dead_code)]
-fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut Gen, is_pos: bool) -> Comp {
+fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, igen: &mut IGen, is_pos: bool) -> Comp {
     let sig_clone1 = sig.clone();
     let sig_clone2 = sig.clone();
 
@@ -70,7 +70,7 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut
     // !axiom_0 OR ... OR !axiom_n OR condition[true]
     let mut t_disjuncts: Vec<Builder> =
         op.axioms.clone().into_iter().map(|axiom| {
-            Builder::new(|gen| axiom.rename(gen))
+            Builder::new(|igen| axiom.rename(igen))
                 .flatten()
                 .apply_v(vs.clone())
                 .not()
@@ -80,10 +80,10 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut
     t_disjuncts.push(
         Builder::lift(m.clone().substitute(&x, &t_val))
     );
-    let pos_branch = Builder::new(move |gen| {
+    let pos_branch = Builder::new(move |igen| {
         Builder::log_op(LogOpN::Or, t_disjuncts)
-            .build(gen)
-            .normal_form_single_case(&sig_clone1, gen)
+            .build(igen)
+            .normal_form_single_case(&sig_clone1, igen)
     });
 
     // Build the FALSE branch: disjunction with a conjunction. ALL
@@ -100,20 +100,20 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut
     // panics when you construct an AND_MANY node with no arguments.
     let f_conjuncts: Vec<Builder> =
         op.axioms.clone().into_iter().map(|axiom| {
-            Builder::new(|gen| axiom.rename(gen))
+            Builder::new(|igen| axiom.rename(igen))
                 .flatten()
                 .apply_v(vs.clone())
         })
         .collect();
     let f_val = Val::from_bool(!is_pos);
     let neg_branch = if f_conjuncts.len() > 0 {
-        Builder::new(move |gen| {
+        Builder::new(move |igen| {
             Builder::log_op(LogOpN::Or, [
                 Builder::log_op(LogOpN::And, f_conjuncts),
                 Builder::lift(m.clone().substitute(&x, &f_val))
             ])
-                .build(gen)
-                .normal_form_single_case(&sig_clone2, gen)
+                .build(igen)
+                .normal_form_single_case(&sig_clone2, igen)
             })
     } else {
         Builder::return_(Val::true_())
@@ -123,12 +123,12 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, gen: &mut
         pos_branch,
         neg_branch,
     ])
-        .build(gen)
-        .normal_form_single_case(sig,gen)
+        .build(igen)
+        .normal_form_single_case(sig,igen)
 }
 
 impl Comp {
-    pub fn expand_funs(mut self, sig: &Sig, gen: &mut Gen, mut anti_stack: Vec<Rebuild>) -> Self {
+    pub fn expand_funs(mut self, sig: &Sig, igen: &mut IGen, mut anti_stack: Vec<Rebuild>) -> Self {
         loop {
             match self {
                 Self::Bind1(b, x, m) => {
@@ -145,7 +145,7 @@ impl Comp {
                                 }
                                 Oc::Op(Op::Pred(op)) => {
                                     // println!("Expanding pred {}...", &oc.ident);
-                                    self = expand_pred(op.clone(), vs, x, *m, sig, gen, is_pos);
+                                    self = expand_pred(op.clone(), vs, x, *m, sig, igen, is_pos);
                                     break;
                                 }
                                 // Treat Fun like a Symbol, since this
@@ -187,7 +187,7 @@ impl Comp {
                             }
                         }
                         Binder1::LogQuantifier(q, xs, body) => {
-                            let body = body.expand_funs(sig,gen,Vec::new());
+                            let body = body.expand_funs(sig,igen,Vec::new());
                             anti_stack.push(Rebuild::Quantifier(q, xs, body, x));
                             self = *m;
                         },
@@ -212,11 +212,11 @@ impl Comp {
                             );
                             let op = FunOp{inputs, output, axioms: vec![axiom]};
                             // println!("Expanding call {}...", &oc);
-                            self = expand_fun(op, vs, xs, *m, sig, gen);
+                            self = expand_fun(op, vs, xs, *m, sig, igen);
                         }
                         Oc::Op(Op::Fun(op)) => {
                             // println!("Expanding call {}...", &oc);
-                            self = expand_fun(op, vs, xs, *m, sig, gen);
+                            self = expand_fun(op, vs, xs, *m, sig, igen);
                             break;
                         }
                         Oc::Op(Op::Pred(_op)) => {
@@ -224,15 +224,15 @@ impl Comp {
                         }
                         Oc::Op(Op::Rec(op)) => {
                             // println!("Expanding call {}...", &oc);
-                            self = expand_fun(op.as_fun_op(), vs, xs, *m, sig, gen);
+                            self = expand_fun(op.as_fun_op(), vs, xs, *m, sig, igen);
                             break;
                         }
                         r => panic!("Can't expand_fun on {:?}", r),
                     }
                 }
                 Self::Ite(cond, then_b, else_b) => {
-                    let then_b = then_b.expand_funs(sig,gen,Vec::new());
-                    let else_b = else_b.expand_funs(sig,gen,Vec::new());
+                    let then_b = then_b.expand_funs(sig,igen,Vec::new());
+                    let else_b = else_b.expand_funs(sig,igen,Vec::new());
                     self = Self::ite(cond, then_b, else_b);
                     break;
                 }
