@@ -1,4 +1,4 @@
-use crate::cbpv::Comp;
+use crate::Comp;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;

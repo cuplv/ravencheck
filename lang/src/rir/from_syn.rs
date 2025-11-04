@@ -1,3 +1,6 @@
+//! Translation from Rust syntax (represented using the `syn` package)
+//! into the Raven IR (RIR).
+
 use syn::{
     AngleBracketedGenericArguments,
     BinOp,

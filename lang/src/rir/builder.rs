@@ -1,7 +1,7 @@
-use crate::sig::VType;
-use crate::ident::Ident;
-use crate::gen::Gen;
-use crate::cbpv::{
+use crate::VType;
+use crate::Ident;
+use crate::Gen;
+use crate::{
     Binder1,
     BinderN,
     Comp,

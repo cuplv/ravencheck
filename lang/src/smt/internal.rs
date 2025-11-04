@@ -17,7 +17,7 @@ use crate::{
     Val,
     Ident,
     VType,
-    constructions,
+    rir::constructions,
 };
 
 impl BType {

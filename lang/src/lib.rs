@@ -1,7 +1,5 @@
-mod builder;
-pub use builder::Builder;
-mod cbpv;
-pub use cbpv::{
+mod rir;
+pub use rir::ast::{
     Binder1,
     BinderN,
     CaseName,
@@ -16,8 +14,7 @@ pub use cbpv::{
     Quantifier,
     Val,
 };
-mod constructions;
-mod depth;
+pub use rir::builder::Builder;
 mod eliminate_match;
 pub mod epr_check;
 mod expand_funs;
@@ -55,14 +52,11 @@ mod substitute;
 mod type_check;
 pub use type_check::TypeContext;
 mod utility;
-mod ident;
-pub use ident::Ident;
-mod gen;
-pub use gen::Gen;
+pub use rir::ident::Ident;
+pub use rir::igen::Gen;
 mod tag_recursive;
 
-mod syn_to_cbpv;
-pub use syn_to_cbpv::{
+pub use rir::from_syn::{
     InstRuleSyntax,
     HypotheticalCallSyntax,
     RirFn,
@@ -82,7 +76,7 @@ pub fn parse_str_syn<T: syn::parse::Parse>(input: &str) -> syn::Result<T> {
     syn::parse_str(input)
 }
 
-pub fn parse_str_cbpv(input: &str) -> syn::Result<cbpv::Comp> {
+pub fn parse_str_cbpv(input: &str) -> syn::Result<Comp> {
     
     match syn::parse_str(input) {
         Ok(expr) => match syn_to_builder(expr) {

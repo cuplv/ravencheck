@@ -1,5 +1,7 @@
+//! # The AST for Raven IR (i.e. RIR)
+
 use crate::sig::{OpCode, VType};
-use crate::ident::Ident;
+use crate::Ident;
 use std::fmt;
 
 impl Ident {

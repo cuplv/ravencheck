@@ -15,7 +15,7 @@ use crate::{
     Builder,
     CType,
     Comp,
-    constructions,
+    rir::constructions,
     Gen,
     InstMode,
     InstRule,
@@ -28,7 +28,7 @@ use crate::{
         Op,
         OpCode,
     },
-    syn_to_cbpv::{
+    rir::from_syn::{
         InstRuleSyntax,
         HypotheticalCallSyntax,
         RirFn,
