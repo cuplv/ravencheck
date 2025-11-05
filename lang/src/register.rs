@@ -108,50 +108,33 @@ impl Sig {
         i: ItemFn,
         inst_rules: Vec<InstRuleSyntax>,
     ) -> Result<(), String> {
-        // Parse the ItemFn into Rir types, and keep the body.
-        let i = RirFn::from_syn(i)?;
-        // Apply type aliases
-        let i = i.expand_types(&self.type_aliases());
-        // Unpack
-        let RirFn{sig, body} = i;
-        let RirFnSig{ident, tas, inputs, output} = sig;
-
+        // Interpret the instantiation rules.
         let inst_rules = inst_rules
             .into_iter()
             .map(InstRule::from_syn)
             .collect::<Result<Vec<_>, _>>()?;
 
-        // For now, don't allow inputs
-        if inputs.len() != 0 {
-            return Err(format!(
-                "#[assume] items should have zero inputs, but '{}' has {} inputs.",
-                ident,
-                inputs.len()
-            ));
-        }
+        // Parse the ItemFn into Rir types, and keep the body.
+        let i = RirFn::from_syn(i)?;
+        // Apply type aliases
+        let i = i.expand_types(&self.type_aliases());
+        // Typecheck as bool
+        i.type_check(&self, false).unwrap();
+        assert!(
+            i.sig.output == VType::prop(),
+            "#[assume] items should have output type 'bool', but {} had {}",
+            i.sig.ident,
+            i.sig.output.render(),
+        );
 
-        // Declared output must be bool. Consider type aliases and
-        // type abstractions when checking.
-        if !output.clone().type_match(&VType::prop(), self, &tas) {
-            return Err(format!(
-                "#[assume] items must have bool output, but '{}' has '{}' output.",
-                ident,
-                output.render(),
-            ));
-        }
+        // Create a forall-quantified formula, which quantifies the fn
+        // item's arguments.
+        let (_ident, tas, formula) = i.into_uni_formula().unwrap();
 
-        // Body must also type-check as bool
-        let tc = TypeContext::new_types(self.clone(), tas.clone());
-        match body.type_check_r(&CType::Return(VType::prop()), tc) {
-            Ok(()) => {},
-            Err(e) => return Err(format!(
-                "Type error in '{}': {}", ident, e
-            )),
-        }
         let axiom = Axiom {
             tas,
             inst_mode: InstMode::Rules(inst_rules.clone()),
-            body,
+            body: formula.build(&mut IGen::new()),
         };
         // println!("Pushing axiom with rules {:?}", inst_rules);
         self.axioms.push(axiom);

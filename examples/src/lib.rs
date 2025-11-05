@@ -1,4 +1,5 @@
 pub mod bool_match_bug;
+pub mod doc_examples;
 pub mod filter;
 pub mod ite;
 pub mod import_test;

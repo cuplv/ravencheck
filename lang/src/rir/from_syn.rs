@@ -767,15 +767,24 @@ impl RirFn {
         // The output type is expected to be bool, but we don't
         // check/enforce that here.
         let RirFnSig{ident, tas, inputs, ..} = sig;
-        let inputs = inputs
-            .into_iter()
-            .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
-            .collect::<Result<Vec<_>,String>>()?;
-        let formula = Builder::lift(body).quant(
-            Quantifier::Forall,
-            inputs,
-        );
-        Ok((ident, tas, formula))
+        // If there are arguments to quantify, then wrap the fn item's
+        // body in a universal quantifier that quantifies them.
+        //
+        // Otherwise, just convert the unchanged body into a
+        // `Builder`.
+        let body = if inputs.len() > 0 {
+            let inputs = inputs
+                .into_iter()
+                .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
+                .collect::<Result<Vec<_>,String>>()?;
+            Builder::lift(body).quant(
+                Quantifier::Forall,
+                inputs,
+            )
+        } else {
+            Builder::lift(body)
+        };
+        Ok((ident, tas, body))
     }
 
     pub fn from_syn(

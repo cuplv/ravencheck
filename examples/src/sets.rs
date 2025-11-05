@@ -21,17 +21,13 @@ pub mod my_mod {
     }
 
     #[assume]
-    fn equal_or_distinguisher() -> bool {
-        forall(|a:Set,b:Set| {
-            a == b || exists(|e:Elem| member(e,a) !=  member(e,b))
-        })
+    fn equal_or_distinguisher(a: Set, b: Set) -> bool {
+        a == b || exists(|e:Elem| member(e,a) !=  member(e,b))
     }
 
     #[assume]
-    fn empty_set_no_member() -> bool {
-        forall(|e: Elem| {
-            !member(e, empty_set())
-        })
+    fn empty_set_no_member(e: Elem) -> bool {
+        !member(e, empty_set())
     }
 
     #[declare]
