@@ -33,3 +33,9 @@ impl Ident {
         }
     }
 }
+
+impl From<&str> for Ident {
+    fn from(s: &str) -> Self {
+        Self::new(s.to_string())
+    }
+}

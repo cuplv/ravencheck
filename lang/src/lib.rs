@@ -82,7 +82,7 @@ pub fn parse_str_cbpv(input: &str) -> syn::Result<Comp> {
         Ok(expr) => match syn_to_builder(expr) {
             Ok(b) => {
                 let mut igen = IGen::new();
-                Ok(b.build(&mut igen))
+                Ok(b.build_with(&mut igen))
             }
             Err(e) => panic!("syn_to_builder error: {}", e),
         }
@@ -525,7 +525,7 @@ Type error in def of \"{}\": {:?}",
                     })
                 )
             })
-        ).build(&mut IGen::new())
+        ).build_with(&mut IGen::new())
     }
 
     pub fn declare_op_parsed(&mut self, name: String, targs: Vec<String>, inputs: Vec<VType>, output: VType) {

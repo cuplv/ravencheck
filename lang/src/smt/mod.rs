@@ -268,7 +268,7 @@ Error in type-checking definition of \"{}\": {:?}",
                     .apply_rt(vec![x])
             })
             .quant(Quantifier::Forall, q_sig)
-            .build(&mut gn);
+            .build_with(&mut gn);
 
         let v_sig = CheckedSig(v_sig);
         match query_negative_c(m, &v_sig, Vec::new()) {
@@ -349,7 +349,7 @@ Error in type-checking definition of \"{}\": {:?}",
                     .apply_rt(vec![x])
             })
             .quant(Quantifier::Forall, q_sig)
-            .build(&mut gn);
+            .build_with(&mut gn);
         // Build assertion body: for all inputs, apply the definition to
         // get the output, and then check that the inputs and output
         // are related by the annotation.

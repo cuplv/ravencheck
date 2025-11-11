@@ -45,7 +45,7 @@ fn expand_fun(op: FunOp, vs: Vec<Val>, xs: Vec<Ident>, m: Comp, sig: &Sig, igen:
     }).collect();
     disjuncts.push(Builder::lift(m));
     let new_body =
-        Builder::log_op(LogOpN::Or, disjuncts).build(igen);
+        Builder::log_op(LogOpN::Or, disjuncts).build_with(igen);
 
     let x_result = igen.next();
     let new_m =
@@ -82,7 +82,7 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, igen: &mu
     );
     let pos_branch = Builder::new(move |igen| {
         Builder::log_op(LogOpN::Or, t_disjuncts)
-            .build(igen)
+            .build_with(igen)
             .normal_form_single_case(&sig_clone1, igen)
     });
 
@@ -112,7 +112,7 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, igen: &mu
                 Builder::log_op(LogOpN::And, f_conjuncts),
                 Builder::lift(m.clone().substitute(&x, &f_val))
             ])
-                .build(igen)
+                .build_with(igen)
                 .normal_form_single_case(&sig_clone2, igen)
             })
     } else {
@@ -123,7 +123,7 @@ fn expand_pred(op: PredOp, vs: Vec<Val>, x: Ident, m: Comp, sig: &Sig, igen: &mu
         pos_branch,
         neg_branch,
     ])
-        .build(igen)
+        .build_with(igen)
         .normal_form_single_case(sig,igen)
 }
 

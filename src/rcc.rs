@@ -281,7 +281,7 @@ impl Rcc {
         let axiom =
             Builder::seq_many(code_calls, |_| axiom_body)
             .quant(Quantifier::Forall, qsig.clone())
-            .build(&mut igen);
+            .build_with(&mut igen);
 
         // Sanity-check that the generated axiom is well-formed
         axiom.type_check_r(
@@ -299,7 +299,7 @@ impl Rcc {
             .clone()
             .builder()
             .guard_recursive()
-            .build(&mut igen);
+            .build_with(&mut igen);
 
         // Create a temporary sig which assumes the recursion-guarded
         // version of the axiom, and is prepared to add recursion
@@ -364,7 +364,7 @@ impl Rcc {
                 })
             })
             .quant(Quantifier::Forall, qsig)
-            .build(&mut igen);
+            .build_with(&mut igen);
         // Sanity-check that the generated vc is well-formed
         vc.type_check_r(
             &CType::Return(VType::prop()),
@@ -490,7 +490,7 @@ impl Rcc {
             Builder::return_thunk(
                 Builder::lift(body).fun(inputs)
             )
-            .build(&mut g);
+            .build_with(&mut g);
 
         if is_rec {
             self.sig.0.reg_rir_declare(sig, is_bool)?;
@@ -534,7 +534,7 @@ impl Rcc {
         let goal = Goal {
             title: ident,
             tas,
-            condition: formula.build(&mut IGen::new()),
+            condition: formula.build_with(&mut IGen::new()),
             should_be_valid,
             
         };
@@ -620,6 +620,6 @@ impl Rcc {
                     )
             },
         );
-        Ok(vc.build(&mut igen))
+        Ok(vc.build_with(&mut igen))
     }
 }

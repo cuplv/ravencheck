@@ -12,6 +12,66 @@ use crate::{
     Val,
 };
 
+/**
+`Builder`s are Raven IR [`Comp`] and [`Val`] terms that are easy to
+construct and compose together.
+
+For example, suppose we wanted to construct the Raven IR equivalent of
+the Rust expression `(x || y) && true`.
+Using `Builder`, we can write:
+
+```
+use ravenlang::{Builder, Comp};
+
+let e: Comp =
+    Builder::var("x")
+    .or(Builder::var("y"))
+    .and(Builder::true_())
+    .build_no_context();
+
+println!("The expression: {:?}", e)
+```
+
+The `.build_no_context()` line "compiles" the builder,
+producing a `Comp` that is equivalent to the following direct
+definition.
+
+```
+use ravenlang::{Binder1, Comp, Ident, LogOpN, Val};
+
+let e: Comp =
+    Comp::Bind1(
+        Binder1::LogOpN(
+            LogOpN::Or,
+            vec![
+                Val::var(Ident::new("x")),
+                Val::var(Ident::new("y"))
+            ]
+        ), 
+        Ident::new("i0"),
+        Box::new(Comp::Bind1(
+            Binder1::LogOpN(
+                LogOpN::And,
+                vec![
+                    Val::var(Ident::Auto(0)),
+                    Val::true_(),
+                ]
+            ),
+            Ident::new("i1"),
+            Box::new(Comp::Return(
+                vec![Val::var(Ident::Auto(1))]
+            ))
+        ))
+    );
+
+println!("The expression: {:?}", e)
+```
+
+Notice that, in the direct definition, we had to invent two new names
+for intermediate variables: `i0` and `i1`.  The `Builder` handles this
+creation of fresh names for us, filling them in when we call
+[`Builder::build_no_context`].
+*/
 pub struct Builder {
     fun: Box<dyn FnOnce(&mut IGen) -> Comp>,
 }
@@ -31,7 +91,18 @@ impl From<Comp> for Builder {
 }
 
 impl Builder {
-    pub fn build(self, igen: &mut IGen) -> Comp {
+
+    /// Build a `Comp`, using a new `IGen` to fill in fresh variable names.
+    ///
+    /// Do not use this to build a `Comp` that will be nested within
+    /// another `Comp`, since the new `IGen` does not know about
+    /// existing in-scope variable names and might shadow them. In
+    /// that case, use [`build_with`] instead, and pass in the `IGen` that
+    /// was used to create the other in-scope variable names.
+    pub fn build_no_context(self) -> Comp {
+        self.build_with(&mut IGen::new())
+    }
+    pub fn build_with(self, igen: &mut IGen) -> Comp {
         (self.fun)(igen)
     }
     pub fn igen<F1,F2>(self, f: F1) -> Self
@@ -40,9 +111,9 @@ impl Builder {
         F2: FnOnce(Ident) -> Self,
     {
         Self::new(|igen| {
-            let m = self.build(igen);
+            let m = self.build_with(igen);
             let x = igen.next();
-            f(Builder::lift(m))(x).build(igen)
+            f(Builder::lift(m))(x).build_with(igen)
         })
     }
 
@@ -51,7 +122,7 @@ impl Builder {
     {
         Self::new(move |igen| {
             let x = igen.next();
-            f(x).build(igen)
+            f(x).build_with(igen)
         })
     }
 
@@ -60,7 +131,7 @@ impl Builder {
     {
         Self::new(move |igen| {
             let xs = igen.next_many(n);
-            f(xs).build(igen)
+            f(xs).build_with(igen)
         })
     }
 
@@ -70,9 +141,9 @@ impl Builder {
         F2: FnOnce(Vec<Ident>) -> Self,
     {
         Self::new(move |igen| {
-            let m = self.build(igen);
+            let m = self.build_with(igen);
             let xs = igen.next_many(n);
-            f(Builder::lift(m))(xs).build(igen)
+            f(Builder::lift(m))(xs).build_with(igen)
         })
     }
     pub fn lift(m: Comp) -> Self {
@@ -91,7 +162,7 @@ impl Builder {
         F: FnOnce(Comp) -> Comp + 'static
     {
         Self::new(|igen| {
-            f(self.build(igen))
+            f(self.build_with(igen))
         })
     }
     pub fn bind<F>(self, f: F) -> Self
@@ -99,7 +170,7 @@ impl Builder {
         F: FnOnce(Comp) -> Self + 'static,
     {
         Self::new(|igen| {
-            f(self.build(igen)).build(igen)
+            f(self.build_with(igen)).build_with(igen)
         })
     }
     pub fn bind_many<F>(bs: Vec<Self>, f: F) -> Self
@@ -109,9 +180,9 @@ impl Builder {
         Self::new(|igen| {
             let cs = bs
                 .into_iter()
-                .map(|b| b.build(igen))
+                .map(|b| b.build_with(igen))
                 .collect();
-            f(cs).build(igen)
+            f(cs).build_with(igen)
         })
     }
     pub fn return_<V: Into<Val>>(v: V) -> Self {
@@ -119,21 +190,32 @@ impl Builder {
     }
     pub fn return_thunk(b: Self) -> Self {
         Self::new(|igen| {
-            let m = b.build(igen);
+            let m = b.build_with(igen);
             Comp::return1(Val::thunk(&m))
         })
     }
     pub fn force<V: Into<Val>>(v: V) -> Self {
         Self::lift(Comp::force(v))
     }
+
+    pub fn true_() -> Self {
+        Self::return_(Val::true_())
+    }
+    pub fn false_() -> Self {
+        Self::return_(Val::false_())
+    }
+    pub fn var<T: Into<Ident>>(i: T) -> Self {
+        Self::return_(Val::into_var(i))
+    }
+
     pub fn seq<F1>(self, cont: F1) -> impl FnOnce(Ident) -> Self
     where
         F1: FnOnce(Val) -> Self + 'static,
     {
         |x|
         Self::new(|igen: &mut IGen| {
-            let m1 = self.build(igen);
-            let m2 = cont(x.clone().val()).build(igen);
+            let m1 = self.build_with(igen);
+            let m2 = cont(x.clone().val()).build_with(igen);
             Comp::seq(m1, x, m2)
         })
     }
@@ -141,11 +223,11 @@ impl Builder {
     {
         |p|
         Self::new(|igen: &mut IGen| {
-            let m1 = self.build(igen);
+            let m1 = self.build_with(igen);
             Comp::BindN(
                 BinderN::Seq(Box::new(m1)),
                 vec![p],
-                Box::new(cont.build(igen)),
+                Box::new(cont.build_with(igen)),
             )
         })
     }
@@ -184,11 +266,11 @@ impl Builder {
     {
         Self::new(|igen: &mut IGen| {
             let ms: Vec<Comp> =
-                bs.into().into_iter().map(|b| b.build(igen)).collect();
+                bs.into().into_iter().map(|b| b.build_with(igen)).collect();
             let xs = igen.next_many(ms.len());
             let m2 =
                 cont(xs.clone().into_iter().map(|x| x.val()).collect())
-                .build(igen);
+                .build_with(igen);
             Comp::seq1_many(ms, xs, m2)
         })
     }
@@ -200,7 +282,7 @@ impl Builder {
         Self::new(|igen: &mut IGen| {
             let x = igen.next();
             let v = x.clone().val();
-            Comp::Fun(vec![(x, Some(t))], Box::new(cont(v).build(igen)))
+            Comp::Fun(vec![(x, Some(t))], Box::new(cont(v).build_with(igen)))
         })
     }
 
@@ -215,7 +297,7 @@ impl Builder {
             let xs = igen.next_many(ts.len());
             let vs = xs.clone().into_iter().map(|x| x.val()).collect();
             let xts = xs.into_iter().zip(ts).map(|(x,t)| (x,Some(t))).collect();
-            Comp::Fun(xts, Box::new(cont(vs).build(igen)))
+            Comp::Fun(xts, Box::new(cont(vs).build_with(igen)))
         })
     }
 
@@ -242,7 +324,7 @@ impl Builder {
             bs.reverse();
             let mut ms = Vec::new();
             for b in bs {
-                ms.push(b.build(igen));
+                ms.push(b.build_with(igen));
             }
             let xs = igen.next_many(ms.len());
             let vs = xs.clone().into_iter().map(|x| x.val()).collect();
@@ -342,7 +424,7 @@ impl Builder {
     }
     pub fn ret_thunk(self) -> Self {
         Self::new(|igen: &mut IGen| {
-            Comp::Return(vec![Val::Thunk(Box::new(self.build(igen)))])
+            Comp::Return(vec![Val::Thunk(Box::new(self.build_with(igen)))])
         })
     }
 
@@ -355,7 +437,7 @@ impl Builder {
             Comp::quant_many(
                 q,
                 xs.into(),
-                self.build(igen),
+                self.build_with(igen),
                 x_result.clone(),
                 Comp::return1(x_result),
             )
@@ -420,7 +502,7 @@ impl Builder {
         Xs: Into<Vec<(Ident,Option<VType>)>> + 'static,
     {
         Self::new(move |igen: &mut IGen| {
-            Comp::Fun(xs.into(), Box::new(self.build(igen)))
+            Comp::Fun(xs.into(), Box::new(self.build_with(igen)))
         })
     }
 
@@ -429,7 +511,7 @@ impl Builder {
         Vs: Into<Vec<Val>> + 'static
     {
         Self::new(|igen: &mut IGen| {
-            Comp::apply(self.build(igen), Vec::new(), vs)
+            Comp::apply(self.build_with(igen), Vec::new(), vs)
         })
     }
 
@@ -444,7 +526,7 @@ impl Builder {
 
     pub fn apply_rt(self, vs: Vec<Val>) -> Self {
         Self::new(|igen: &mut IGen| {
-            let m = self.build(igen);
+            let m = self.build_with(igen);
             let x_thunk = igen.next();
             Comp::seq(
                 m,

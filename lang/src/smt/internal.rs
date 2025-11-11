@@ -131,7 +131,7 @@ fn declare_uf(ctx: &mut easy_smt::Context, sig: &Sig, code: OpCode, f_inputs: Ve
                 f_inputs,
                 f_output,
             )
-                .build(&mut igen)
+                .build_with(&mut igen)
                 .normal_form_single_case(&sig, &mut igen);
     
             let mut builder = Context::new(ctx);
@@ -157,7 +157,7 @@ fn declare_con_exclusions(
             inputs,
             enum_type.clone(),
         )
-            .build(&mut igen)
+            .build_with(&mut igen)
             .normal_form_single_case(&sig, &mut igen);
         let mut builder = Context::new(ctx);
         println!("SMT Axiom [Rel-Con-Same for {}]...", code);
@@ -179,7 +179,7 @@ fn declare_con_exclusions(
             inputs2,
             enum_type.clone(),
         )
-            .build(&mut igen)
+            .build_with(&mut igen)
             .normal_form_single_case(&sig, &mut igen);
         let mut builder = Context::new(ctx);
         // println!(

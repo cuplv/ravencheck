@@ -214,7 +214,7 @@ impl Comp {
                                     Ok(Oc::Op(Op::Direct(f))) => {
                                         self = Builder::lift(f.clone().rename(igen))
                                             .apply_rt(vs)
-                                            .build(igen);
+                                            .build_with(igen);
                                     }
                                     Ok(Oc::Op(Op::Symbol(..))) => {
                                         let x_result = igen.next();

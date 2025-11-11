@@ -792,7 +792,7 @@ impl RirFn {
     ) -> Result<Self, Error> {
         let sig = RirFnSig::from_syn(sig)?;
         let body = match block_to_builder(*block) {
-            Ok(b) => Ok(b.build(&mut IGen::new())),
+            Ok(b) => Ok(b.build_with(&mut IGen::new())),
             Err(e) => Err(e),
         }?;
         Ok(RirFn{sig, body})

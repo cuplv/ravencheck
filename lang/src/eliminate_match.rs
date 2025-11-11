@@ -125,7 +125,7 @@ fn build_symbolic_branch(
     let branch =
         Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
         .quant(Quantifier::Forall, qsig);
-    let b = branch.build(igen);
+    let b = branch.build_with(igen);
     // println!("\nBuilt match branch: {:?}\n", b);
     b
 }
@@ -143,7 +143,7 @@ fn build_symbolic_match(
         let branches: Vec<Builder> =
             branches.into_iter().map(Builder::lift).collect();
         let b = Builder::log_op(LogOpN::And, branches)
-            .build(igen)
+            .build_with(igen)
             .partial_eval_single_case(sig, igen);
         // println!("\nBuilt matcher: {:?}\n", b);
         b

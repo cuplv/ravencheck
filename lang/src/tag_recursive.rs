@@ -60,7 +60,7 @@ impl Comp {
                         rest
                             .builder()
                             .guard_recursive()
-                            .build(igen)
+                            .build_with(igen)
                             .partial_eval_single_case(sig, igen)
                     }
                     _ => rest,
@@ -80,7 +80,7 @@ impl Comp {
                         rest
                             .builder()
                             .guard_recursive()
-                            .build(igen)
+                            .build_with(igen)
                             .partial_eval_single_case(sig, igen)
                     }
                     _ => rest,

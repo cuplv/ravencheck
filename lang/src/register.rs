@@ -134,7 +134,7 @@ impl Sig {
         let axiom = Axiom {
             tas,
             inst_mode: InstMode::Rules(inst_rules.clone()),
-            body: formula.build(&mut IGen::new()),
+            body: formula.build_with(&mut IGen::new()),
         };
         // println!("Pushing axiom with rules {:?}", inst_rules);
         self.axioms.push(axiom);
@@ -233,7 +233,7 @@ impl Sig {
                     Builder::lift(body).fun([f_output])
                 )
                     .fun(f_inputs)
-            ).build(&mut g);
+            ).build_with(&mut g);
 
         // Replace hypothetical call type argument names with the
         // declared operation's type argument names.
@@ -349,7 +349,7 @@ impl Sig {
                             code.clone(),
                             inputs.clone(),
                             output.clone(),
-                        ).build(&mut IGen::new())
+                        ).build_with(&mut IGen::new())
                     ]
                 } else {
                     Vec::new()
