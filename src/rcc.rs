@@ -480,15 +480,11 @@ impl Rcc {
 
         body.type_check_r(&CType::Return(output.clone()), tc)?;
 
-        let inputs: Vec<(RirIdent, Option<VType>)> = inputs
-            .into_iter()
-            .map(|(x,t)| (x, Some(t)))
-            .collect();
         // Construct function for given typed inputs
         let mut g = body.get_igen();
         let fun: Comp =
             Builder::return_thunk(
-                Builder::lift(body).fun(inputs)
+                Builder::lift(body).into_fun(inputs)
             )
             .build_with(&mut g);
 

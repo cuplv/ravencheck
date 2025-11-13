@@ -67,7 +67,11 @@ impl Binder1 {
 impl BinderN {
     fn advance_igen(&self, igen: &mut IGen) {
         match self {
-            Self::Call(_oc, _vs) => todo!(),
+            Self::Call(_oc, vs) => {
+                for v in vs {
+                    v.advance_igen(igen);
+                }
+            }
             Self::Seq(m) => {
                 m.advance_igen(igen);
             }

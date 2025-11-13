@@ -13,10 +13,15 @@ use crate::{
 };
 
 /**
-`Builder`s are Raven IR [`Comp`] and [`Val`] terms that are easy to
-construct and compose together.
+Use `Builder` to easily define and compose Raven IR terms.
 
-For example, suppose we wanted to construct the Raven IR equivalent of
+Raven IR terms are represented
+by the [`Comp`] and [`Val`] enum types.
+These types are good for processing,
+but using them to manually construct IR terms is inconvenient,
+and so we use `Builder` for this task.
+For example, suppose we wanted to construct
+the Raven IR equivalent of
 the Rust expression `(x || y) && true`.
 Using `Builder`, we can write:
 
@@ -33,8 +38,8 @@ println!("The expression: {:?}", e)
 ```
 
 The `.build_no_context()` line "compiles" the builder,
-producing a `Comp` that is equivalent to the following direct
-definition.
+producing a `Comp` that is equivalent
+to the following direct definition.
 
 ```
 use ravenlang::{Binder1, Comp, Ident, LogOpN, Val};
@@ -67,10 +72,11 @@ let e: Comp =
 println!("The expression: {:?}", e)
 ```
 
-Notice that, in the direct definition, we had to invent two new names
-for intermediate variables: `i0` and `i1`.  The `Builder` handles this
-creation of fresh names for us, filling them in when we call
-[`Builder::build_no_context`].
+Notice that, in the direct definition,
+we had to invent two new names
+for intermediate variables: `i0` and `i1`.
+The `Builder` handles this creation of fresh names for us,
+filling them in when we call [`Builder::build_no_context`].
 */
 pub struct Builder {
     fun: Box<dyn FnOnce(&mut IGen) -> Comp>,
@@ -92,19 +98,50 @@ impl From<Comp> for Builder {
 
 impl Builder {
 
-    /// Build a `Comp`, using a new `IGen` to fill in fresh variable names.
+    /// Build a `Comp`, using a new [`IGen`] to fill in fresh variable
+    /// names.
     ///
     /// Do not use this to build a `Comp` that will be nested within
     /// another `Comp`, since the new `IGen` does not know about
     /// existing in-scope variable names and might shadow them. In
-    /// that case, use [`build_with`] instead, and pass in the `IGen` that
-    /// was used to create the other in-scope variable names.
+    /// that case, use [`Builder::build_with`] instead, and pass in
+    /// the `IGen` that was used to create the other in-scope variable
+    /// names.
     pub fn build_no_context(self) -> Comp {
         self.build_with(&mut IGen::new())
     }
+
+    /** 
+    Build a `Comp`,
+    using the provided [`IGen`] reference
+    to generate fresh variable names.
+    The `IGen` will be advanced
+    so that using it in the future
+    does not shadow the generated names.
+    */
     pub fn build_with(self, igen: &mut IGen) -> Comp {
         (self.fun)(igen)
     }
+
+    /**
+    Get a fresh `Ident`
+    and use it to modify an existing `Builder`.
+
+    In the following example, `b2` is equivalent
+    to `|x: bool| (true, x)`,
+    but uses an auto-generated name in place of `x`.
+
+    ```
+    use ravenlang::{Builder, VType};
+
+    let b = Builder::true_();
+
+    let b2 = b.igen(|b||x| {
+        Builder::tuple([b, Builder::var(x.clone())])
+            .into_fun([(x, VType::prop())])
+    });
+    ```
+    */
     pub fn igen<F1,F2>(self, f: F1) -> Self
     where
         F1: FnOnce(Self) -> F2 + 'static,
@@ -146,11 +183,32 @@ impl Builder {
             f(Builder::lift(m))(xs).build_with(igen)
         })
     }
+
+    /**
+    `Builder::lift(m)` produces a `Builder`
+    that will itself simply reproduce `m`.
+
+    ```
+    use ravenlang::{Builder, Comp, Ident, Val};
+
+    let m: Comp = Comp::Return(vec![
+        Val::var(Ident::new("x"))
+    ]);
+
+    assert!(
+        m.clone() == 
+            Builder::lift(m).build_no_context()
+    );
+    ```
+    */
     pub fn lift(m: Comp) -> Self {
-        Self{
-            fun: Box::new(|_igen: &mut IGen| m)
-        }
+        let fun = Box::new(|igen: &mut IGen| {
+            m.advance_igen(igen);
+            m
+        });
+        Self{ fun }
     }
+
     pub fn new<F>(f: F) -> Self
     where
         F: FnOnce(&mut IGen) -> Comp + 'static
@@ -497,10 +555,15 @@ impl Builder {
         Self::quantify_many(Quantifier::Exists, ts_q, f)
     }
 
-    pub fn fun<Xs>(self, xs: Xs) -> Self
+    pub fn into_fun<Xs>(self, xs: Xs) -> Self
     where
-        Xs: Into<Vec<(Ident,Option<VType>)>> + 'static,
+        Xs: Into<Vec<(Ident,VType)>> + 'static,
     {
+        let xs: Vec<(Ident,VType)> = xs.into();
+        let xs: Vec<(Ident,Option<VType>)> = xs
+            .into_iter()
+            .map(|(i,t)| (i, Some(t)))
+            .collect();
         Self::new(move |igen: &mut IGen| {
             Comp::Fun(xs.into(), Box::new(self.build_with(igen)))
         })

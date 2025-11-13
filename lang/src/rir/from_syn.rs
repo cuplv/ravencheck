@@ -538,8 +538,17 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                 };
                 xs.push((x,t));
             }
+            let xs = xs
+                .into_iter()
+                .map(|(x,o)| match o {
+                    Some(t) => Ok((x,t)),
+                    None => Err(format!(
+                        "Closure arguments must have type annotations."
+                    )),
+                })
+                .collect::<Result<Vec<_>,_>>()?;
             Ok(Builder::return_thunk(
-                syn_to_builder(*body)?.fun(xs)
+                syn_to_builder(*body)?.into_fun(xs)
             ))
         }
 

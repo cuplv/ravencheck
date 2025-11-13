@@ -220,19 +220,19 @@ impl Sig {
             )),
         }
 
-        let f_inputs: Vec<(RirIdent, Option<VType>)> = c_inputs
+        let f_inputs: Vec<(RirIdent, VType)> = c_inputs
             .iter()
             .zip(applied_op.inputs.iter())
-            .map(|(a,b)| (RirIdent::new(a.clone()), Some(b.clone())))
+            .map(|(a,b)| (RirIdent::new(a.clone()), b.clone()))
             .collect();
-        let f_output = (RirIdent::new(c_output.clone()), Some(applied_op.output.clone()));
+        let f_output = (RirIdent::new(c_output.clone()), applied_op.output.clone());
         let mut g = body.get_igen();
         let f_axiom: Comp =
             Builder::return_thunk(
                 Builder::return_thunk(
-                    Builder::lift(body).fun([f_output])
+                    Builder::lift(body).into_fun([f_output])
                 )
-                    .fun(f_inputs)
+                    .into_fun(f_inputs)
             ).build_with(&mut g);
 
         // Replace hypothetical call type argument names with the
