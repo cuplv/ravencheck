@@ -154,6 +154,25 @@ impl Builder {
         })
     }
 
+    /**
+    Create a new ident and use it in a builder.
+
+    The following example creates a Raven IR function equivalent to
+    `|i0: bool| { (i0,i0) }`, but with a unique generated `Ident`
+    in place of `i0`.
+    ```
+    use ravenlang::{Builder, VType};
+
+    let b = Builder::with_x(|i0| {
+        let body = Builder::tuple([
+            Builder::var(i0.clone()),
+            Builder::var(i0.clone()),
+        ]);
+
+        body.into_fun([(i0, VType::prop())])
+    });
+    ```
+    */
     pub fn with_x<F>(f: F) -> Self
     where F: FnOnce(Ident) -> Self + 'static,
     {
@@ -163,6 +182,10 @@ impl Builder {
         })
     }
 
+    /**
+    This works just like [`Builder::with_x`], except that it provides a `Vec` of fresh `Ident`s to build with, rather than a single `Ident`.
+    The provided `n` argument specifies the number of generated `Ident`s.
+    */
     pub fn with_x_many<F>(n: usize, f: F) -> Self
     where F: FnOnce(Vec<Ident>) -> Self + 'static,
     {
