@@ -187,7 +187,7 @@ pub fn block_to_builder(block: Block) -> Result<Builder, Error> {
 fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
     match stmt {
         Stmt::Local(l) => {
-            let x = pat_to_vname(l.pat)?.0;
+            let x = Pattern::from_pat(l.pat)?.0;
             let body = match l.init {
                 Some(local_init) => *local_init.expr,
                 None => return mk_err("let-bindings must have inits"),
@@ -197,7 +197,7 @@ fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
             match rem.pop() {
                 Some(next) => {
                     let n = stmts_to_builder(next,rem)?;
-                    Ok(m.seq_pat(n)(x))
+                    Ok(m.seq_pattern(x,n))
                 }
                 None => mk_err("terminating let-binding in block"),
             }
@@ -359,26 +359,26 @@ impl VType {
 
 impl Pattern {
     pub fn from_pat(p: Pat) -> Result<(Self, Option<VType>), Error> {
-        pat_to_vname(p)
+        pat_to_rir_pattern(p)
     }
     pub fn from_pat_type(pt: PatType) -> Result<(Self, VType), Error> {
-        let (p,t) = pat_to_vname(Pat::Type(pt))?;
+        let (p,t) = pat_to_rir_pattern(Pat::Type(pt))?;
         Ok((p, t.unwrap()))
     }
 }
 
-fn pat_to_vname(p: Pat) -> Result<(Pattern, Option<VType>), Error> {
+fn pat_to_rir_pattern(p: Pat) -> Result<(Pattern, Option<VType>), Error> {
     match p {
         Pat::Ident(p) => Ok((Pattern::Atom(p.into()), None)),
         Pat::Tuple(p) => {
             let mut ps = Vec::new();
             for sub_p in p.elems.into_iter() {
-                ps.push(pat_to_vname(sub_p)?.0);
+                ps.push(pat_to_rir_pattern(sub_p)?.0);
             }
             Ok((Pattern::Tuple(ps), None))
         }
         Pat::Type(p) => {
-            let (x,_) = pat_to_vname(*p.pat)?;
+            let (x,_) = pat_to_rir_pattern(*p.pat)?;
             let t = VType::from_syn(*p.ty)?;
             Ok((x,Some(t)))
         }
@@ -398,7 +398,7 @@ fn q_body(quantifier: Quantifier, expr: Expr) -> Result<Builder, Error> {
             );
             let mut q_sig = Vec::new();
             for i in inputs.into_iter() {
-                match pat_to_vname(i)? {
+                match Pattern::from_pat(i)? {
                     (x,Some(t)) => {
                         let x = match x.clone().unwrap_atom() {
                             Some(x) => x,
@@ -529,7 +529,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
         Expr::Closure(ExprClosure{ inputs, body, .. }) => {
             let mut xs = Vec::new();
             for i in inputs.into_iter() {
-                let (p,t) = pat_to_vname(i)?;
+                let (p,t) = Pattern::from_pat(i)?;
                 let x = match p.clone().unwrap_atom() {
                     Some(x) => x,
                     None => return Err(format!(

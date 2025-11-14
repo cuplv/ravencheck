@@ -267,20 +267,45 @@ impl Builder {
         Self::return_(Val::into_var(i))
     }
 
-    pub fn seq<F1>(self, cont: F1) -> impl FnOnce(Ident) -> Self
+    pub fn seq_ident<F1>(self, x: Ident, cont: F1) -> Self
     where
         F1: FnOnce(Val) -> Self + 'static,
     {
-        |x|
         Self::new(|igen: &mut IGen| {
             let m1 = self.build_with(igen);
             let m2 = cont(x.clone().val()).build_with(igen);
             Comp::seq(m1, x, m2)
         })
     }
-    pub fn seq_pat(self, cont: Self) -> impl FnOnce(Pattern) -> Self
+
+    /**
+    Sequence two `Builder`s, binding the first to a given [`Pattern`].
+
+    In the following example, `b3` is equivalent to
+    `let (a,b,_) = (x,y,z); a || b`.
+    
+    ```
+    use ravenlang::{Builder, Pattern};
+
+    let b1 = Builder::tuple([
+        Builder::var("x"),
+        Builder::var("y"),
+        Builder::var("z"),
+    ]);
+
+    let p = Pattern::tuple([
+        Pattern::atom("a"),
+        Pattern::atom("b"),
+        Pattern::NoBind
+    ]);
+
+    let b2 = Builder::var("a").or(Builder::var("b"));
+
+    let b3 = b1.seq_pattern(p, b2);
+    ```
+    */
+    pub fn seq_pattern(self, p: Pattern, cont: Self) -> Self
     {
-        |p|
         Self::new(|igen: &mut IGen| {
             let m1 = self.build_with(igen);
             Comp::BindN(
@@ -298,7 +323,7 @@ impl Builder {
         F: FnOnce(Val) -> Self + 'static
     {
         self.igen(|b||x| {
-            b.seq(cont)(x)
+            b.seq_ident(x, cont)
         })
     }
 

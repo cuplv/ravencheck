@@ -148,6 +148,10 @@ impl Pattern {
             Pattern::Tuple(_) => None,
         }
     }
+    pub fn atom<T: Into<Ident>>(x: T) -> Self { Self::Atom(x.into()) }
+    pub fn tuple<Ps: Into<Vec<Self>>>(ps: Ps) -> Self {
+        Pattern::Tuple(ps.into())
+    }
 }
 
 /// Computations that bind multiple variables for use in a body
