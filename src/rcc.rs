@@ -280,7 +280,7 @@ impl Rcc {
         let axiom_body = i.body.clone().builder();
         let axiom =
             Builder::seq_many(code_calls, |_| axiom_body)
-            .quant(Quantifier::Forall, qsig.clone())
+            .into_quantifier(Quantifier::Forall, qsig.clone())
             .build_with(&mut igen);
 
         // Sanity-check that the generated axiom is well-formed
@@ -363,7 +363,7 @@ impl Rcc {
                     i.body.builder()
                 })
             })
-            .quant(Quantifier::Forall, qsig)
+            .into_quantifier(Quantifier::Forall, qsig)
             .build_with(&mut igen);
         // Sanity-check that the generated vc is well-formed
         vc.type_check_r(
@@ -610,7 +610,7 @@ impl Rcc {
                     .seq_igen(|output| {
                         f_axiom.apply_rt(input_vals).apply_rt(vec![output])
                     })
-                    .quant(
+                    .into_quantifier(
                         Quantifier::Forall,
                         quant_sig,
                     )

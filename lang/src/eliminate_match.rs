@@ -124,7 +124,7 @@ fn build_symbolic_branch(
     // The condition should then imply the remaining comp.
     let branch =
         Builder::log_op(LogOpN::Or, [cond.not(), Builder::lift(branch)])
-        .quant(Quantifier::Forall, qsig);
+        .into_quantifier(Quantifier::Forall, qsig);
     let b = branch.build_with(igen);
     // println!("\nBuilt match branch: {:?}\n", b);
     b

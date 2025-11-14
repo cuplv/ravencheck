@@ -262,6 +262,7 @@ impl Builder {
     pub fn false_() -> Self {
         Self::return_(Val::false_())
     }
+
     pub fn var<T: Into<Ident>>(i: T) -> Self {
         Self::return_(Val::into_var(i))
     }
@@ -289,6 +290,9 @@ impl Builder {
             )
         })
     }
+
+    /// ```m1.seq_igen(f)``` gives you `m1 to x. f(x)` in CBPV terms,
+    /// but with a unique generated variable in place of `x`.
     pub fn seq_igen<F>(self, cont: F) -> Self
     where
         F: FnOnce(Val) -> Self + 'static
@@ -297,6 +301,7 @@ impl Builder {
             b.seq(cont)(x)
         })
     }
+
     pub fn seq_many<F>(bxs: Vec<(Self, Ident)>, cont: F) -> Self
     where
         F: FnOnce(Vec<Val>) -> Self + 'static,
@@ -317,6 +322,9 @@ impl Builder {
             })
         })
     }
+
+    /// Same as `Builder::seq_igen`, but binds multiple `Builder`s to
+    /// multiple generated variable names.
     pub fn seq_many_igen<Cs,F>(bs: Cs, cont: F) -> Self
     where
         Cs: Into<Vec<Self>> + 'static,
@@ -333,6 +341,20 @@ impl Builder {
         })
     }
 
+    /// Create a function, using a freshly generated variable name. In
+    /// fhe following example, `b` gives you a function equivalent to
+    /// `|x: bool| (x,x)`, but with a unique name in place of `x`.
+    ///
+    /// ```
+    /// use ravenlang::{Builder, VType};
+    ///
+    /// let b = Builder::fun_igen(VType::prop(), |x| {
+    ///     Builder::tuple([
+    ///         Builder::return_(x.clone()),
+    ///         Builder::return_(x)
+    ///     ])
+    /// });
+    /// ```
     pub fn fun_igen<F>(t: VType, cont: F) -> Self
     where
         F: FnOnce(Val) -> Self + 'static,
@@ -344,6 +366,10 @@ impl Builder {
         })
     }
 
+    /**
+    This works like [`Builder::fun_igen`], but generate input
+    variables for a sequence of types.
+    */
     pub fn fun_many_igen<Ts,F>(ts: Ts, cont: F) -> Self
     where
         Ts: Into<Vec<VType>> + 'static,
@@ -359,6 +385,9 @@ impl Builder {
         })
     }
 
+    /// `x.eq_ne(true, y)` gives you `x == y`.
+    ///
+    /// `x.eq_ne(false, y)` gives you `x != y`.
     pub fn eq_ne(self, pos: bool, other: Self) -> Self {
         self.seq_igen(move |x| {
              other.seq_igen(move |y| {
@@ -399,34 +428,46 @@ impl Builder {
         })
     }
 
+    /// `Builder::and_many([x,y,z])`
+    /// gived you `x && y && z`
     pub fn and_many<Bs: Into<Vec<Self>>>(bs: Bs) -> Self {
         Self::log_op(LogOpN::And, bs)
     }
 
+    /// `x.and(y)` gives you `x && y`.
     pub fn and<T: Into<Self>>(self, other: T) -> Self {
         Self::and_many([self, other.into()])
     }
 
+    /// `Builder::or_many([x,y,z])`
+    /// gives you `x || y || z`.
     pub fn or_many<Bs: Into<Vec<Self>>>(bs: Bs) -> Self {
         Self::log_op(LogOpN::Or, bs)
     }
 
+    /// `x.or(y)` gives you `x || y`.
     pub fn or<T: Into<Self>>(self, other: T) -> Self {
         Self::or_many([self, other.into()])
     }
 
+    /// `x.implies(y)` gives you `!x || y`.
     pub fn implies<T: Into<Self>>(self, other: T) -> Self {
         self.not().or(other)
     }
 
+    /// `x.is_eq(y)`
+    /// gives you `x == y`.
     pub fn is_eq<T: Into<Self>>(self, other: T) -> Self {
         self.eq_ne(true, other.into())
     }
 
+    /// `x.is_ne(y)`
+    /// gives you `x != y`.
     pub fn is_ne<T: Into<Self>>(self, other: T) -> Self {
         self.eq_ne(false, other.into())
     }
 
+    /// `x.ite(y, z)` gives you `if x then { y } else { z }`.
     pub fn ite(self, then_branch: Self, else_branch: Self) -> Self {
         self.seq_igen(|v_cond| {
             then_branch.bind(|m_then| {
@@ -437,6 +478,7 @@ impl Builder {
         })
     }
 
+    /// `mat` gives you a match statement.
     pub fn mat(self, arms: Vec<(MatchArm, Self)>) -> Self {
         let mut matchers = Vec::new();
         let mut comps = Vec::new();
@@ -459,6 +501,7 @@ impl Builder {
         })
     }
 
+    /// `Builder::tuple([x, y])` gives you `(x,y)`.
     pub fn tuple<Bs>(bs: Bs) -> Self
     where
         Bs: Into<Vec<Self>> + 'static
@@ -468,25 +511,50 @@ impl Builder {
         })
     }
 
-
+    /// `x.not()` gives you `!x`.
     pub fn not(self) -> Self {
         self.seq_igen(|x| Builder::new(|igen: &mut IGen| {
             let x_neg = igen.next();
             Comp::not(x, x_neg.clone(), Comp::return1(x_neg))
         }))
     }
+
+    /// `m.flatten()` gives you `m to x. force x`, in CBPV
+    /// terms. Basically, this and [`Builder::ret_thunk()`] are inverse
+    /// operations.
     pub fn flatten(self) -> Self {
         self.seq_igen(|x_thunk| {
             Builder::lift(Comp::force(x_thunk))
         })
     }
+
+    /// `m.ret_thunk()` gives you `return (thunk m)`, in CBPV terms.
     pub fn ret_thunk(self) -> Self {
         Self::new(|igen: &mut IGen| {
             Comp::Return(vec![Val::Thunk(Box::new(self.build_with(igen)))])
         })
     }
 
-    pub fn quant<Xs>(self, q: Quantifier, xs: Xs) -> Self
+    /** 
+    Wrap the given `Builder` in a quantifier, using the given
+    variable names and types.
+
+    The following example first constructs `x && y` and then wraps it
+    into `forall(|x: bool, y: bool| { x && y })`.
+
+    ```
+    use ravenlang::{Builder, Ident, Quantifier, VType};
+
+    let b1 = Builder::var("x").and(Builder::var("y"));
+    let b2 = b1.into_quantifier(
+        Quantifier::Forall,
+        [(Ident::new("x"), VType::prop()),
+         (Ident::new("y"), VType::prop())
+        ]
+    );
+    ```
+    */
+    pub fn into_quantifier<Xs>(self, q: Quantifier, xs: Xs) -> Self
     where
         Xs: Into<Vec<(Ident,VType)>> + 'static,
     {
@@ -502,6 +570,21 @@ impl Builder {
         })
     }
 
+    /** 
+    The following example gives `exists(|x: bool| x == x)`, but
+    with a unique generated variable name in place of `x`.
+
+    ```
+    use ravenlang::{Builder, Quantifier, VType};
+
+    let b = Builder::quantify(
+        Quantifier::Exists,
+        VType::prop(),
+        |x| { Builder::return_(x.clone())
+              .is_eq(Builder::return_(x)) }
+    );
+    ```
+    */
     pub fn quantify<F>(q: Quantifier, t_q: VType, f: F) -> Self
     where
         F: FnOnce(Val) -> Self + 'static,
@@ -510,6 +593,8 @@ impl Builder {
         Self::quantify_many(q, [t_q], f)
     }
 
+    /// Just like [`Builder::quantify`], but generates a sequence of
+    /// unique variables names for a sequence of quantified types.
     pub fn quantify_many<Ts,F>(q: Quantifier, ts_q: Ts, f: F) -> Self
     where
         F: FnOnce(Vec<Val>) -> Self + 'static,
@@ -521,7 +606,7 @@ impl Builder {
                 xs_q.clone().into_iter().zip(ts_q).collect();
             let vs_q = xs_q.into_iter().map(|x| x.val()).collect();
             let body = f(vs_q);
-            body.quant(q, qs)
+            body.into_quantifier(q, qs)
         })
     }
 
@@ -555,6 +640,24 @@ impl Builder {
         Self::quantify_many(Quantifier::Exists, ts_q, f)
     }
 
+    /** 
+    Wrap the given builder in a function, which takes the given
+    types as arguments, bound to the given variable names.
+
+    The following example first constructs `x && y` and then wraps it
+    into `|x: bool, y: bool| { x && y }`.
+
+    ```
+    use ravenlang::{Builder, Ident, VType};
+
+    let b1 = Builder::var("x").and(Builder::var("y"));
+    let b2 = b1.into_fun(
+        [(Ident::new("x"), VType::prop()),
+         (Ident::new("y"), VType::prop())
+        ]
+    );
+    ```
+    */
     pub fn into_fun<Xs>(self, xs: Xs) -> Self
     where
         Xs: Into<Vec<(Ident,VType)>> + 'static,

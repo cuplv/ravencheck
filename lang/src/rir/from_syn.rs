@@ -416,7 +416,8 @@ fn q_body(quantifier: Quantifier, expr: Expr) -> Result<Builder, Error> {
                     }
                 }
             }
-            Ok(syn_to_builder(*body)?.quant(quantifier, q_sig))
+            Ok(syn_to_builder(*body)?
+               .into_quantifier(quantifier, q_sig))
         }
         e => {
             Err(format!(
@@ -786,7 +787,7 @@ impl RirFn {
                 .into_iter()
                 .map(|(p,t)| Ok((p.unwrap_vname()?, t)))
                 .collect::<Result<Vec<_>,String>>()?;
-            Builder::lift(body).quant(
+            Builder::lift(body).into_quantifier(
                 Quantifier::Forall,
                 inputs,
             )

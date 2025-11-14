@@ -267,7 +267,7 @@ Error in type-checking definition of \"{}\": {:?}",
                     .apply_rt(input_args)
                     .apply_rt(vec![x])
             })
-            .quant(Quantifier::Forall, q_sig)
+            .into_quantifier(Quantifier::Forall, q_sig)
             .build_with(&mut gn);
 
         let v_sig = CheckedSig(v_sig);
@@ -348,7 +348,7 @@ Error in type-checking definition of \"{}\": {:?}",
                     .apply_rt(input_args)
                     .apply_rt(vec![x])
             })
-            .quant(Quantifier::Forall, q_sig)
+            .into_quantifier(Quantifier::Forall, q_sig)
             .build_with(&mut gn);
         // Build assertion body: for all inputs, apply the definition to
         // get the output, and then check that the inputs and output
