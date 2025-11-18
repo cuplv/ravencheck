@@ -154,6 +154,18 @@ impl Builder {
         })
     }
 
+    pub fn igen_many<F1,F2>(self, n: usize, f: F1) -> Self
+    where
+        F1: FnOnce(Self) -> F2 + 'static,
+        F2: FnOnce(Vec<Ident>) -> Self,
+    {
+        Self::new(move |igen| {
+            let m = self.build_with(igen);
+            let xs = igen.next_many(n);
+            f(Builder::lift(m))(xs).build_with(igen)
+        })
+    }
+
     /**
     Create a new ident and use it in a builder.
 
@@ -185,6 +197,30 @@ impl Builder {
     /**
     This works just like [`Builder::with_x`], except that it provides a `Vec` of fresh `Ident`s to build with, rather than a single `Ident`.
     The provided `n` argument specifies the number of generated `Ident`s.
+
+    The following example creates a Raven IR function equivalent to
+    `|i0: bool,i2: bool,i3: bool| { (i0,i1,i2) }`,
+    but with unique generated `Ident`s
+    in place of `i0`, `i1`, and `i2`.
+    ```
+    use ravenlang::{Builder, Ident, VType};
+
+    let b = Builder::with_x_many(3, |idents| {
+        let body = Builder::tuple(
+            idents
+                .iter()
+                .map(|i| Builder::var(i.clone()))
+                .collect::<Vec<_>>()
+        );
+
+        body.into_fun(
+            idents
+                .into_iter()
+                .map(|i| (i, VType::prop()))
+                .collect::<Vec<_>>()
+        )
+    });
+    ```
     */
     pub fn with_x_many<F>(n: usize, f: F) -> Self
     where F: FnOnce(Vec<Ident>) -> Self + 'static,
@@ -192,18 +228,6 @@ impl Builder {
         Self::new(move |igen| {
             let xs = igen.next_many(n);
             f(xs).build_with(igen)
-        })
-    }
-
-    pub fn igen_many<F1,F2>(self, n: usize, f: F1) -> Self
-    where
-        F1: FnOnce(Self) -> F2 + 'static,
-        F2: FnOnce(Vec<Ident>) -> Self,
-    {
-        Self::new(move |igen| {
-            let m = self.build_with(igen);
-            let xs = igen.next_many(n);
-            f(Builder::lift(m))(xs).build_with(igen)
         })
     }
 
