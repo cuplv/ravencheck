@@ -54,7 +54,7 @@ pub mod rvn_hashset {
     }
 
     #[assume]
-    #[inst_for(HashSet<T> => <T>)]
+    #[for_type(HashSet<T> => <T>)]
     fn member_defines_eq<T>(s1: HashSet<T>, s2: HashSet<T>) -> bool {
         let some_difference = exists(|e: T| {
             member::<T>(e,s1) != member::<T>(e,s2)

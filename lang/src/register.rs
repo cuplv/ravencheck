@@ -127,6 +127,10 @@ impl Sig {
             i.sig.output.render(),
         );
 
+        if i.sig.tas.len() != 0 && inst_rules.len() == 0 {
+            panic!("#[assume] item '{}' is polymorphic, but has no instantiation rules.  This means that the item will never actually be assumed.  You need to add a rule to instantiate the item's type parameters when a type of a particular form is relevant.  For example, adding the attribute #[for_type(HashMap<T1,T2> => <T1,T2>)] will plug in T1 and T2 as the item's type parameters when the type HashMap<T1,T2> is used in a query.", i.sig.ident);
+        }
+
         // Create a forall-quantified formula, which quantifies the fn
         // item's arguments.
         let (_ident, tas, formula) = i.into_uni_formula().unwrap();
