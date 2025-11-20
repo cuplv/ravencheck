@@ -46,3 +46,6 @@ pub use ravencheck_macros::{
 pub use ravenlang::CheckedSig;
 mod rcc;
 pub use rcc::Rcc;
+
+#[cfg(test)]
+mod tests;

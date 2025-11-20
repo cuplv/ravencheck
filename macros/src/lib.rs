@@ -10,6 +10,7 @@ use syn::{
     ItemFn,
     ItemMod,
     ItemUse,
+    LitStr,
     Meta,
     Pat,
     Path,
@@ -155,6 +156,13 @@ impl RvnItemAttr {
             _item => Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ShouldPanic {
+    No,
+    Yes,
+    YesWithText(String),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -305,14 +313,20 @@ impl RccCommand {
         item: Item,
         should_be_valid: bool,
     ) -> (Vec<Self>, Option<Item>) {
-        assert!(
-            ras.len() == 0,
-            "#[verify] and #[falsify] should not have further attributes beneath them",
-        );
+        let attr_str = if should_be_valid {
+            "#[verify]"
+        } else {
+            "#[falsify]"
+        };
+        for attr in ras {
+            match attr {
+                a => panic!("{:?} should not appear after {attr_str} on an item.", a),
+            }
+        }
         let item = match item {
             Item::Fn(i) => i,
             item => panic!(
-                "should not use #[verify] or #[falsify] on {:?}",
+                "You should not use {attr_str} on non-fn items, but you used it on {:?}",
                 item,
             ),
         };
@@ -416,53 +430,6 @@ impl RccCommand {
         }
     }
 
-    fn from_toplevel_attr(attr: &Attribute) -> Vec<Self> {
-        let mut out = Vec::new();
-        match &attr.meta {
-            Meta::List(l) if l.path.segments.len() == 1 => {
-                match path_to_one_str(&l.path).as_deref() {
-                    Some("declare_types") => {
-                        let parser =
-                            Punctuated
-                            ::<Path,syn::Token![,]>
-                            ::parse_separated_nonempty;
-                        let types = parser
-                            .parse2(l.tokens.clone())
-                            .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
-
-                        for mut p in types.into_iter() {
-                            let seg = p.segments.pop().unwrap().into_value();
-                            let arity = match seg.arguments {
-                                PathArguments::None => 0,
-                                PathArguments::AngleBracketed(a) => a.args.len(),
-                                PathArguments::Parenthesized(..) => panic!("declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
-                            };
-
-                            out.push(RccCommand::DeclareType(seg.ident, arity));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-        out
-    }
-
-    fn extract_from_toplevel_attrs(attrs: &mut Vec<Attribute>) -> Vec<Self> {
-        let mut out = Vec::new();
-        attrs.retain_mut(|attr| {
-            let mut cs = Self::from_toplevel_attr(attr);
-            if cs.len() > 0 {
-                out.append(&mut cs);
-                false
-            } else {
-                true
-            }
-        });
-        out
-    }
-
     fn extract_from_items(items: &mut Vec<Item>) -> Vec<Self> {
         let mut commands: Vec<Self> = Vec::new();
         let mut items_out: Vec<Item> = Vec::new();
@@ -485,6 +452,102 @@ impl RccCommand {
 enum GenMode {
     Check,
     Export,
+}
+
+struct RvnMod {
+    commands: Vec<RccCommand>,
+    mode: GenMode,
+    should_panic: ShouldPanic,
+}
+
+impl RvnMod {
+    fn new_check() -> Self {
+        Self {
+            commands: Vec::new(),
+            mode: GenMode::Check,
+            should_panic: ShouldPanic::No,
+        }
+    }
+
+    fn new_export() -> Self {
+        Self {
+            commands: Vec::new(),
+            mode: GenMode::Export,
+            should_panic: ShouldPanic::No,
+        }
+    }
+
+    fn is_export(&self) -> bool {
+        match self.mode {
+            GenMode::Check => false,
+            GenMode::Export => true,
+        }
+    }
+
+    fn extract_from_toplevel_attrs(&mut self, attrs: &mut Vec<Attribute>) {
+        attrs.retain_mut(|attr| {
+            let should_retain = self.from_toplevel_attr(attr);
+
+            should_retain
+        });
+    }
+
+    /// Returns `true` if the `Attribute` should be retained, or
+    /// `false` if it should be erased.
+    fn from_toplevel_attr(&mut self, attr: &Attribute) -> bool {
+        match &attr.meta {
+            Meta::List(l) if l.path.segments.len() == 1 => {
+                match path_to_one_str(&l.path).as_deref() {
+                    Some("declare_types") => {
+                        let parser =
+                            Punctuated
+                            ::<Path,syn::Token![,]>
+                            ::parse_separated_nonempty;
+                        let types = parser
+                            .parse2(l.tokens.clone())
+                            .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
+
+                        for mut p in types.into_iter() {
+                            let seg = p.segments.pop().unwrap().into_value();
+                            let arity = match seg.arguments {
+                                PathArguments::None => 0,
+                                PathArguments::AngleBracketed(a) => a.args.len(),
+                                PathArguments::Parenthesized(..) => panic!("declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
+                            };
+
+                            self.commands.push(
+                                RccCommand::DeclareType(seg.ident, arity)
+                            );
+                        }
+
+                        // Return false so that the attribute is
+                        // erased before passing on to the Rust
+                        // toolchain.
+                        false
+                    }
+                    Some("rvn_should_panic") => {
+                        let s: String = syn::parse2::<LitStr>(l.tokens.clone())
+                            .unwrap()
+                            .value();
+                        self.should_panic = ShouldPanic::YesWithText(s);
+                        false
+                    }
+                    _ => true,
+                }
+            }
+            Meta::Path(p) if p.segments.len() == 1 => {
+                match path_to_one_str(p).as_deref() {
+                    Some("rvn_should_panic") => {
+                        self.should_panic = ShouldPanic::Yes;
+                        false
+                    }
+                    _ => true,
+                }
+            }
+            _ => true,
+        }
+    }
+
 }
 
 fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
@@ -564,6 +627,7 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 out.push(s);
             }
             RccCommand::Goal(should_be_valid, item_fn) => {
+                let item_fn = item_fn.clone();
                 match mode {
                     GenMode::Check => {
                         let item_fn_str = quote!{ #item_fn }.to_string();
@@ -600,18 +664,18 @@ fn use_tree_to_path(t: UseTree) -> Vec<PathSegment> {
 
 #[proc_macro_attribute]
 pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    process_module(attrs, input, true)
+    process_module(attrs, input, RvnMod::new_export())
 }
 
 #[proc_macro_attribute]
 pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    process_module(attrs, input, false)
+    process_module(attrs, input, RvnMod::new_check())
 }
 
 fn process_module(
     attrs: TokenStream,
     input: TokenStream,
-    export: bool,
+    mut rvn: RvnMod,
 ) -> TokenStream {
 
     // The macro needs to name the crate that CheckedSig comes from,
@@ -635,28 +699,26 @@ fn process_module(
     };
 
     // Handle commands within the top-level attributes
-    let mut commands =
-        RccCommand::extract_from_toplevel_attrs(&mut m.attrs);
-    // extract_top_level(&mut m.attrs, &mut rcc_items);
+    rvn.extract_from_toplevel_attrs(&mut m.attrs);
 
     // Handle per-item commands within the module
     match &mut m.content {
         Some((_,items)) => {
-            
+
             // extract_items(items, &mut rcc_items);
-            commands.append(
+            rvn.commands.append(
                 &mut RccCommand::extract_from_items(items)
             );
 
             let mut test_stmts: Vec<Stmt> =
-                generate_stmts(&commands, GenMode::Check);
+                generate_stmts(&rvn.commands, GenMode::Check);
             test_stmts.push(
                 syn::parse2(quote!{
                     rcc.check_goals();
                 }).unwrap()
             );
 
-            let test: ItemFn = syn::parse((quote! {
+            let mut test: ItemFn = syn::parse_quote! {
                 #[test]
                 fn check_properties() {
                     let mut rcc = Rcc::new();
@@ -664,9 +726,25 @@ fn process_module(
                     // Interpolate 'stmts' here
                     #(#test_stmts)*
                 }
-            }).into()).unwrap();
+            };
+
+            match &rvn.should_panic {
+                ShouldPanic::No => {},
+                ShouldPanic::Yes => {
+                    let parser = Attribute::parse_outer;
+                    let mut a = parser.parse_str("#[should_panic]").unwrap();
+                    test.attrs.push(a.pop().unwrap());
+                }
+                ShouldPanic::YesWithText(s) => {
+                    let parser = Attribute::parse_outer;
+                    let tokens = quote!{ #[should_panic(expected = #s)] };
+                    let mut a = parser.parse2(tokens).unwrap();
+                    test.attrs.push(a.pop().unwrap());
+                }
+            }
 
             let test_s = Item::Fn(test);
+            // println!("the test: {}", quote!{ #test_s });
 
             let test_mod = quote! {
                 #[cfg(test)]
@@ -682,9 +760,9 @@ fn process_module(
 
             items.push(syn::parse(test_mod.into()).expect("parse test mod"));
 
-            if export {
+            if rvn.is_export() {
                 let export_stmts: Vec<Stmt> =
-                    generate_stmts(&commands, GenMode::Export);
+                    generate_stmts(&rvn.commands, GenMode::Export);
 
                 let export_mod = quote! {
                     pub mod ravencheck_exports {
