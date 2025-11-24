@@ -41,7 +41,7 @@ pub struct Rcc {
     sig: CheckedSig,
     defs: HashMap<String, Comp>,
     goals: Vec<(Option<CheckedSig>, Goal)>,
-    touched_paths: HashSet<String>,
+    pub seen_hashes: HashSet<u64>,
 }
 
 impl Rcc {
@@ -50,16 +50,7 @@ impl Rcc {
             sig: CheckedSig::empty(),
             defs: HashMap::new(),
             goals: Vec::new(),
-            touched_paths: HashSet::new(),
-        }
-    }
-
-    pub fn touch_new_path(&mut self, path: &str) -> bool {
-        if self.touched_paths.contains(path) {
-            false
-        } else {
-            self.touched_paths.insert(path.to_string());
-            true
+            seen_hashes: HashSet::new(),
         }
     }
 

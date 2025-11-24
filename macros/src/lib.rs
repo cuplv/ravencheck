@@ -27,6 +27,8 @@ use syn::parse::Parser;
 
 use std::collections::VecDeque;
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnItemAttr {
     Annotate(String),
@@ -458,6 +460,13 @@ struct RvnMod {
     commands: Vec<RccCommand>,
     mode: GenMode,
     should_panic: ShouldPanic,
+    source_hash: u64,
+}
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
 }
 
 impl RvnMod {
@@ -466,6 +475,7 @@ impl RvnMod {
             commands: Vec::new(),
             mode: GenMode::Check,
             should_panic: ShouldPanic::No,
+            source_hash: 0,
         }
     }
 
@@ -474,6 +484,7 @@ impl RvnMod {
             commands: Vec::new(),
             mode: GenMode::Export,
             should_panic: ShouldPanic::No,
+            source_hash: 0,
         }
     }
 
@@ -618,12 +629,9 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                     punct.push(s);
                 }
                 let path = Path { leading_colon: None, segments: punct };
-                let path_str = quote!{ #path }.to_string();
-                let s: Stmt = syn::parse2(quote! {
-                    if rcc.touch_new_path(#path_str) {
-                        rcc = #path::ravencheck_exports::apply_exports(rcc);
-                    }
-                }).unwrap();
+                let s: Stmt = syn::parse_quote! {
+                    rcc = #path::ravencheck_exports::apply_exports(rcc);
+                };
                 out.push(s);
             }
             RccCommand::Goal(should_be_valid, item_fn) => {
@@ -677,6 +685,8 @@ fn process_module(
     input: TokenStream,
     mut rvn: RvnMod,
 ) -> TokenStream {
+
+    rvn.source_hash = calculate_hash(&input.to_string());
 
     // The macro needs to name the crate that CheckedSig comes from,
     // and that will be different depending on the context that
@@ -764,12 +774,16 @@ fn process_module(
                 let export_stmts: Vec<Stmt> =
                     generate_stmts(&rvn.commands, GenMode::Export);
 
+                let hash = rvn.source_hash;
                 let export_mod = quote! {
                     pub mod ravencheck_exports {
                         use #cratename::Rcc;
 
                         pub fn apply_exports(mut rcc: Rcc) -> Rcc {
-                            #(#export_stmts)*
+                            if !rcc.seen_hashes.contains(&#hash) {
+                                rcc.seen_hashes.insert(#hash);
+                                #(#export_stmts)*
+                            }
                             rcc
                         }
                     }
