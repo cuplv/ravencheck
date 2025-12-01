@@ -166,3 +166,27 @@ mod my_set_client5 {
             == (tri_member(e1, e2, e3, s) && bi_member(e4, e5, s))
     }
 }
+
+#[crate::check_module(crate)]
+#[rvn_should_panic("Assign statements are not supported by Ravencheck, use a `let` binding instead of z = ! x")]
+mod bad_block1 {
+    #[verify]
+    fn bad_block1(x: bool) -> bool {
+        let y = {
+            z = !x;
+        };
+        y
+    }
+}
+
+#[crate::check_module(crate)]
+#[rvn_should_panic("The last item in a block cannot be a let-binding: let z = ! x ;")]
+mod bad_block2 {
+    #[verify]
+    fn bad_block2(x: bool) -> bool {
+        let y = {
+            let z = !x;
+        };
+        y
+    }
+}

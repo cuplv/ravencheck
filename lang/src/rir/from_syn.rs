@@ -39,6 +39,7 @@ use syn::{
     TypeParamBound,
     UnOp,
 };
+use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 
 use crate::{
@@ -187,8 +188,8 @@ pub fn block_to_builder(block: Block) -> Result<Builder, Error> {
 fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
     match stmt {
         Stmt::Local(l) => {
-            let x = Pattern::from_pat(l.pat)?.0;
-            let body = match l.init {
+            let x = Pattern::from_pat(l.clone().pat)?.0;
+            let body = match l.clone().init {
                 Some(local_init) => *local_init.expr,
                 None => return mk_err("let-bindings must have inits"),
             };
@@ -199,17 +200,24 @@ fn stmts_to_builder(stmt: Stmt, mut rem: Vec<Stmt>) -> Result<Builder,Error> {
                     let n = stmts_to_builder(next,rem)?;
                     Ok(m.seq_pattern(x,n))
                 }
-                None => mk_err("terminating let-binding in block"),
+                None => mk_err(format!("The last item in a block cannot be a let-binding: {}", l.to_token_stream())),
             }
         }
         Stmt::Expr(expr,_) => {
+            // Attempt to translate expr first, so that if it's
+            // totally invalid then that is the first error the user
+            // will see.
+            let e = syn_to_builder(expr.clone())?;
+
+            // Only if it is a valid expr, then check that it is the
+            // last item in the block.
             if rem.len() != 0 {
                 mk_err(format!(
-                    "non-terminating expr in block, remaining: {:?}",
-                    rem.len(),
+                    "This expr should only be used as the last item in a block: {}",
+                    expr.to_token_stream(),
                 ))
             } else {
-                syn_to_builder(expr)
+                Ok(e)
             }
         }
         s => todo!("block stmt {:?}", s),
@@ -437,6 +445,9 @@ fn get_cloned_expr(e: ExprMethodCall) -> Result<Expr, Error> {
 
 pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
     match e {
+        Expr::Assign(e) => {
+            mk_err(format!("Assign statements are not supported by Ravencheck, use a `let` binding instead of {}", e.to_token_stream()))
+        }
         Expr::Binary(ExprBinary{ left, op, right, .. }) => {
             let c1 = syn_to_builder(*left)?;
             let c2 = syn_to_builder(*right)?;
@@ -720,7 +731,7 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             }
         }
 
-        e => mk_err(format!("Unhandled expr: {:?}", e)),
+        e => mk_err(format!("This form of expression is not supported by Ravencheck, and thus can only be used in the body of a #[declare] item: {}", e.to_token_stream())),
     }
 }
 
