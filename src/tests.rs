@@ -190,3 +190,29 @@ mod bad_block2 {
         y
     }
 }
+
+
+// // When this is uncommented, it should throw a nice compiler error.
+
+// #[crate::check_module(crate)]
+// fn itsa_function() -> String {
+//     format!("Hello World")
+// }
+
+
+// // When uncommented, should throw nice compiler error.
+
+// #[crate::check_module(crate)]
+// mod annotate {
+//     #[annotate(foo(a) => b)]
+//     type Foo = (String, String);
+// }
+
+
+// // When uncommented, should throw nice compiler error.
+
+// #[crate::check_module(crate)]
+// mod annotate {
+//     #[assume]
+//     type Foo = (String, String);
+// }

@@ -4,6 +4,7 @@ use quote::quote;
 
 use syn::{
     Attribute,
+    Error as SynError,
     FnArg,
     Ident,
     Item,
@@ -17,6 +18,7 @@ use syn::{
     PathArguments,
     PathSegment,
     punctuated::Punctuated,
+    spanned::Spanned,
     Stmt,
     Token,
     UseTree,
@@ -26,8 +28,52 @@ use syn::ext::IdentExt;
 use syn::parse::Parser;
 
 use std::collections::VecDeque;
-
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::fmt;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum SynItemTag {
+    Const,
+    Enum,
+    Fn,
+    Impl,
+    Mod,
+    Struct,
+    Type,
+    Use,
+}
+
+impl fmt::Display for SynItemTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Const => "const",
+            Self::Enum => "enum",
+            Self::Fn => "fn",
+            Self::Impl => "impl",
+            Self::Mod => "mod",
+            Self::Struct => "struct",
+            Self::Type => "type",
+            Self::Use => "use",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl SynItemTag {
+    fn tag_attrs(item: &mut Item) -> Option<(SynItemTag, &mut Vec<Attribute>)> {
+        match item {
+            Item::Const(i) => Some((Self::Const, &mut i.attrs)),
+            Item::Enum(i) => Some((Self::Enum, &mut i.attrs)),
+            Item::Fn(i) => Some((Self::Fn, &mut i.attrs)),
+            Item::Impl(i) => Some((Self::Impl, &mut i.attrs)),
+            Item::Mod(i) => Some((Self::Mod, &mut i.attrs)),
+            Item::Struct(i) => Some((Self::Struct, &mut i.attrs)),
+            Item::Type(i) => Some((Self::Type, &mut i.attrs)),
+            Item::Use(i) => Some((Self::Use, &mut i.attrs)),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RvnItemAttr {
@@ -38,8 +84,11 @@ enum RvnItemAttr {
     Declare,
     Define,
     Falsify,
+    // Should only be used with AnnotateMulti
     ForCall(String),
+    // Should only be used with AnnotateMulti
     ForInst(String),
+    // Should only be used with AnnotateMulti
     ForValues(String),
     Import,
     InstRule(String),
@@ -47,6 +96,7 @@ enum RvnItemAttr {
     Loopify(Ident, Ident, Ident, Ident, Ident, Ident),
     Phantom,
     Recursive,
+    // Should only be used with AnnotateMulti
     ShouldFail,
     Total,
     Verify,
@@ -61,101 +111,240 @@ fn path_to_one_str(p: &Path) -> Option<String> {
 }
 
 impl RvnItemAttr {
-    fn try_from_attr(attr: &Attribute) -> Option<RvnItemAttr> {
-        match &attr.meta {
+    fn is_primary(&self) -> bool { use RvnItemAttr::*; match self {
+        Annotate(..) | AnnotateMulti | Assume | AssumeFor(..)
+            | Declare | Define | Falsify | Import | Loopify(..)
+            | Verify => true,
+        _ => false,
+    }}
+
+    fn refer_text(&self) -> &'static str {
+        use RvnItemAttr::*;
+        match self {
+            Annotate(..) => "#[annotate(..)]",
+            AnnotateMulti => "#[annotate_multi]",
+            Assume => "#[assume]",
+            AssumeFor(..) => "#[assume(..)]",
+            Declare => "#[declare]",
+            Define => "#[define]",
+            Falsify => "#[falsify]",
+            ForCall(..) => "#[for_call(..)]",
+            ForInst(..) => "#[for_inst(..)]",
+            ForValues(..) => "#[for_values(..)]",
+            Import => "#[import]",
+            InstRule(..) => "#[for_type(..)]",
+            Loopify(..) => "#[loopify(..)]",
+            Phantom => "#[phantom]",
+            Recursive => "#[recursive]",
+            ShouldFail => "#[should_fail]",
+            Total => "#[total]",
+            Verify => "#[verify]",
+        }
+    }
+
+    fn explain_context_requirement(&self) -> String {
+        use RvnItemAttr::*;
+        let rt = self.refer_text();
+        match self {
+            Annotate(..) | AnnotateMulti | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify => format!("{} should only be used as the first ravencheck attribute on a 'fn' item", rt),
+            Declare | Define => format!("{} should only be used as the first ravencheck attribute on a 'fn', 'type', 'struct', or 'enum' item.", rt),
+            ForCall(..) | ForInst(..) | ForValues(..) => format!("{} should only be used under {} on a 'fn' item", rt, AnnotateMulti.refer_text()),
+            Import => format!("{} should only be used as the first ravencheck attribute on a 'use' item", rt),
+            InstRule(..) => format!("{} should only be used under {} on a 'fn' item", rt, Assume.refer_text()),
+            Phantom => format!("{} should only be used under {} or {}, on a 'fn', 'type', or 'struct', or 'enum' item.", rt, Declare.refer_text(), Define.refer_text()),
+            Recursive => format!("{} should only be used under {} on a 'fn' item.", rt, Define.refer_text()),
+            ShouldFail => format!("{} should only be used under {} on a 'fn' item.", rt, AnnotateMulti.refer_text()),
+            Total => format!("{}, should only be used under {} or {} on a 'fn' item.", rt, Declare.refer_text(), Define.refer_text()),
+        }
+    }
+
+    fn under_annotate_multi(attrs: &Vec<Self>) -> bool {
+        attrs.iter().any(|a| match a { Self::AnnotateMulti => true, _ => false })
+    }
+
+    fn under_assume(attrs: &Vec<Self>) -> bool {
+        attrs.iter().any(|a| match a { Self::Assume => true, _ => false })
+    }
+
+    fn under_declare(attrs: &Vec<Self>) -> bool {
+        attrs.iter().any(|a| match a { Self::Declare => true, _ => false })
+    }
+
+    fn under_define(attrs: &Vec<Self>) -> bool {
+        attrs.iter().any(|a| match a { Self::Define => true, _ => false })
+    }
+
+    fn from_attr_context(
+        attr: &Attribute,
+        item: SynItemTag,
+        rvn_attrs: &Vec<RvnItemAttr>
+    ) -> Result<Self, Result<(), SynError>> {
+        use RvnItemAttr::*;
+
+        let span = attr.span();
+
+        let error = |e: &str| Err(Err(SynError::new(span.clone(), e)));
+        let error2 = |e: &str| Err(Err(SynError::new(span.clone(), e)));
+        let pass = || Err(Ok(()));
+        let ret = |a: RvnItemAttr| Ok(a);
+
+        // First, attempt to parse out a ravencheck attribute. If the
+        // attribute is not recognized, pass it on.
+        let attr = match &attr.meta {
             Meta::Path(p) if p.segments.len() == 1 => {
                 match path_to_one_str(p).as_deref() {
-                    Some("annotate") => panic!("#[annotate] needs arguments"),
-                    Some("annotate_multi") => Some(RvnItemAttr::AnnotateMulti),
-                    Some("assume") => Some(RvnItemAttr::Assume),
-                    Some("declare") => Some(RvnItemAttr::Declare),
-                    Some("define") => Some(RvnItemAttr::Define),
-                    Some("define_rec") => panic!("#[define_rec] has been replaced by #[define] followed by #[recursive]"),
-                    Some("falsify") => Some(RvnItemAttr::Falsify),
-                    Some("import") => Some(RvnItemAttr::Import),
-                    Some("phantom") => Some(RvnItemAttr::Phantom),
-                    Some("recursive") => Some(RvnItemAttr::Recursive),
-                    Some("should_fail") => Some(RvnItemAttr::ShouldFail),
-                    Some("total") => Some(RvnItemAttr::Total),
-                    Some("verify") => Some(RvnItemAttr::Verify),
-                    _ => None,
+                    Some("annotate") => error("This attribute needs arguments, for example: #[annotate(foo(a,b) => c)]")?,
+                    Some("annotate_multi") => AnnotateMulti,
+                    Some("assume") => Assume,
+                    Some("declare") => Declare,
+                    Some("define") => Define,
+                    Some("define_rec") => error("#[define_rec] has been replaced by #[define] followed by #[recursive]")?,
+                    Some("falsify") => RvnItemAttr::Falsify,
+                    Some("import") => RvnItemAttr::Import,
+                    Some("loopify") => error("This attribute needs arguments.")?,
+                    Some("phantom") => RvnItemAttr::Phantom,
+                    Some("recursive") => RvnItemAttr::Recursive,
+                    Some("should_fail") => RvnItemAttr::ShouldFail,
+                    Some("total") => RvnItemAttr::Total,
+                    Some("verify") => RvnItemAttr::Verify,
+                    _ => pass()?,
                 }
             }
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
-                    Some("annotate") =>
-                        Some(RvnItemAttr::Annotate(l.tokens.to_string())),
-                    Some("assume") =>
-                        Some(RvnItemAttr::AssumeFor(l.tokens.to_string())),
-                    Some("assume_for") => {
-                        panic!("#[assume_for(..)] has been replaced by #[assume(..)]")
-                        // let fun_name: Ident = l.parse_args().unwrap();
-                        // Some(RvnAttr::AssumeFor(fun_name.to_string()))
-                    }
-                    Some("for_call") =>
-                        Some(RvnItemAttr::ForCall(l.tokens.to_string())),
-                    Some("for_inst") =>
-                        Some(RvnItemAttr::ForInst(l.tokens.to_string())),
-                    Some("for_type") => Some(RvnItemAttr::InstRule(l.tokens.to_string())),
-                    Some("for_values") =>
-                        Some(RvnItemAttr::ForValues(l.tokens.to_string())),
+                    Some("annotate") => Annotate(l.tokens.to_string()),
+                    Some("assume") => AssumeFor(l.tokens.to_string()),
+                    Some("assume_for") => error("#[assume_for(..)] has been replaced by #[assume(..)]")?,
+                    Some("declare") => error("#[declare] should not have arguments.")?,
+                    Some("define") => error("#[define] should not have arguments.")?,
+                    Some("define_rec") => error("#[define_rec] has been replaced by #[define] followed by #[recursive]")?,
+                    Some("falsify") => error("#[falsify] should not have arguments.")?,
+                    Some("for_call") => ForCall(l.tokens.to_string()),
+                    Some("for_inst") => ForInst(l.tokens.to_string()),
+                    Some("for_type") => InstRule(l.tokens.to_string()),
+                    Some("for_values") => ForValues(l.tokens.to_string()),
+                    Some("import") => error("#[import] should not have arguments.")?,
                     Some("loopify") => {
                         let parser =
                             Punctuated
                             ::<Ident,syn::Token![,]>
                             ::parse_separated_nonempty;
-                        // let types = parser
-                        //     .parse2(l.tokens.clone())
-                        //     .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
-                        let idents: Punctuated<Ident,Token![,]> =
-                            parser.parse2(l.tokens.clone())
-                            .expect("the #[loopify(..)] attribute expects six Ident arguments");
+                        let idents: Punctuated<Ident,Token![,]> = elab_error(
+                            parser.parse2(l.tokens.clone()),
+                            "the #[loopify(..)] attribute expects six Ident arguments"
+                        ).map_err(Err)?;
                         let idents: Vec<Ident> = idents.iter().cloned().collect();
-                        Some(RvnItemAttr::Loopify(
+                        Loopify(
                             idents[0].clone(),
                             idents[1].clone(),
                             idents[2].clone(),
                             idents[3].clone(),
                             idents[4].clone(),
                             idents[5].clone(),
-                        ))
+                        )
                     }
-                    _ => None,
+                    _ => pass()?,
                 }
             }
-            _ => None,
+            _ => pass()?,
+        };
+
+        // If a ravencheck attribute was found, check that its context
+        // is valid.
+
+        // First, check that the attribute appears under other
+        // attributes if and only if it is not primary.
+        if rvn_attrs.len() > 0 && attr.is_primary() {
+            error(&format!(
+                "{} appears under {}, but {}",
+                attr.refer_text(),
+                rvn_attrs[0].refer_text(),
+                &attr.explain_context_requirement(),
+            ))?;
         }
+        if rvn_attrs.len() == 0 && !attr.is_primary() {
+            error(&format!(
+                "{} appears as the first attribute, but {}",
+                attr.refer_text(),
+                &attr.explain_context_requirement(),
+            ))?;
+        }
+
+        // Then, check that the attr is used in the appropriate
+        // context. Each match arm returns () if a valid combination
+        // of attr, item, and context is found.
+        use SynItemTag as Tag;
+        match (&attr, item) {
+            // Declare
+            (Declare, Tag::Const | Tag::Fn | Tag::Struct | Tag::Type) => (),
+
+            // Define
+            (Define, Tag::Enum | Tag::Fn | Tag::Struct | Tag::Type) => (),
+
+            // Primary attributes that go on 'fn' items.
+            (Annotate(..) | AnnotateMulti | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify, Tag::Fn) => (),
+
+            // Secondary attributes that go under 'annotate_multi'.
+            (ForCall(..) | ForInst(..) | ForValues(..) | ShouldFail, Tag::Fn) if Self::under_annotate_multi(rvn_attrs) => (),
+
+            // Import
+            (Import, Tag::Use) => (),
+
+            // Secondary attributes that go under 'assume'.
+            (InstRule(..), _) if Self::under_assume(rvn_attrs) => (),
+
+            // Phantom: under 'define' or 'declare'
+            (Phantom, _) if Self::under_define(rvn_attrs) || Self::under_declare(rvn_attrs) => (),
+
+            // Recursive: only on a 'fn' or 'enum' under 'define'.
+            (Recursive, Tag::Fn | Tag::Enum) if Self::under_define(rvn_attrs) => (),
+            // Total: only on a 'fn' under 'declare' or 'define'.
+            (Total, Tag::Fn) if Self::under_declare(rvn_attrs) || Self::under_define(rvn_attrs) => (),
+
+            // If no valid combinations have matched, then show the
+            // user an error that explains the context requirement for
+            // the attribute.
+            _ => error2(&attr.explain_context_requirement())?,
+        }
+
+        ret(attr)
     }
 
     /// Remove any `RvnAttr`s found from the given `Vec` and return a
     /// new `Vec` containing them.
-    fn extract_from_attrs(attrs: &mut Vec<Attribute>) -> Vec<RvnItemAttr> {
-        let mut out = Vec::new();
+    fn extract_from_attrs(
+        tag: SynItemTag,
+        attrs: &mut Vec<Attribute>
+    ) -> Result<Vec<RvnItemAttr>, SynError> {
+        let mut out: Vec<RvnItemAttr> = Vec::new();
+        let mut context: Vec<RvnItemAttr> = Vec::new();
+        let mut cumulative_error: Option<SynError> = None;
         attrs.retain_mut(|attr| {
-            match RvnItemAttr::try_from_attr(attr) {
-                Some(a) => {
+            match RvnItemAttr::from_attr_context(attr, tag, &context) {
+                Ok(a) => {
+                    context.push(a.clone());
                     out.push(a);
                     false
                 }
-                None => true,
+                Err(Ok(())) => true,
+                Err(Err(e)) => {
+                    match &mut cumulative_error {
+                        Some(e1) => {
+                            e1.combine(e);
+                            // cumulative_error = Some(e1.combine(e));
+                        }
+                        None => {
+                            cumulative_error = Some(e);
+                        }
+                    }
+                    false
+                }
             }
         });
-        out
-    }
 
-    fn extract_from_item(item: &mut Item) -> Vec<RvnItemAttr> {
-        match item {
-            Item::Const(i) => Self::extract_from_attrs(&mut i.attrs),
-            Item::Enum(i) => Self::extract_from_attrs(&mut i.attrs),
-            Item::Fn(i) => Self::extract_from_attrs(&mut i.attrs),
-            Item::Impl(_) => Vec::new(),
-            Item::Mod(_) => Vec::new(),
-            Item::Struct(i) => Self::extract_from_attrs(&mut i.attrs),
-            Item::Type(i) => Self::extract_from_attrs(&mut i.attrs),
-            Item::Use(i) => Self::extract_from_attrs(&mut i.attrs),
-            // Assume anything we haven't listed here is something
-            // that we totally ignore.
-            _item => Vec::new(),
+        match cumulative_error {
+            Some(e) => Err(e),
+            None => Ok(out),
         }
     }
 }
@@ -339,24 +528,32 @@ impl RccCommand {
     /// returning the original (possibly modified) [`Item`] if it
     /// should remain in the module and be passed along to the Rust
     /// compiler.
-    fn from_item(mut item: Item) -> (Vec<RccCommand>, Option<Item>) {
+    fn from_item(
+        mut item: Item
+    ) -> Result<(Vec<RccCommand>, Option<Item>), SynError> {
         use RvnItemAttr::*;
 
-        let ras = RvnItemAttr::extract_from_item(&mut item);
+        // let ras = RvnItemAttr::extract_from_item(&mut item)?;
+
+        let ras = match SynItemTag::tag_attrs(&mut item) {
+            Some((i, attrs)) => RvnItemAttr::extract_from_attrs(i, attrs)?,
+            None => Vec::new(),
+        };
 
         // If there are no Ravencheck attrs, return the item
         // unchanged.
         if ras.len() == 0 {
-            return (Vec::new(), Some(item));
+            return Ok((Vec::new(), Some(item)));
         }
         let mut ras = VecDeque::from(ras);
         match ras.pop_front().unwrap() {
             Annotate(call) => match item {
                 Item::Fn(i) => {
                     let c = RccCommand::Annotate(call, i);
-                    (vec![c], None)
+                    Ok((vec![c], None))
                 }
-                item => panic!("Can't use #[annotate(..)] on {:?}", item),
+                item => Err(SynError::new(item.span(), "The #[annotate(..)] attribute should only be used on fn items.")),
+                // item => panic!("Can't use #[annotate(..)] on {:?}", item),
             }
             AnnotateMulti => match item {
                 Item::Fn(i) => {
@@ -382,9 +579,9 @@ impl RccCommand {
                         inst_lines,
                         i
                     );
-                    (vec![c], None)
+                    Ok((vec![c], None))
                 }
-                item => panic!("Can't use #[annotate_multi(..)] on {:?}", item),
+                item => Err(SynError::new(item.span(), "The #[annotate_multi(..)] attribute should only be used on fn items.")),
             }
             Assume => match item {
                 Item::Fn(i) => {
@@ -398,45 +595,45 @@ impl RccCommand {
                         ),
                     }}
                     let c = RccCommand::Assume(rules, i);
-                    (vec![c], None)
+                    Ok((vec![c], None))
                 }
-                item => panic!("Can't use #[assume] on {:?}", item),
+                item => Err(SynError::new(item.span(), "The #[assume] attribute should only be used on fn items.")),
             }
             AssumeFor(call) => match item {
                 Item::Fn(i) => {
                     let c = RccCommand::AssumeFor(call, i);
-                    (vec![c], None)
+                    Ok((vec![c], None))
                 }
-                item => panic!("Can't use #[assume(..)] on {:?}", item),
+                item => Err(SynError::new(item.span(), "The #[assume(..)] attribute should only be used on fn items.")),
             }
-            Declare => Self::mk_declare_define(Vec::from(ras), item, false),
-            Define => Self::mk_declare_define(Vec::from(ras), item, true),
-            Falsify => Self::mk_goal(Vec::from(ras), item, false),
+            Declare => Ok(Self::mk_declare_define(Vec::from(ras), item, false)),
+            Define => Ok(Self::mk_declare_define(Vec::from(ras), item, true)),
+            Falsify => Ok(Self::mk_goal(Vec::from(ras), item, false)),
             Import => match item {
                 Item::Use(i) => {
                     let c = RccCommand::Import(i.clone());
-                    (vec![c], Some(Item::Use(i)))
+                    Ok((vec![c], Some(Item::Use(i))))
                 }
                 item => panic!("Can't use #[import] on {:?}", item),
             }
             InstRule(_) =>
                 panic!("#[for_type(..)] should only appear under #[assume]"),
             Loopify(st,ct,i,c,s,f) => match item {
-                Item::Fn(item) => Self::mk_loop(st,ct,i,c,s,f,item),
+                Item::Fn(item) => Ok(Self::mk_loop(st,ct,i,c,s,f,item)),
                 _ => panic!("#[loopify(..)] can only be used on a fn item"),
             }
             Phantom =>
                 panic!("#[phantom] should only appear under #[declare] or #[define]"),
-            Verify => Self::mk_goal(Vec::from(ras), item, true),
+            Verify => Ok(Self::mk_goal(Vec::from(ras), item, true)),
             a => todo!("other attrs for from_item: {:?}", a),
         }
     }
 
-    fn extract_from_items(items: &mut Vec<Item>) -> Vec<Self> {
+    fn extract_from_items(items: &mut Vec<Item>) -> Result<Vec<Self>, SynError> {
         let mut commands: Vec<Self> = Vec::new();
         let mut items_out: Vec<Item> = Vec::new();
         for item in items.clone() {
-            let (mut c,i) = Self::from_item(item);
+            let (mut c,i) = Self::from_item(item)?;
             commands.append(&mut c);
             // if let Some(c) = c {
             //     commands.push(c);
@@ -446,7 +643,7 @@ impl RccCommand {
             }
         }
         *items = items_out;
-        commands
+        Ok(commands)
     }
 }
 
@@ -467,6 +664,30 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
+}
+
+fn elab_error<A>(
+    a: Result<A, SynError>,
+    msg: &str,
+) -> Result<A, SynError> {
+    match a {
+        Ok(v) => Ok(v),
+        Err(mut e) => {
+            e.combine(SynError::new(e.span(), msg));
+            Err(e)
+        }
+    }
+}
+
+fn replace_error<A>(
+    a: Result<A, SynError>,
+    span: Span,
+    msg: &str,
+) -> Result<A, SynError> {
+    match a {
+        Ok(v) => Ok(v),
+        Err(_e) => Err(SynError::new(span, msg)),
+    }
 }
 
 impl RvnMod {
@@ -495,17 +716,41 @@ impl RvnMod {
         }
     }
 
-    fn extract_from_toplevel_attrs(&mut self, attrs: &mut Vec<Attribute>) {
-        attrs.retain_mut(|attr| {
-            let should_retain = self.from_toplevel_attr(attr);
+    fn extract_from_toplevel_attrs(
+        &mut self,
+        attrs: &mut Vec<Attribute>,
+    ) -> Result<(), SynError> {
+        let mut errs = Vec::new();
 
-            should_retain
+        attrs.retain_mut(|attr| {
+            match self.from_toplevel_attr(attr) {
+                Ok(should_retain) => should_retain,
+                Err(e) => {
+                    errs.push(e);
+                    // Doesn't matter what this value is, since we are
+                    // going to throw a compile_error.
+                    true
+                }
+            }
         });
+
+        match errs.pop() {
+            Some(mut e) => {
+                for e1 in errs {
+                    e.combine(e1);
+                }
+                Err(e)
+            }
+            None => Ok(()),
+        }
     }
 
     /// Returns `true` if the `Attribute` should be retained, or
     /// `false` if it should be erased.
-    fn from_toplevel_attr(&mut self, attr: &Attribute) -> bool {
+    fn from_toplevel_attr(
+        &mut self,
+        attr: &Attribute,
+    ) -> Result<bool, SynError> {
         match &attr.meta {
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
@@ -514,16 +759,24 @@ impl RvnMod {
                             Punctuated
                             ::<Path,syn::Token![,]>
                             ::parse_separated_nonempty;
-                        let types = parser
-                            .parse2(l.tokens.clone())
-                            .expect("the #[declare_types(..)] attribute expects one or more type names as arguments");
+
+                        let types = replace_error(
+                            parser.parse2(l.tokens.clone()),
+                            attr.span(),
+                            "The #[declare_types(..)] attribute expects one or more types as arguments",
+                        )?;
 
                         for mut p in types.into_iter() {
                             let seg = p.segments.pop().unwrap().into_value();
                             let arity = match seg.arguments {
                                 PathArguments::None => 0,
                                 PathArguments::AngleBracketed(a) => a.args.len(),
-                                PathArguments::Parenthesized(..) => panic!("declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
+                                PathArguments::Parenthesized(..) => {
+                                    return Err(SynError::new(
+                                        seg.span(),
+                                        format!("Declared types should get angle-bracketed arguments <..>, but {} got parenthesized arguments", seg.ident),
+                                    ))
+                                }
                             };
 
                             self.commands.push(
@@ -534,28 +787,28 @@ impl RvnMod {
                         // Return false so that the attribute is
                         // erased before passing on to the Rust
                         // toolchain.
-                        false
+                        Ok(false)
                     }
                     Some("rvn_should_panic") => {
                         let s: String = syn::parse2::<LitStr>(l.tokens.clone())
                             .unwrap()
                             .value();
                         self.should_panic = ShouldPanic::YesWithText(s);
-                        false
+                        Ok(false)
                     }
-                    _ => true,
+                    _ => Ok(true),
                 }
             }
             Meta::Path(p) if p.segments.len() == 1 => {
                 match path_to_one_str(p).as_deref() {
                     Some("rvn_should_panic") => {
                         self.should_panic = ShouldPanic::Yes;
-                        false
+                        Ok(false)
                     }
-                    _ => true,
+                    _ => Ok(true),
                 }
             }
-            _ => true,
+            _ => Ok(true),
         }
     }
 
@@ -670,21 +923,40 @@ fn use_tree_to_path(t: UseTree) -> Vec<PathSegment> {
     }
 }
 
+fn result_to_tokens(r: Result<TokenStream, SynError>) -> TokenStream {
+    match r {
+        Ok(t) => t,
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
 #[proc_macro_attribute]
 pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    process_module(attrs, input, RvnMod::new_export())
+    result_to_tokens(
+        process_module(attrs, input, RvnMod::new_export())
+    )
 }
 
 #[proc_macro_attribute]
 pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    process_module(attrs, input, RvnMod::new_check())
+    result_to_tokens(
+        process_module(attrs, input, RvnMod::new_check())
+    )
 }
 
+/// This function returns a Result, in which both the Ok and Err types
+/// are TokenStreams. The Ok output should contain a successful
+/// compilation output, while the Err output should contain a
+/// 'compile_error!(..)'.
+///
+/// Both outputs should be handled by just passing them on as the
+/// output of the macro. They are only distinguished so that we can
+/// use '?' syntax to short-circuit.
 fn process_module(
     attrs: TokenStream,
     input: TokenStream,
     mut rvn: RvnMod,
-) -> TokenStream {
+) -> Result<TokenStream, SynError> {
 
     rvn.source_hash = calculate_hash(&input.to_string());
 
@@ -700,16 +972,28 @@ fn process_module(
         parser.parse(attrs).expect("parse crate name")
     };
 
-    let mut m: ItemMod = match syn::parse(input).expect("parse input") {
-        Item::Mod(m) => m,
-        i => panic!(
-            "'check_module' macro should only be applied to a module, but it was applied to {:?}",
-            i,
-        ),
-    };
+    let mut m: ItemMod = match syn::parse(input) {
+        Ok(m) => Ok(m),
+        Err
+            (mut e) => {
+            let attr_name = match rvn.mode {
+                GenMode::Check => "check_module",
+                GenMode::Export => "export_module",
+            };
+            e.combine(
+                SynError::new(
+                    e.span(),
+                    format!(
+                        "The '{attr_name}' attribute can only be applied to a module item."
+                    ),
+                )
+            );
+            Err(e)
+        }
+    }?;
 
     // Handle commands within the top-level attributes
-    rvn.extract_from_toplevel_attrs(&mut m.attrs);
+    rvn.extract_from_toplevel_attrs(&mut m.attrs)?;
 
     // Handle per-item commands within the module
     match &mut m.content {
@@ -717,7 +1001,7 @@ fn process_module(
 
             // extract_items(items, &mut rcc_items);
             rvn.commands.append(
-                &mut RccCommand::extract_from_items(items)
+                &mut RccCommand::extract_from_items(items)?
             );
 
             let mut test_stmts: Vec<Stmt> =
@@ -799,5 +1083,5 @@ fn process_module(
     let out = quote! {
         #m
     };
-    out.into()
+    Ok(out.into())
 }
