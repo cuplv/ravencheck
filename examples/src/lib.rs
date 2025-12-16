@@ -1,6 +1,7 @@
 pub mod bool_match_bug;
 pub mod doc_examples;
 pub mod filter;
+pub mod filter_nested_tuple;
 pub mod ite;
 pub mod import_test;
 pub mod main_example_nat;

@@ -537,32 +537,45 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
             }
         }
 
-        Expr::Closure(ExprClosure{ inputs, body, .. }) => {
-            let mut xs = Vec::new();
-            for i in inputs.into_iter() {
-                let (p,t) = Pattern::from_pat(i)?;
-                let x = match p.clone().unwrap_atom() {
-                    Some(x) => x,
-                    None => return Err(format!(
-                        "Must not use tuple pattern in function signature: {:?}",
-                        p,
-                    )),
-                };
-                xs.push((x,t));
-            }
-            let xs = xs
+
+        Expr::Closure(ExprClosure { inputs, body, .. }) => {
+            let body_builder = syn_to_builder(*body)?;
+
+            // Got patterns and types
+            let pats_and_types: Vec<(Pattern, VType)> = inputs
                 .into_iter()
-                .map(|(x,o)| match o {
-                    Some(t) => Ok((x,t)),
-                    None => Err(format!(
-                        "Closure arguments must have type annotations."
-                    )),
+                .map(|i| {
+                    let (p, t_opt) = pat_to_rir_pattern(i)?;
+                    match t_opt {
+                        Some(t) => Ok((p, t)),
+                        None => Err(format!("Closure arguments must have type annotations.")),
+                    }
                 })
-                .collect::<Result<Vec<_>,_>>()?;
-            Ok(Builder::return_thunk(
-                syn_to_builder(*body)?.into_fun(xs)
-            ))
+                .collect::<Result<_, _>>()?;
+
+
+            // Generates n fresh id's with with_x_many
+            let body_builder = Builder::with_x_many(pats_and_types.len(), move |fresh_idents: Vec<RirIdent>| {
+                let mut xs: Vec<(RirIdent, VType)> = Vec::new();
+                let mut bb = body_builder;
+
+                for ((p, t), tmp_ident) in pats_and_types.into_iter().zip(fresh_idents.into_iter()) {
+                    // Add fresh ident and it's type
+                    xs.push((tmp_ident.clone(), t.clone()));
+
+                    // Bind fresh idents with seq_pattern
+                    bb = Builder::var(tmp_ident).seq_pattern(p, bb);
+                }
+
+                // Return into_fun(xs)
+                bb.into_fun(xs)
+            });
+
+            Ok(Builder::return_thunk(body_builder))
         }
+
+
+
 
         Expr::Macro(ExprMacro{ mac: Macro{ path, tokens, .. }, .. }) => {
             // match 'path' into the quantifier
