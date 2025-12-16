@@ -365,25 +365,6 @@ impl Pattern {
         let (p,t) = pat_to_rir_pattern(Pat::Type(pt))?;
         Ok((p, t.unwrap()))
     }
-    pub fn flatten(&self, t: Option<VType>) -> Vec<(RirIdent, Option<VType>)> {
-        let mut xs = Vec::new();
-        self.collect_atoms(&mut xs, t);
-        xs
-    }
-
-    fn collect_atoms(&self, xs: &mut Vec<(RirIdent, Option<VType>)>, t: Option<VType>) {
-        match self {
-            Pattern::Atom(x) => xs.push((x.clone(), t)),
-            Pattern::Tuple(ps) => {
-                println!("In collect_atoms");
-                println!("ps: {:?}", ps);
-                for p in ps {
-                    p.collect_atoms(xs, t.clone());
-                }
-            }
-            Pattern::NoBind => {}
-        }
-    }
 }
 
 fn pat_to_rir_pattern(p: Pat) -> Result<(Pattern, Option<VType>), Error> {
