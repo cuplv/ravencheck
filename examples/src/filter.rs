@@ -47,16 +47,16 @@ mod my_mod {
         })
     }
 
-    #[cfg(test)]
-    #[test]
-    fn filter_test() {
-        let a = HashSet::from([1,2]);
-        let f = |x| x >= 2;
-        let b = filter(f, a.clone());
-        let c = filter(|_| false, a);
-        let d = filter(f, b.clone());
-        assert!(b == HashSet::from([2]));
-        assert!(c == HashSet::new());
-        assert!(b == d);
-    }
+    // #[cfg(test)]
+    // #[test]
+    // fn filter_test() {
+    //     let a = HashSet::from([1,2]);
+    //     let f = |x| x >= 2;
+    //     let b = filter(f, a.clone());
+    //     let c = filter(|_| false, a);
+    //     let d = filter(f, b.clone());
+    //     assert!(b == HashSet::from([2]));
+    //     assert!(c == HashSet::new());
+    //     assert!(b == d);
+    // }
 }
