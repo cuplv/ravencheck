@@ -8,6 +8,7 @@ use crate::{
     LogOpN,
     MatchArm,
     OpCode,
+    OpMode,
     RirFn,
     RirFnSig,
     Sig,
@@ -365,9 +366,14 @@ impl Val {
                 Literal::LogTrue => Ok(VType::prop()),
                 Literal::LogFalse => Ok(VType::prop()),
             }
-            Self::OpCode(om, oc) => panic!(
-                "OpCode values ({:?}, {:?}) should not exist at type-check time.", om, oc
-            ),
+            Self::OpCode(om, oc) => match om {
+                OpMode::Const => panic!("Const opcodes should not appear at typecheck time: {:?}", self),
+                OpMode::RelAbs => tc.sig.opcode_relabs_type(oc, tc.type_bindings.clone()),
+                OpMode::ZeroArgAsConst(_b) => panic!("ZeroArgAsConst opcodes should not appear at typecheck time: {:?}", self),
+            }
+            // Self::OpCode(om, oc) => panic!(
+            //     "OpCode values ({:?}, {:?}) should not exist at type-check time.", om, oc
+            // ),
             Self::Thunk(m) => Ok(VType::Thunk(Box::new(m.type_of(tc)?))),
             Self::Tuple(vs) => {
                 let mut ts = Vec::new();

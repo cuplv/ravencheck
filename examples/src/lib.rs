@@ -1,4 +1,5 @@
 pub mod bool_match_bug;
+pub mod def_and_eq;
 pub mod doc_examples;
 pub mod filter;
 pub mod filter_nested_tuple;

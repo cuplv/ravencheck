@@ -323,6 +323,43 @@ impl Sig {
         }
     }
 
+    pub fn opcode_relabs_type(
+        &self,
+        oc: &OpCode,
+        _tas: Vec<String>,
+    ) -> Result<VType, String> {
+        match self.get_applied_op_or_con(oc) {
+            Ok(Oc::Con(inputs)) => {
+                let path = oc.path.clone().unwrap();
+                if inputs.len() > 0 {
+                    let mut rel_inputs = Vec::new();
+                    for i in inputs {
+                        rel_inputs.push(i.clone());
+                    }
+                    rel_inputs.push(VType::ui_args(path, oc.types.clone()));
+                    Ok(VType::fun_v(rel_inputs, VType::prop()))
+                } else {
+                    Err(format!("Zero-arg constructors (such as {}) have no defined RelAbs type.", oc.ident))
+                }
+            }
+            Ok(Oc::Op(op)) => match op {
+                Op::Fun(op) => {
+                    let mut rel_inputs = Vec::new();
+                    for i in op.inputs {
+                        rel_inputs.push(i.clone());
+                    }
+                    rel_inputs.push(op.output.clone());
+                    return Ok(VType::fun_v(
+                        rel_inputs,
+                        VType::prop(),
+                    ))
+                }
+                _ => Err(format!("Only declared functions, recursive functions, and constructors have a RelAbs type; none is defined for {}", oc.ident)),
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn add_axiom<S1: ToString>(
         &mut self,
         def: S1,

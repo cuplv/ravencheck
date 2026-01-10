@@ -436,6 +436,34 @@ fn q_body(quantifier: Quantifier, expr: Expr) -> Result<Builder, Error> {
     }
 }
 
+fn def_and_eq(left: Expr, right: Expr) -> Result<Builder, Error> {
+    match left {
+        Expr::Call(ExprCall{ func, args, .. }) => {
+            let f = syn_to_builder(*func)?.build_no_context();
+            match f {
+                Comp::Return(mut vs) => {
+                    match vs.pop().unwrap() {
+                        Val::Var(RirIdent::Manual(s), types, path, true) => {
+                            let oc = OpCode { ident: s.clone(), types, path };
+                            let f = oc.as_rel_abs().force().builder();
+                            let mut cs = Vec::new();
+                            for arg in args {
+                                cs.push(syn_to_builder(arg)?);
+                            }
+                            cs.push(syn_to_builder(right)?);
+                            Ok(f.apply(cs))
+                            // todo!("make a relabs node from the opcode")
+                        }
+                        _ => panic!(),
+                    }
+                }
+                c => Err(format!("first arg to def_and_eq should be a call to a declared (or recursive) function, got {:?}", c)),
+            }
+        }
+        _ => todo!()
+    }
+}
+
 fn get_cloned_expr(e: ExprMethodCall) -> Result<Expr, Error> {
     match e.method.to_string().as_str() {
         "clone" => Ok(*e.receiver),
@@ -519,6 +547,15 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                             args,
                         );
                         q_body(Quantifier::Exists, args.pop().unwrap().into_value())
+                    }
+                    Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "def_and_eq" => {
+                        assert!(
+                            args.len() == 2,
+                            "def_and_eq takes two arguments",
+                        );
+                        let right = args.pop().unwrap().into_value();
+                        let left = args.pop().unwrap().into_value();
+                        def_and_eq(left, right)
                     }
                     func => {
                         let f = syn_to_builder(func)?;
