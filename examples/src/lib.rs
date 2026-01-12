@@ -14,6 +14,7 @@ pub mod annotate_multi;
 pub mod annotate_nat;
 pub mod recursive;
 pub mod loopify;
+pub mod incomplete_map;
 pub mod nat;
 pub mod nat_u32;
 pub mod sets;
