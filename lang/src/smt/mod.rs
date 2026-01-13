@@ -2,8 +2,10 @@ pub mod internal;
 
 use crate::{
     parse_str_cbpv,
+    render_cycle,
     Builder,
     Comp,
+    Cycle,
     IGen,
     Goal,
     Op,
@@ -19,6 +21,24 @@ use easy_smt::Response;
 #[cfg(test)]
 mod tests; 
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum RvnResponse {
+    Query(Response),
+    SortCycles(Vec<Cycle>),
+}
+
+impl RvnResponse {
+    pub fn unsat() -> Self {
+        Self::Query(Response::Unsat)
+    }
+    pub fn sat() -> Self {
+        Self::Query(Response::Sat)
+    }
+    pub fn unknown() -> Self {
+        Self::Query(Response::Unknown)
+    }
+}
+
 #[derive(Clone)]
 pub struct CheckedSig(pub Sig);
 
@@ -26,16 +46,27 @@ impl CheckedSig {
     pub fn check_goal(&self, goal: Goal) -> Result<(), String> {
         let Goal{title, tas, condition, should_be_valid} = goal;
         match query_negative_c(condition, self, tas) {
-            Response::Unsat if should_be_valid => Ok(()),
-            Response::Unsat =>
-                Err(format!("Failed to falsify '{}': solver did not find counterexample", title)),
-            Response::Sat if !should_be_valid => Ok(()),
-            Response::Sat =>
-                Err(format!("Failed to verify '{}': solver found counterexample", title)),
-            Response::Unknown if should_be_valid =>
-                Err(format!("Failed to verify '{}': query could not be completed (sort cycle?)", title)),
-            Response::Unknown =>
-                Err(format!("Failed to falsify '{}': query could not be completed (sort cycle?)", title)),
+            RvnResponse::Query(r) => match r {
+                Response::Unsat if should_be_valid => Ok(()),
+                Response::Unsat =>
+                    Err(format!("Failed to falsify '{}': solver did not find counterexample", title)),
+                Response::Sat if !should_be_valid => Ok(()),
+                Response::Sat =>
+                    Err(format!("Failed to verify '{}': solver found counterexample", title)),
+                Response::Unknown if should_be_valid =>
+                    Err(format!("Failed to verify '{}': solver returned UNKNOWN (this is probably a bug)", title)),
+                Response::Unknown =>
+                    Err(format!("Failed to falsify '{}': solver returned UNKNOWN (this is probably a bug)", title)),
+            }
+            RvnResponse::SortCycles(cycles) => {
+                if cycles.len() == 1 {
+                    Err(format!("Cannot check '{}': sort cycle {}", title, render_cycle(&cycles[0])))
+                } else if cycles.len() > 1 {
+                    Err(format!("Cannot check '{}': multiple sort cycles, including {}", title, render_cycle(&cycles[0])))
+                } else {
+                    panic!("Sort cycle reported, but not found (this is a bug)")
+                }
+            }
         }
     }
 
@@ -272,26 +303,32 @@ Error in type-checking definition of \"{}\": {:?}",
 
         let v_sig = CheckedSig(v_sig);
         match query_negative_c(m, &v_sig, Vec::new()) {
-            Response::Unsat => {},
-            Response::Sat => {
+            RvnResponse::Query(Response::Unsat) => {},
+            RvnResponse::Query(Response::Sat) => {
                 panic!(
                     "Annotation '{}' on recursive function '{}' is invalid",
                     title,
                     name.to_string(),
                 )
             }
-            Response::Unknown => {
+            RvnResponse::Query(Response::Unknown) => {
                 panic!(
                     "Verification of '{}' for '{}' cannot proceed",
                     title,
                     name.to_string(),
                 )
             }
+            RvnResponse::SortCycles(cycles) => {
+                panic!(
+                    "Cannot check '{}' for '{}': sort cycle {}",
+                    title,
+                    name.to_string(),
+                    render_cycle(&cycles[0]),
+                )
+            }
         }
 
-        self.0 = potential_sig;
-        
-        // todo!("add_checked_annotation")
+        self.0 = potential_sig;        
     }
     pub fn add_op_pred<S1: ToString, S2: ToString>(
         &mut self,
@@ -355,19 +392,26 @@ Error in type-checking definition of \"{}\": {:?}",
         // are related by the annotation.
         self.0 = potential_sig;
         match query_negative_c(m, &self, Vec::new()) {
-            Response::Unsat => {},
-            Response::Sat => {
+            RvnResponse::Query(Response::Unsat) => {},
+            RvnResponse::Query(Response::Sat) => {
                 panic!(
                     "The annotation on recursive function \"{}\" is invalid",
                     name.clone().to_string(),
                 )
             }
-            Response::Unknown => {
+            RvnResponse::Query(Response::Unknown) => {
                 panic!(
-                    "Verification of \"{}\" cannot proceed",
+                    "Verification of \"{}\" cannot proceed: solver returned UNKNOWN (this is probably a bug)",
                     name.clone().to_string(),
                 )
             }
+            RvnResponse::SortCycles(cycles) => {
+                panic!(
+                    "Cannot check '{}': sort cycle {}",
+                    name.to_string(),
+                    render_cycle(&cycles[0]),
+                )
+            }                
         }
         // self.0.add_op_rec(name, axiom, def, term_arg, term_relation)
     }
@@ -426,14 +470,14 @@ Error in type-checking definition of \"{}\": {:?}",
 }
 
 
-fn query_negative<T: ToString>(s: T, sig: &CheckedSig) -> Response {
+fn query_negative<T: ToString>(s: T, sig: &CheckedSig) -> RvnResponse {
     match parse_str_cbpv(&s.to_string()) {
         Ok(c) => query_negative_c(c, sig, Vec::new()),
         Err(e) => panic!("Parse error: {}", e),
     }
 }
 
-fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> Response {
+fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> RvnResponse {
     let mut sig = sig.clone();
     // Declare all type abstraction arguments as zero-arity
     // uninterpreted sorts.
@@ -452,66 +496,68 @@ fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> Response {
         let cycles = g.get_cycles();
         if cycles.len() > 0 {
             println!("Sort cycles detected in case [{}]:", name);
-            for c in cycles {
-                if c.len() == 1 {
-                    println!("=> self-loop on {:?}", c[0]);
-                } else {
-                    println!("=> {:?}", c);
-                }
+            for c in cycles.clone() {
+                println!("=> {}", render_cycle(&c));
             }
             println!("Query is undecidable due to sort cycles.");
-            return Response::Unknown
+            return RvnResponse::SortCycles(cycles)
         }
         match internal::check_sat_of_normal(&case, sig.inner_sig()).unwrap() {
             Response::Sat => {
                 println!("Got SAT for case [{}]", name);
-                return Response::Sat
+                return RvnResponse::sat()
             }
             Response::Unsat => {},
             Response::Unknown => {
                 println!("Got UNKNOWN for case [{}]", name);
-                return Response::Unknown
+                return RvnResponse::unknown()
             }
         }
     }
 
     // If we made it here, the overall answer is UNSAT.
-    Response::Unsat
+    RvnResponse::unsat()
 }
 
 pub fn assert_valid_with<T: ToString>(sig: &CheckedSig, s: T) {
     match query_negative(s, sig) {
-        Response::Unsat => {},
-        Response::Sat => panic!("
+        RvnResponse::Query(Response::Unsat) => {},
+        RvnResponse::Query(Response::Sat) => panic!("
 verification conditions are not valid, counterexample was found"
         ),
-        Response::Unknown => panic!("
+        RvnResponse::Query(Response::Unknown) => panic!("
 verification could not be completed (sort cycle?)"
         ),
+        _ => panic!()
     }
     // assert_eq!(query_negative(s, sig), Response::Unsat);
 }
 pub fn assert_valid_with_t<T: ToString>(sig: &CheckedSig, title: &str, s: T) {
     match query_negative(s, sig) {
-        Response::Unsat => {},
-        Response::Sat => panic!("verification goal {} is invalid", title),
-        Response::Unknown => panic!("verification goal {} could not be checked (sort cycle?)", title),
+        RvnResponse::Query(Response::Unsat) => {},
+        RvnResponse::Query(Response::Sat) => panic!("verification goal {} is invalid", title),
+        RvnResponse::Query(Response::Unknown) => panic!("verification goal {} could not be checked (sort cycle?)", title),
+        _ => panic!()
     }
     // assert_eq!(query_negative(s, sig), Response::Unsat);
 }
 
 pub fn assert_invalid_with_t<T: ToString>(sig: &CheckedSig, title: &str, s: T) {
     match query_negative(s, sig) {
-        Response::Unsat => panic!("falsification goal {} is actually valid", title),
-        Response::Sat => {},
-        Response::Unknown => panic!("falsification goal {} could not be checked (sort cycle?)", title),
+        RvnResponse::Query(Response::Unsat) => panic!("falsification goal {} is actually valid", title),
+        RvnResponse::Query(Response::Sat) => {},
+        RvnResponse::Query(Response::Unknown) => panic!("falsification goal {} could not be checked (sort cycle?)", title),
+        _ => panic!()
     }
 }
 
 pub fn assert_invalid_with<T: ToString>(sig: &CheckedSig, s: T) {
-    assert_eq!(query_negative(s, sig), Response::Sat);
+    assert_eq!(query_negative(s, sig), RvnResponse::sat());
 }
 
 pub fn assert_unknown_with<T: ToString>(sig: &CheckedSig, s: T) {
-    assert_eq!(query_negative(s, sig), Response::Unknown);
+    match query_negative(s, sig) {
+        RvnResponse::SortCycles(_) => {},
+        r => panic!("Expected SortCycles, got {:?}", r)
+    }
 }

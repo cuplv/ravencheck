@@ -8,7 +8,7 @@
 #[allow(unused_imports)]
 // For testing, you can write ravencheck modules that *should* panic
 // with a particular error message by using the following attribute.
-#[rvn_should_panic("sort cycle?")]
+#[rvn_should_panic("sort cycle self-loop ⤷ u32 ⤴")]
 mod call_creates_cycles {
     #[import]
     // You can find this mod at the bottom of this file.

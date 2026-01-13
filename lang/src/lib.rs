@@ -17,6 +17,7 @@ pub use rir::ast::{
 pub use rir::builder::Builder;
 mod eliminate_match;
 pub mod epr_check;
+pub use epr_check::{Cycle, render_cycle};
 mod expand_funs;
 mod expand_types;
 mod neg_normal_form;

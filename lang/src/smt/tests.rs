@@ -119,10 +119,10 @@ member(e,s) == member_tuple((e,s)))
 }
 
 pub fn assert_valid<T: ToString>(s: T) {
-    assert_eq!(query_negative(s, &sig1()), Response::Unsat);
+    assert_eq!(query_negative(s, &sig1()), RvnResponse::unsat());
 }
 pub fn assert_invalid<T: ToString>(s: T) {
-    assert_eq!(query_negative(s, &sig1()), Response::Sat);
+    assert_eq!(query_negative(s, &sig1()), RvnResponse::sat());
 }
 
 

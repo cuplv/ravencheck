@@ -41,7 +41,7 @@ mod no_inst_export {
 mod no_inst_import {
     #[import]
     #[allow(unused_imports)]
-    use crate::tests::no_inst_export::*;
+    use crate::tests::misc::no_inst_export::*;
 
     #[verify]
     fn my_prop<T>(s: HashSet<T>) -> bool {
@@ -77,7 +77,7 @@ pub use my_set as my_set_by_other_name;
 #[allow(dead_code)]
 pub mod my_set_client1 {
     #[import]
-    use crate::tests::my_set::*;
+    use crate::tests::misc::my_set::*;
     use std::hash::Hash;
 
     #[define]
@@ -93,7 +93,7 @@ pub mod my_set_client1 {
 #[allow(dead_code)]
 pub mod my_set_client2 {
     #[import]
-    use crate::tests::my_set_by_other_name::*;
+    use crate::tests::misc::my_set_by_other_name::*;
     use std::hash::Hash;
 
     #[define]
@@ -115,9 +115,9 @@ pub mod my_set_client2 {
 #[allow(unused_imports)]
 mod my_set_client3 {
     #[import]
-    use crate::tests::my_set_client1::*;
+    use crate::tests::misc::my_set_client1::*;
     #[import]
-    use crate::tests::my_set_client2::*;
+    use crate::tests::misc::my_set_client2::*;
 
     #[verify]
     fn five_member<T>(e1: T, e2: T, e3: T, e4: T, e5: T, s: HashSet<T>) -> bool {
@@ -133,11 +133,11 @@ mod my_set_client3 {
 #[allow(unused_imports)]
 mod my_set_client4 {
     #[import]
-    use crate::tests::my_set::*;
+    use crate::tests::misc::my_set::*;
     #[import]
-    use crate::tests::my_set_client1::*;
+    use crate::tests::misc::my_set_client1::*;
     #[import]
-    use crate::tests::my_set_client2::*;
+    use crate::tests::misc::my_set_client2::*;
 
     #[verify]
     fn five_member<T>(e1: T, e2: T, e3: T, e4: T, e5: T, s: HashSet<T>) -> bool {
@@ -157,8 +157,8 @@ mod my_set_client4 {
 #[allow(unused_imports)]
 mod my_set_client5 {
     #[import]
-    use crate::tests::my_set_client1::*;
-    use crate::tests::my_set_client2::*;
+    use crate::tests::misc::my_set_client1::*;
+    use crate::tests::misc::my_set_client2::*;
 
     #[verify]
     fn five_member<T>(e1: T, e2: T, e3: T, e4: T, e5: T, s: HashSet<T>) -> bool {
