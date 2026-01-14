@@ -1,3 +1,5 @@
+pub mod solver;
+
 pub mod internal;
 
 use crate::{
@@ -11,6 +13,7 @@ use crate::{
     Op,
     Quantifier,
     Sig,
+    SolverConfig,
     TypeContext,
     Val,
     Ident,
@@ -43,9 +46,9 @@ impl RvnResponse {
 pub struct CheckedSig(pub Sig);
 
 impl CheckedSig {
-    pub fn check_goal(&self, goal: Goal) -> Result<(), String> {
+    pub fn check_goal(&self, goal: Goal, solver_config: &SolverConfig) -> Result<(), String> {
         let Goal{title, tas, condition, should_be_valid} = goal;
-        match query_negative_c(condition, self, tas) {
+        match query_negative_c(condition, self, tas, solver_config) {
             RvnResponse::Query(r) => match r {
                 Response::Unsat if should_be_valid => Ok(()),
                 Response::Unsat =>
@@ -70,24 +73,6 @@ impl CheckedSig {
         }
     }
 
-    // pub fn assert_valid_comp(&self, c: Comp) -> Result<(), String> {
-    //     match query_negative_c(c, self) {
-    //         Response::Unsat => Ok(()),
-    //         Response::Sat =>
-    //             Err(format!("Solver found counterexample")),
-    //         Response::Unknown =>
-    //             Err(format!("Query could not be completed (sort cycle?)")),
-    //     }
-    // }
-    // pub fn assert_invalid_comp(&self, c: Comp) -> Result<(), String> {
-    //     match query_negative_c(c, self) {
-    //         Response::Unsat =>
-    //             Err(format!("Solver did not find counterexample")),
-    //         Response::Sat => Ok(()),
-    //         Response::Unknown =>
-    //             Err(format!("Query could not be completed (sort cycle?)")),
-    //     }
-    // }
     pub fn assert_valid<T: ToString>(&self, s: T) {
         assert_valid_with(self, s)
     }
@@ -253,7 +238,9 @@ Error in type-checking definition of \"{}\": {:?}",
     pub fn add_annotation(&mut self, name: &str, body: &str) {
         self.0.add_annotation(name, body);
     }
+    // TODO: remove this; it's only used for old tests.
     pub fn add_checked_annotation(&mut self, title: &str, name: &str, body: &str) {
+        let solver_config = SolverConfig::default();
         let mut potential_sig = self.0.clone();
         potential_sig.add_annotation(name, body);
 
@@ -302,7 +289,7 @@ Error in type-checking definition of \"{}\": {:?}",
             .build_with(&mut gn);
 
         let v_sig = CheckedSig(v_sig);
-        match query_negative_c(m, &v_sig, Vec::new()) {
+        match query_negative_c(m, &v_sig, Vec::new(), &solver_config) {
             RvnResponse::Query(Response::Unsat) => {},
             RvnResponse::Query(Response::Sat) => {
                 panic!(
@@ -344,12 +331,14 @@ Error in type-checking definition of \"{}\": {:?}",
     ) {
         self.0.add_op_fun(name, axiom)
     }
+    // TODO: remove this; it's only used for tests.
     pub fn add_op_rec<S1: ToString + Clone, S2: ToString, S3: ToString>(
         &mut self,
         name: S1,
         axiom: S2,
         def: S3,
     ) {
+        let solver_config = SolverConfig::default();
         let mut potential_sig = self.0.clone();
         potential_sig.add_op_rec(
             name.clone(),
@@ -391,7 +380,7 @@ Error in type-checking definition of \"{}\": {:?}",
         // get the output, and then check that the inputs and output
         // are related by the annotation.
         self.0 = potential_sig;
-        match query_negative_c(m, &self, Vec::new()) {
+        match query_negative_c(m, &self, Vec::new(), &solver_config) {
             RvnResponse::Query(Response::Unsat) => {},
             RvnResponse::Query(Response::Sat) => {
                 panic!(
@@ -472,12 +461,17 @@ Error in type-checking definition of \"{}\": {:?}",
 
 fn query_negative<T: ToString>(s: T, sig: &CheckedSig) -> RvnResponse {
     match parse_str_cbpv(&s.to_string()) {
-        Ok(c) => query_negative_c(c, sig, Vec::new()),
+        Ok(c) => query_negative_c(c, sig, Vec::new(), &SolverConfig::default()),
         Err(e) => panic!("Parse error: {}", e),
     }
 }
 
-fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> RvnResponse {
+fn query_negative_c(
+    c: Comp,
+    sig: &CheckedSig,
+    tas: Vec<String>,
+    solver_config: &SolverConfig
+) -> RvnResponse {
     let mut sig = sig.clone();
     // Declare all type abstraction arguments as zero-arity
     // uninterpreted sorts.
@@ -502,7 +496,7 @@ fn query_negative_c(c: Comp, sig: &CheckedSig, tas: Vec<String>) -> RvnResponse 
             println!("Query is undecidable due to sort cycles.");
             return RvnResponse::SortCycles(cycles)
         }
-        match internal::check_sat_of_normal(&case, sig.inner_sig()).unwrap() {
+        match internal::check_sat_of_normal(&case, sig.inner_sig(), solver_config).unwrap() {
             Response::Sat => {
                 println!("Got SAT for case [{}]", name);
                 return RvnResponse::sat()

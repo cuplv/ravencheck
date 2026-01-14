@@ -49,6 +49,7 @@ pub use sig::{
 };
 mod smt;
 pub use smt::CheckedSig;
+pub use smt::solver::SolverConfig;
 mod substitute;
 mod type_check;
 pub use type_check::TypeContext;

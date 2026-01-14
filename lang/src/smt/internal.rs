@@ -14,6 +14,7 @@ use crate::{
     OpMode,
     Quantifier,
     Sig,
+    SolverConfig,
     Val,
     Ident,
     VType,
@@ -290,22 +291,11 @@ fn declare_sig(ctx: &mut easy_smt::Context, sig: &Sig, term: &Comp) -> std::io::
 pub fn check_sat_of_normal(
     term: &Comp,
     sig: &Sig,
+    solver_config: &SolverConfig,
 ) -> std::io::Result<Response> {
-    // See https://github.com/cvc5/cvc5/issues/6274
-    // for explanation of 3rd and 4th options.
-    //
-    // Without them, cvc5 will often return Unknown rather than Sat or
-    // Unsat.
-    let mut ctx = easy_smt::ContextBuilder::new()
-        .solver("cvc5", [
-            "--lang", "smt2",
-            "--full-saturate-quant",
-            "--finite-model-find",
-        ])
-        .build()?;
-    ctx.set_logic("ALL")?;
+    // let solver_config = SolverConfig::default();
+    let mut ctx = solver_config.context_builder().build()?;
     declare_sig(&mut ctx, sig, term)?;
-    // println!("Normal: {:?}", term_normal);
     let mut builder = Context::new(&mut ctx);
     let e = builder.smt(&term)?;
     println!("SMT VC: {}\n", ctx.display(e[0]));

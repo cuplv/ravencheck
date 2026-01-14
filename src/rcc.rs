@@ -25,6 +25,7 @@ use ravenlang::{
     Quantifier,
     RirFn,
     RirFnSig,
+    SolverConfig,
     InstRuleSyntax,
     TypeContext,
     Ident as RirIdent,
@@ -42,6 +43,7 @@ pub struct Rcc {
     defs: HashMap<String, Comp>,
     goals: Vec<(Option<CheckedSig>, Goal)>,
     pub seen_hashes: HashSet<u64>,
+    solver_config: SolverConfig, 
 }
 
 impl Rcc {
@@ -51,6 +53,7 @@ impl Rcc {
             defs: HashMap::new(),
             goals: Vec::new(),
             seen_hashes: HashSet::new(),
+            solver_config: SolverConfig::default(),
         }
     }
 
@@ -530,14 +533,14 @@ impl Rcc {
     }
 
     pub fn check_goals(self) {
-        let Rcc{sig, goals, ..} = self;
+        let Rcc{sig, goals, solver_config, ..} = self;
         let mut failures = Vec::new();
         for (ctx,goal) in goals.into_iter() {
             let specific_sig = match ctx {
                 Some(goal_sig) => goal_sig,
                 None => sig.clone(),
             };
-            match specific_sig.check_goal(goal) {
+            match specific_sig.check_goal(goal, &solver_config) {
                 Ok(()) => {},
                 Err(e) => failures.push(e),
             }
