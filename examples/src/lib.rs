@@ -19,6 +19,7 @@ pub mod nat;
 pub mod nat_u32;
 pub mod sets;
 pub mod sets_using_alias;
+pub mod solver;
 pub mod sum;
 pub mod sum_small;
 pub mod totality;

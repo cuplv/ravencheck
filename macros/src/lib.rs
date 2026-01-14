@@ -376,6 +376,10 @@ enum RccCommand {
     /// The boolean is `true` if this should be verified, and `false`
     /// if this should be falsified.
     Goal(bool, ItemFn),
+    /// Set solver to this program, with no args.
+    SetSolverProgram(String),
+    /// Add this arg to the solver config.
+    AddSolverArg(String),
 }
 
 impl RccCommand {
@@ -754,6 +758,54 @@ impl RvnMod {
         match &attr.meta {
             Meta::List(l) if l.path.segments.len() == 1 => {
                 match path_to_one_str(&l.path).as_deref() {
+                    Some("add_solver_args") => {
+                        let parser =
+                            Punctuated
+                            ::<LitStr,syn::Token![,]>
+                            ::parse_separated_nonempty;
+
+                        let args = replace_error(
+                            parser.parse2(l.tokens.clone()),
+                            attr.span(),
+                            "The #[add_solver_args(..)] attribute expects one or more strings as arguments",
+                        )?;
+
+                        for a in args.into_iter() {
+                            self.commands.push(RccCommand::AddSolverArg(a.value()));
+                        }
+
+                        // Return false so that the attribute is
+                        // erased before passing on to the Rust
+                        // toolchain.
+                        Ok(false)
+                    }
+                    Some("set_solver") => {
+                        let parser =
+                            Punctuated
+                            ::<LitStr,syn::Token![,]>
+                            ::parse_separated_nonempty;
+
+                        let args = replace_error(
+                            parser.parse2(l.tokens.clone()),
+                            attr.span(),
+                            "The #[set_solver(..)] attribute expects one or more strings as arguments: the first is the solver name, and the rest are the solver arguments",
+                        )?;
+
+                        let mut first = true;
+                        for a in args.into_iter() {
+                            if first {
+                                self.commands.push(RccCommand::SetSolverProgram(a.value()));
+                                first = false;
+                            } else {
+                                self.commands.push(RccCommand::AddSolverArg(a.value()));
+                            }
+                        }
+
+                        // Return false so that the attribute is
+                        // erased before passing on to the Rust
+                        // toolchain.
+                        Ok(false)
+                    }
                     Some("declare_types") => {
                         let parser =
                             Punctuated
@@ -818,6 +870,18 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
     let mut out = Vec::new();
     for c in commands {
         match c {
+            RccCommand::AddSolverArg(arg) => {
+                match mode {
+                    GenMode::Check => {
+                        let arg_str = quote!{#arg};
+                        let s: Stmt = syn::parse2(quote! {
+                            rcc.add_solver_arg(#arg_str);
+                        }).unwrap();
+                        out.push(s);
+                    }
+                    GenMode::Export => {}
+                }
+            }
             RccCommand::DeclareType(ident, arity) => {
                 let ident_str = quote!{#ident}.to_string();
                 let s: Stmt = syn::parse2(quote! {
@@ -894,6 +958,18 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                         let item_fn_str = quote!{ #item_fn }.to_string();
                         let s: Stmt = syn::parse2(quote! {
                             rcc.reg_fn_goal(#should_be_valid, #item_fn_str);
+                        }).unwrap();
+                        out.push(s);
+                    }
+                    GenMode::Export => {}
+                }
+            }
+            RccCommand::SetSolverProgram(name) => {
+                match mode {
+                    GenMode::Check => {
+                        let name_str = quote!{#name};
+                        let s: Stmt = syn::parse2(quote! {
+                            rcc.set_solver(#name_str);
                         }).unwrap();
                         out.push(s);
                     }

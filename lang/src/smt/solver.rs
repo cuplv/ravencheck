@@ -1,5 +1,6 @@
 // use std::ffi::{OsStr, OsString};
 
+#[derive(Debug)]
 pub struct SolverConfig {
     program: String,
     args: Vec<String>,
@@ -85,6 +86,7 @@ impl SolverConfig {
     }
 
     pub fn context_builder(&self) -> easy_smt::ContextBuilder {
+        println!("{:?}", self);
         let mut builder = easy_smt::ContextBuilder::new();
         builder.solver(&self.program, &self.args);
         builder

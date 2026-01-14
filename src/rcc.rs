@@ -57,6 +57,14 @@ impl Rcc {
         }
     }
 
+    pub fn add_solver_arg(&mut self, arg: &str) {
+        self.solver_config.add_arg(arg);
+    }
+
+    pub fn set_solver(&mut self, name: &str) {
+        self.solver_config = SolverConfig::program(name);
+    }
+
     fn get_goal_by_title(&self, title: &str) -> Option<&Goal> {
         for (_, goal) in &self.goals {
             if &goal.title == title {
