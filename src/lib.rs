@@ -37,6 +37,40 @@ mod rvn {
     }
 }
 ```
+
+# Viewing Solver Input/Output
+
+You can view the complete input/output trace with the solver
+using the [`env_logger`](https://crates.io/crates/env_logger) system.
+
+First, add `env_logger`
+to your `Cargo.toml`.
+
+```toml
+[dependencies]
+env_logger = "0.11.5"
+```
+
+Next, add the `#[log_solver]` attribute
+to a Ravencheck module.
+
+```ignore
+#[ravencheck::check_module]
+#[log_solver]
+...
+mod rvn {
+    ...
+}
+```
+
+Finally, set the `RUST_LOG` variable
+to `easy_smt=trace` in your environment
+when you `cargo test`.
+You can do this on the command line as follows:
+
+```ignore
+$ RUST_LOG="easy_smt=trace" cargo test
+````
 */
 
 pub use ravencheck_macros::{

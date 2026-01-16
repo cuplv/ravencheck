@@ -662,6 +662,7 @@ struct RvnMod {
     mode: GenMode,
     should_panic: ShouldPanic,
     source_hash: u64,
+    use_env_logger: bool,
 }
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -701,6 +702,7 @@ impl RvnMod {
             mode: GenMode::Check,
             should_panic: ShouldPanic::No,
             source_hash: 0,
+            use_env_logger: false,
         }
     }
 
@@ -710,6 +712,7 @@ impl RvnMod {
             mode: GenMode::Export,
             should_panic: ShouldPanic::No,
             source_hash: 0,
+            use_env_logger: false,
         }
     }
 
@@ -855,6 +858,10 @@ impl RvnMod {
                 match path_to_one_str(p).as_deref() {
                     Some("rvn_should_panic") => {
                         self.should_panic = ShouldPanic::Yes;
+                        Ok(false)
+                    }
+                    Some("log_solver") => {
+                        self.use_env_logger = true;
                         Ok(false)
                     }
                     _ => Ok(true),
@@ -1088,13 +1095,26 @@ fn process_module(
                 }).unwrap()
             );
 
-            let mut test: ItemFn = syn::parse_quote! {
-                #[test]
-                fn check_properties() {
-                    let mut rcc = Rcc::new();
+            let mut test: ItemFn = if rvn.use_env_logger {
+                syn::parse_quote! {
+                    #[test]
+                    fn check_properties() {
+                        let _ = env_logger::builder().is_test(true).try_init();
+                        let mut rcc = Rcc::new();
 
-                    // Interpolate 'stmts' here
-                    #(#test_stmts)*
+                        // Interpolate 'stmts' here
+                        #(#test_stmts)*
+                    }
+                }
+            } else {
+                syn::parse_quote! {
+                    #[test]
+                    fn check_properties() {
+                        let mut rcc = Rcc::new();
+
+                        // Interpolate 'stmts' here
+                        #(#test_stmts)*
+                    }
                 }
             };
 
