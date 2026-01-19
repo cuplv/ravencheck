@@ -477,6 +477,22 @@ impl Builder {
         })
     }
 
+    /// `Builder::eq_ne(x, true, y)` gives you `x == y`, where `x` and
+    /// `y` are `Val`s.
+    ///
+    /// `Builder::eq_ne(x, false, y)` gives you `x != y`.
+    pub fn eq_ne_v(left: Val, pos: bool, right: Val) -> Self {
+        Self::with_x(move |result| {
+            Comp::eq_ne(
+                pos,
+                [left],
+                [right],
+                result.clone(),
+                Comp::return1(result),
+            ).builder()
+        })
+    }
+
     pub fn log_op<Bs: Into<Vec<Self>>>(op: LogOpN, bs: Bs) -> Builder {
         let mut bs: Vec<Self> = bs.into();
         Self::new(|igen: &mut IGen| {
@@ -533,10 +549,18 @@ impl Builder {
         self.eq_ne(true, other.into())
     }
 
+    pub fn is_eq_v(right: Val, left: Val) -> Self {
+        Self::eq_ne_v(right, true, left)
+    }
+
     /// `x.is_ne(y)`
     /// gives you `x != y`.
     pub fn is_ne<T: Into<Self>>(self, other: T) -> Self {
         self.eq_ne(false, other.into())
+    }
+
+    pub fn is_ne_v(right: Val, left: Val) -> Self {
+        Self::eq_ne_v(right, false, left)
     }
 
     /// `x.ite(y, z)` gives you `if x then { y } else { z }`.

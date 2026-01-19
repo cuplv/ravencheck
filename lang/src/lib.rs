@@ -46,6 +46,7 @@ pub use sig::{
     Sig,
     TypeDef,
     VType,
+    substruct_code,
 };
 mod smt;
 pub use smt::CheckedSig;

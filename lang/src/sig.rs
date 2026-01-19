@@ -3,6 +3,25 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 
+pub fn substruct_name() -> String {
+    "substruct".to_string()
+}
+
+pub fn substruct_code(t: BType) -> OpCode {
+    OpCode {
+        ident: substruct_name(),
+        types: vec![VType::Base(t)],
+        path: None,
+    }
+}
+
+pub fn substruct_op() -> (String, Vec<String>, Op) {
+    let tname = "T".to_string();
+    let t = VType::ui(tname.clone());
+    let op = Op::Symbol(PredSymbol{ inputs: vec![t.clone(), t] });
+    (substruct_name(), vec![tname], op)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpCode {
     pub ident: String,
@@ -489,15 +508,19 @@ pub struct Sig {
     // assumption of the Inductive Hypothesis, in a recursive
     // annotation problem.
     pub recs: Option<HashSet<OpCode>>,
+    // Base types that are inducted upon in a recursive annotation
+    // problem, and thus should have their substruct relation defined.
+    pub inductive_bases: Option<HashSet<BType>>,
 }
 
 impl Sig {
     pub fn empty() -> Sig {
         Sig {
             type_defs: HashMap::new(),
-            ops: Vec::new(),
+            ops: vec![substruct_op()],
             axioms: Vec::new(),
             recs: Some(HashSet::new()),
+            inductive_bases: None,
         }
     }
     pub fn sorts(&self) -> HashMap<String,usize> {

@@ -2,6 +2,7 @@ use crate::{
     Axiom,
     Binder1,
     BinderN,
+    Builder,
     BType,
     Comp,
     InstMode,
@@ -15,6 +16,7 @@ use crate::{
     Val,
     Ident,
     VType,
+    substruct_code,
 };
 
 use std::collections::HashMap;
@@ -46,6 +48,10 @@ impl Relevant {
     }
     pub fn add_op(mut self, ident: String, types: Vec<VType>) -> Self {
         self.ops.insert(OpCode{ident,types,path: None});
+        self
+    }
+    pub fn add_substruct_rel(mut self, t: BType) -> Self {
+        self.ops.insert(substruct_code(t));
         self
     }
     pub fn add_oc(mut self, oc: OpCode, sig: &Sig) -> Self {
@@ -218,8 +224,6 @@ impl Val {
 
 impl Sig {
     pub fn relevant_with_axioms(&self, term: &Comp) -> (Relevant, Vec<Comp>) {
-        // println!("Calling relevant_with_axioms on...");
-        // println!("term: {:?}", &term);
         let mut relevant = term.relevant(self);
         for t in &relevant.base_types().clone() {
             match self.get_con_codes_with_inputs_btype(t) {
@@ -278,6 +282,26 @@ impl Sig {
         }
 
         // Do not recurse...
+
+        // Add substruct relations and their axioms
+        if let Some(bases) = &self.inductive_bases {
+            for b in bases {
+                relevant = relevant.add_substruct_rel(b.clone());
+                match b.clone() {
+                    BType::UI(name, ts) => {
+                        let cons = self
+                            .get_con_codes_with_inputs(&name, ts).unwrap();
+                        for m in Builder::substruct_axioms(b.clone(), cons) {
+                            let m = m.build_no_context();
+                            let mut g = m.get_igen();
+                            let a = m.normal_form_single_case(self, &mut g);
+                            inst_axioms.push(a);
+                        }
+                    }
+                    b => unreachable!("Unexpected inductive base {:?}", b),
+                }
+            }
+        }
 
         // println!("Got relevant: {:?}", relevant);
         (relevant, inst_axioms)

@@ -10,11 +10,13 @@ use syn::{
 
 use ravenlang::{
     Axiom,
+    BType,
     Builder,
     Comp,
     CType,
     CheckedSig,
     IGen,
+    Ident as RirIdent,
     Goal,
     HypotheticalCallSyntax,
     HypotheticalCall,
@@ -28,7 +30,6 @@ use ravenlang::{
     SolverConfig,
     InstRuleSyntax,
     TypeContext,
-    Ident as RirIdent,
     VType,
     Val,
     syn_to_builder,
@@ -232,13 +233,18 @@ impl Rcc {
         let i = RirFn::from_syn(item_fn)?;
         let prop_ident = i.sig.ident.clone();
         let mut qsig = Vec::new();
+        let mut qbases = Vec::new();
         for punct in qsigs {
             for pair in punct.into_pairs() {
                 let pat_type = pair.into_value();
                 let (p,t) = Pattern::from_pat_type(pat_type)?;
                 let x = p.unwrap_vname()?;
                 let t = t.expand_types(&self.sig.0.type_aliases());
-                qsig.push((x,t));
+                qsig.push((x, t.clone()));
+                match t.unwrap_base() {
+                    Ok(b) => qbases.push(b),
+                    Err(t) => return Err(format!("{}: only base types should be used in #[for_values(..)], but found {}", prop_ident, t.render())),
+                }
             }
         }
         let calls: Vec<HypotheticalCall> = calls
@@ -278,6 +284,18 @@ impl Rcc {
             })
             .collect();
 
+        // Create a snapshot a version of the sig which does not
+        // assume the property under verification.  This sig marks the
+        // quantified base types as inductive, so that their substruct
+        // relations are defined and axiomatized.
+        let mut qbases_set = HashSet::new();
+        for b in &qbases {
+            qbases_set.insert(b.clone());
+        }
+        // qbases.clone().iter().map(|b| qbases_set.insert(b));
+        let mut vc_sig = self.sig.clone();
+        vc_sig.0.inductive_bases = Some(qbases_set);
+
         let mut igen = i.body.get_igen();
         let axiom_body = i.body.clone().builder();
         let axiom =
@@ -297,27 +315,88 @@ impl Rcc {
             &prop_ident,
         ));
 
-        let guarded_axiom = axiom
-            .clone()
-            .builder()
-            .guard_recursive()
-            .build_with(&mut igen);
+        // let qtypes: Vec<VType> = qbases.iter()
+        //     .map(|b| VType::Base(b.clone()))
+        //     .collect();
+        let top_xs: Vec<RirIdent> =
+            qsig.iter().map(|(x,_)| x.clone()).collect();
+        let axiom_clone = axiom.clone();
+        let inhyp = Builder::with_x_many(qbases.len(), |hyp_xs| {
+            // println!("hypothetical vars: {:?}", &hyp_xs);
+
+            // Builder::forall_many(qtypes, |hyp_xs| {
+            let rs: Vec<((BType, RirIdent), RirIdent)> = qbases.into_iter()
+                .zip(hyp_xs)
+                .zip(top_xs)
+                .collect();
+
+            let hyp_le_top: Vec<Builder> = rs.iter()
+                .cloned()
+                .map(|((bt,hx),tx)| {
+                    Builder::is_substruct_v(
+                        bt,
+                        hx.val(),
+                        tx.val()
+                    )
+                }).collect();
+
+            let hyp_smaller_top: Vec<Builder> = rs.iter()
+                .cloned()
+                .map(|((_bt,hx),tx)| {
+                     Builder::is_ne_v(hx.val(), tx.val())
+                })
+                .collect();
+
+            // Create the inductive hypothesis body by subbing the
+            // hypothetical substructure variables into the axiom
+            // body.
+            let inhyp_body = axiom_clone.substitute_many(
+                &rs.iter()
+                    .map(|((_,hx),tx)| (tx.clone(), hx.clone().val()))
+                    .collect()
+            );
+
+            // Create the quantifier signature for the hypothetical
+            // substructure variables.
+            let inhyp_sig: Vec<(RirIdent, VType)> = rs.into_iter()
+                .map(|((bt,hx),_tx)| (hx, VType::Base(bt)))
+                .collect();
+
+            // Every hyp_x must be substructure of its corresponding
+            // top_x (that is, equal to it or a smaller part of it).
+            Builder::and_many(hyp_le_top)
+                // At least one hyp_x must be a proper substructure of
+                // its corresponding top_x (not equal to it).
+                .and(Builder::or_many(hyp_smaller_top))
+                // Under those conditions, assume that the property
+                // holds for the hypothetical substructure variables.
+                .implies(inhyp_body.builder())
+                // Wrap it all in a quantifier for the hypothetical
+                // substructure variables.
+                .into_quantifier(Quantifier::Forall, inhyp_sig)
+        });
+
+        // let guarded_axiom = axiom
+        //     .clone()
+        //     .builder()
+        //     .guard_recursive()
+        //     .build_with(&mut igen);
 
         // Create a temporary sig which assumes the recursion-guarded
         // version of the axiom, and is prepared to add recursion
         // guards to the expanded definitions.
-        let mut vc_sig = self.sig.clone();
-        let recs: HashSet<OpCode> =
-            calls.iter().map(|c| OpCode::fun_types(c.ident.clone(), Vec::new())).collect();
-        vc_sig.0.recs = Some(recs);
-        vc_sig.0.axioms.push(Axiom {
-            tas: Vec::new(),
-            inst_mode: InstMode::Rules(Vec::new()),
-            body: guarded_axiom,            
-        });
+
+        // let recs: HashSet<OpCode> =
+        //     calls.iter().map(|c| OpCode::fun_types(c.ident.clone(), Vec::new())).collect();
+        // vc_sig.0.recs = Some(recs);
+        // vc_sig.0.axioms.push(Axiom {
+        //     tas: Vec::new(),
+        //     inst_mode: InstMode::Rules(Vec::new()),
+        //     body: guarded_axiom,            
+        // });
 
         // IF this annotation is not intended to fail, assume the
-        // non-guarded axiom in the main sig.
+        // property in the main sig.
         if !should_fail {
             self.sig.0.axioms.push(Axiom {
                 tas: Vec::new(),
@@ -360,25 +439,30 @@ impl Rcc {
         // These come after the inductive-expansion calls, so that
         // they can reference the outputs of those.
         let vc =
-            Builder::seq_many(def_calls, |_| {
-                Builder::seq_many_igen(insts, |_| {
-                    i.body.builder()
+            inhyp.implies(
+                Builder::seq_many(def_calls, |_| {
+                    Builder::seq_many_igen(insts, |_| {
+                        // i.body.builder()
+                        i.body.builder()
+                    })
                 })
-            })
+            )
             .into_quantifier(Quantifier::Forall, qsig)
             .build_with(&mut igen);
         // Sanity-check that the generated vc is well-formed
         vc.type_check_r(
             &CType::Return(VType::prop()),
             TypeContext::new_types(
-                self.sig.0.clone(),
+                vc_sig.0.clone(),
                 Vec::new(),
             )
         ).expect("vc type error");
+        // todo!("Post-type-check");
         println!("Just type-checked this vc: {:?}", vc);
 
-        // Push the goal, using the special vc_sig to eventually
-        // perform the verification.
+        // Push the property as a goal, using the vc_sig (which does
+        // not assume the property) to eventually perform the
+        // verification.
         self.push_goal_ctx(
             Goal {
                 title: prop_ident.clone(),

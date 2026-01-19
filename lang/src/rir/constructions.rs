@@ -1,8 +1,10 @@
 use crate::{
+    BType,
     Builder,
     OpCode,
     Val,
     VType,
+    substruct_code,
 };
 
 /// If there are zero args, gives `ZeroArgAsConst(code) == output`.
@@ -63,6 +65,121 @@ pub fn fun_axiom(
         })
     })
 }
+
+impl Builder {
+
+    pub fn is_substruct(
+        t: BType,
+        b1: Builder,
+        b2: Builder,
+    ) -> Builder {
+        let code = substruct_code(t);
+        Val::op(code.clone()).force().builder().apply([b1, b2])
+    }
+    
+    pub fn is_substruct_v(
+        t: BType,
+        v1: Val,
+        v2: Val,
+    ) -> Builder {
+        let code = substruct_code(t);
+        Val::op(code.clone()).force().builder().apply_v([v1, v2])
+    }
+
+    pub fn substruct_axioms(
+        t: BType,
+        cons: Vec<(OpCode, Vec<VType>)>,
+    ) -> Vec<Builder> {
+        let code = substruct_code(t.clone());
+        let f = Val::op(code).force();
+
+        let mut ts = std::iter::repeat(VType::Base(t.clone()));
+        let mut take_ts = |n: usize| {
+            (&mut ts).take(n).collect::<Vec<_>>()
+        };
+
+        let _ = take_ts(5);
+
+        let f_clone = f.clone();
+        let reflexive = Builder::forall_many(take_ts(1), move |vs| {
+            let [v] = vs.try_into().unwrap();
+            let subs = |a: Val, b: Val| {
+                f_clone.clone().builder().apply_v([a, b])
+            };
+            subs(v.clone(), v)
+        });
+
+        let f_clone = f.clone();
+        let transitive =
+            Builder::forall_many(take_ts(3), move |vs| {
+                let [v1, v2, v3] = vs.try_into().unwrap();
+                // let f = Val::op(code.clone()).force();
+                let subs = |a: Val, b: Val| {
+                    f_clone.clone().builder().apply_v([a, b])
+                };
+                subs(v1.clone(), v2.clone())
+                    .and(subs(v2, v3.clone()))
+                    .implies(subs(v1, v3))
+            });
+
+        let f_clone = f.clone();
+        let anti_symmetric =
+            Builder::forall_many(take_ts(2), move |vs| {
+                let [v1, v2] = vs.try_into().unwrap();
+                // let f = Val::op(code.clone()).force();
+                let subs = |a: Val, b: Val| {
+                    f_clone.clone().builder().apply_v([a, b])
+                };
+                subs(v1.clone(), v2.clone())
+                    .and(subs(v2.clone(), v1.clone()))
+                    .implies(Builder::is_eq_v(v1,v2))
+            });
+
+        let mut out = Vec::new();
+
+        // Add the partial-order axioms
+        out.push(reflexive);
+        out.push(transitive);
+        out.push(anti_symmetric);
+
+        // Add an axiom for each constructor
+        for (con_code, input_ts) in cons {
+            // Find each self-type (recursive component) among the
+            // inputs.  Each of those inputs is substruct (not-equal)
+            // related to the output.
+            let output_t = VType::Base(t.clone());
+            let f_clone = f.clone();
+            out.push(Builder::forall_many(input_ts.clone(), move |input_xs| {
+                Builder::forall(output_t.clone(), move |output_x| {
+                    let mut srels: Vec<Builder> = Vec::new();
+                    for (ix,it) in input_xs.iter().zip(input_ts) {
+                        if it == output_t {
+                            srels.push(
+                                f_clone.clone().builder()
+                                    .apply_v([ix.clone(), output_x.clone()])
+                                    .and(Builder::is_ne_v(
+                                        ix.clone(),
+                                        output_x.clone()
+                                    ))
+                            );
+                        }
+                    }
+                    if srels.len() > 0 {
+                        applied_code_clause(con_code, input_xs, output_x)
+                            .implies(Builder::and_many(srels))
+                    } else {
+                        Builder::true_()
+                    }
+                })
+            }));
+        }
+        // todo!("add substructure axioms for contstructors");
+
+        out
+    }
+
+}
+    
 
 /// If two calls to the same constructor give the same value, then the
 /// two sets of inputs must be identical.
