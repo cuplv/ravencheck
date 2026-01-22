@@ -2,11 +2,13 @@ mod rir;
 pub use rir::ast::{
     Binder1,
     BinderN,
+    Call,
     CaseName,
     Cases,
     Comp,
     HypotheticalCall,
     Literal,
+    LogOp1,
     LogOpN,
     MatchArm,
     OpMode,
@@ -151,7 +153,7 @@ impl Comp {
 
         // Function expansion
         let cases = cases.into_iter().map(|(name,comp)| {
-            (name, comp.expand_funs(sig, igen, Vec::new()))
+            (name, comp.expand_funs(sig, igen, Vec::new(), Quantifier::Forall))
         }).collect::<Vec<_>>();
 
         // println!("normal_form_x passing on {} cases", cases_exp.len());

@@ -339,3 +339,33 @@ mod rvn {
         )
     }
 }
+
+#[ravencheck::check_module]
+#[allow(dead_code)]
+mod small_inductive {
+    #[define]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum Nat { Z, S(Box<Nat>) }
+
+    #[define]
+    #[recursive]
+    fn add(a: Nat, b: Nat) -> Nat {
+        match a {
+            Nat::Z => b,
+            Nat::S(a_minus) =>
+                // We unbox `a_minus` before calling `add`, and then
+                // re-box the output of `add` so that we can wrap it
+                // in Nat::S.
+                Nat::S(Box::new(add(*a_minus,b))),
+        }
+    }
+
+    #[annotate_multi]
+    #[for_values(a: Nat, b: Nat, x: Nat, y: Nat)]
+    #[for_call(add(a,b) => c)]
+    #[for_call(add(x,y) => d)]
+    fn add_z_left() -> bool {
+        // First consider the a == Z case.
+        implies(a == Nat::Z, b == c)
+    }
+}

@@ -130,7 +130,7 @@ impl Comp {
                     m.type_of(tc.plus(x.clone(), VType::prop()))
                 }
             }
-            Self::Bind1(Binder1::LogNot(v), x, m) => {
+            Self::Bind1(Binder1::LogOp1(_b,v), x, m) => {
                 v.type_check_r(&VType::prop(), tc.clone())?;
                 m.type_of(tc.plus(x.clone(), VType::prop()))
             }
@@ -157,7 +157,16 @@ impl Comp {
                     tc.plus(x.clone(), VType::prop()),
                 )
             }
-            Self::BindN(BinderN::Call(_oc, _args), _xs, _m) => {
+            Self::Bind1(Binder1::QMode(_q, body), x, m) => {
+                body.type_check_r(
+                    &CType::return_prop(),
+                    tc.clone(),
+                )?;
+                m.type_of(
+                    tc.plus(x.clone(), VType::prop()),
+                )
+            }
+            Self::BindN(BinderN::Call(_call), _xs, _m) => {
                 panic!(
                     "BinderN::Call should only appear in phases after type_check"
                 )

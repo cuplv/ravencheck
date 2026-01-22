@@ -615,6 +615,39 @@ impl Builder {
         }))
     }
 
+    pub fn into_qmode(self, q: Quantifier) -> Self {
+        Self::new(move |igen: &mut IGen| {
+            let x_result = igen.next();
+            Comp::Bind1(
+                Binder1::QMode(q, Box::new(self.build_with(igen))),
+                x_result.clone(),
+                Box::new(Comp::return1(x_result)),
+            )
+        })
+    }
+
+    pub fn into_undef_or(self) -> Self {
+        self.into_qmode(Quantifier::Forall)
+    }
+
+    pub fn into_def_and(self) -> Self {
+        self.into_qmode(Quantifier::Exists)
+    }
+
+    // pub fn undef_or(self) -> Self {
+    //     self.igen(|b| |out_x| b.seq_igen(|b_x| {
+    //         Comp::Bind1(
+    //             Binder1::LogOp1(
+    //                 LogOp1::QMode(Quantifier::Forall),
+    //                 b_x,
+    //             ),
+    //             out_x.clone(),
+    //             Box::new(Comp::return1(out_x.val())),
+    //         )
+    //             .builder()
+    //     }))
+    // }
+
     /// `m.flatten()` gives you `m to x. force x`, in CBPV
     /// terms. Basically, this and [`Builder::ret_thunk()`] are inverse
     /// operations.

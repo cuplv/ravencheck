@@ -26,7 +26,11 @@ impl Binder1 {
                     Self::LogQuantifier(q, xs, Box::new(m2))
                 }
             }
-            Self::LogNot(v2) => Self::LogNot(v2.substitute(x,v)),
+            Self::QMode(q, m) => {
+                let m2 = m.substitute(x,v);
+                Self::QMode(q, Box::new(m2))
+            }
+            Self::LogOp1(b, v2) => Self::LogOp1(b, v2.substitute(x,v)),
             Self::LogOpN(op, vs) => {
                 let mut vs2 = Vec::new();
                 for v2 in vs {
@@ -41,10 +45,12 @@ impl Binder1 {
 impl BinderN {
     fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
-            Self::Call(oc,vs) => Self::Call(
-                oc,
-                vs.into_iter().map(|v1| v1.substitute(x,v)).collect(),
-            ),
+            Self::Call(mut call) => {
+                call.args = call.args.into_iter()
+                    .map(|v1| v1.substitute(x,v))
+                    .collect();
+                Self::Call(call)
+            }
             Self::Seq(m) => Self::Seq(Box::new(m.substitute(x, v))),
         }
     }

@@ -54,7 +54,8 @@ impl Binder1 {
                 }
                 m.advance_igen(igen);
             }
-            Self::LogNot(v) => v.advance_igen(igen),
+            Self::QMode(_q, m) => m.advance_igen(igen),
+            Self::LogOp1(_op, v) => v.advance_igen(igen),
             Self::LogOpN(_op, vs) => {
                 for v in vs {
                     v.advance_igen(igen);
@@ -67,8 +68,8 @@ impl Binder1 {
 impl BinderN {
     fn advance_igen(&self, igen: &mut IGen) {
         match self {
-            Self::Call(_oc, vs) => {
-                for v in vs {
+            Self::Call(call) => {
+                for v in &call.args {
                     v.advance_igen(igen);
                 }
             }

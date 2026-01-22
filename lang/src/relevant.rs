@@ -154,7 +154,7 @@ impl Comp {
             }
             Self::BindN(b, _xs, _m) => {
                 match b {
-                    BinderN::Call(_oc, _args) =>
+                    BinderN::Call(..) =>
                         todo!("relevant for BinderN::Call"),
                     b => todo!("relevant for BinderN {:?}", b),
                 }

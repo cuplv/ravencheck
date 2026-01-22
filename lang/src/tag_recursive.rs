@@ -73,7 +73,7 @@ impl Comp {
                     Box::new(m.tag_recursive(sig, igen, recs)),
                 );
                 match b {
-                    BinderN::Call(code, _) if recs.contains(&code) => {
+                    BinderN::Call(call) if recs.contains(&call.code) => {
                         // We have encountered a recursive call, so the
                         // remainder of this condition should be implied
                         // by the recursive flag.

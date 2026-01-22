@@ -2,6 +2,7 @@ use crate::{
     Binder1,
     BinderN,
     Builder,
+    Call,
     CaseName,
     Comp,
     IGen,
@@ -12,6 +13,7 @@ use crate::{
     OpCode,
     OpMode,
     Pattern,
+    Quantifier,
     Rebuild,
     Sig,
     Val,
@@ -36,7 +38,7 @@ impl Stack {
 
 impl Comp {
     pub fn partial_eval(self, sig: &Sig, igen: &mut IGen, name: CaseName) -> Vec<(CaseName,Self)> {
-        let cases = self.partial_eval_loop(sig, igen, Stack::new(), Vec::new(), name);
+        let cases = self.partial_eval_loop(sig, igen, Stack::new(), Vec::new(), name, None);
         // println!("partial_eval passing up {} cases", cases.len());
         // println!("\npartial_eval returning {:?}\n", cases);
         cases
@@ -52,7 +54,8 @@ impl Comp {
             igen,
             Stack::new(),
             Vec::new(),
-            CaseName::root()
+            CaseName::root(),
+            None,
         );
         assert!(
             cases.len() == 1,
@@ -71,6 +74,7 @@ impl Comp {
         mut stack: Stack,
         mut anti_stack: Vec<Rebuild>,
         case_name: CaseName,
+        mut qmode: Option<Quantifier>,
     ) -> Vec<(CaseName,Self)> {
         loop {
             match self {
@@ -79,8 +83,8 @@ impl Comp {
                     self = *m;
                 }
                 Self::BindN(b, ps, m) => match b {
-                    BinderN::Call(oc,vs) => {
-                        anti_stack.push(Rebuild::Call(oc,vs,ps));
+                    BinderN::Call(c) => {
+                        anti_stack.push(Rebuild::Call(c,ps));
                         self = *m;
                     }
                     BinderN::Seq(m1) => {
@@ -133,7 +137,7 @@ impl Comp {
                         // body.
 
                         // Problem here: how can we split cases when inside a quantifier?
-                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone());
+                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), qmode);
                         assert!(
                             body_cases.len() == 1,
                             "For now, quantifier body should only have one case, but it had {} cases",
@@ -145,8 +149,21 @@ impl Comp {
                         );
                         self = *m;
                     }
-                    Binder1::LogNot(v) => {
-                        anti_stack.push(Rebuild::Not(v,x));
+                    // Binder1::QMode(q, body) => {
+                    //     let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), Some(q));
+                    //     assert!(body_cases.len() == 1);
+                    //     let body = body_cases.pop().unwrap().1;
+                    //     self = Comp::seq(body, x, *m);
+                    // }
+                    Binder1::QMode(q, body) => {
+                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), Some(q));
+                        assert!(body_cases.len() == 1);
+                        let body = body_cases.pop().unwrap().1;
+                        anti_stack.push(Rebuild::QMode(q, body, x));
+                        self = *m;
+                    }
+                    Binder1::LogOp1(b,v) => {
+                        anti_stack.push(Rebuild::LogOp1(b,v,x));
                         self = *m;
                     }
                     Binder1::LogOpN(op,vs) => {
@@ -203,7 +220,7 @@ impl Comp {
                                             // tuple (with type matching the
                                             // original output type).
                                             let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                            anti_stack.push(Rebuild::Call(oc, vs, ps));
+                                            anti_stack.push(Rebuild::Call(Call::new_q(oc, vs, qmode), ps));
                                             self = Comp::return1(ret_v);
                                         }
                                     }
@@ -255,7 +272,7 @@ impl Comp {
                                         // tuple (with type matching the
                                         // original output type).
                                         let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                        anti_stack.push(Rebuild::Call(oc, vs, ps));
+                                        anti_stack.push(Rebuild::Call(Call::new_q(oc, vs, qmode), ps));
                                         self = Comp::return1(ret_v);
                                     }
                                     Ok(Oc::Op(Op::Fun(op))) => {
@@ -277,7 +294,7 @@ impl Comp {
                                             // tuple (with type matching the
                                             // original output type).
                                             let ret_v = Val::tuple(xs.into_iter().map(|x| x.val()).collect());
-                                            anti_stack.push(Rebuild::Call(oc, vs, ps));
+                                            anti_stack.push(Rebuild::Call(Call::new_q(oc, vs, qmode), ps));
                                             self = Comp::return1(ret_v);
                                         }
                                     }
@@ -356,7 +373,7 @@ impl Comp {
                             // that vars are still unique across both
                             // branches.
                             let mut then_cases = then_b
-                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone());
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode);
                             assert!(
                                 then_cases.len() == 1,
                                 "For now, then-branch should have 1 case, but it had {} cases",
@@ -365,7 +382,7 @@ impl Comp {
                             let then_b = then_cases.pop().unwrap().1;
 
                             let mut else_cases = else_b
-                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone());
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode);
                             assert!(
                                 else_cases.len() == 1,
                                 "For now, else-branch should have 1 case, but it had {} cases",
@@ -428,6 +445,7 @@ impl Comp {
                                             stack.clone(),
                                             Vec::new(),
                                             case_name.clone(),
+                                            qmode,
                                         );
                                     let branch =
                                         branch_cases.pop().unwrap().1;

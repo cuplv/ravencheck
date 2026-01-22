@@ -1,9 +1,10 @@
 use crate::{
     Binder1,
     BinderN,
+    Call,
     Comp,
+    LogOp1,
     LogOpN,
-    OpCode,
     Pattern,
     Quantifier,
     Val,
@@ -13,10 +14,11 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rebuild {
-    Call(OpCode, Vec<Val>, Vec<Pattern>),
+    Call(Call, Vec<Pattern>),
     Eq(bool, Vec<Val>, Vec<Val>, Ident),
+    QMode(Quantifier, Comp, Ident),
     Quantifier(Quantifier, Vec<(Ident,VType)>, Comp, Ident),
-    Not(Val, Ident),
+    LogOp1(LogOp1, Val, Ident),
     LogOpN(LogOpN, Vec<Val>, Ident),
     Bind1(Binder1, Ident),
 }
@@ -27,9 +29,9 @@ impl Comp {
             Rebuild::Bind1(b,x) => {
                 Self::Bind1(b, x, Box::new(self))
             }
-            Rebuild::Call(oc,vs,ps) => {
+            Rebuild::Call(c,ps) => {
                 Self::BindN(
-                    BinderN::Call(oc,vs),
+                    BinderN::Call(c),
                     ps,
                     Box::new(self)
                 )
@@ -43,11 +45,18 @@ impl Comp {
                     self
                 )
             }
+            Rebuild::QMode(q,body,x) => {
+                Self::Bind1(
+                    Binder1::QMode(q,Box::new(body)),
+                    x,
+                    Box::new(self)
+                )
+            }
             Rebuild::Quantifier(q,ps,body,x) => {
                 Self::quant_many(q,ps,body,x,self)
             }
-            Rebuild::Not(v,x) => {
-                Self::Bind1(Binder1::LogNot(v), x, Box::new(self))
+            Rebuild::LogOp1(b,v,x) => {
+                Self::Bind1(Binder1::LogOp1(b,v), x, Box::new(self))
             }
             Rebuild::LogOpN(op, vs, x) => {
                 Self::Bind1(

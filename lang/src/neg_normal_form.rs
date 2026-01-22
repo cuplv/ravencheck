@@ -3,6 +3,7 @@ use crate::{
     BinderN,
     Comp,
     Literal,
+    LogOp1,
     OpMode,
     Val,
     Ident,
@@ -130,6 +131,10 @@ impl Binder1 {
                 }
                 Self::LogQuantifier(*q, xs.clone(), Box::new(m2))
             }
+            Self::QMode(q, m) => {
+                let mut m2 = m.neg_normal_form_r(sig, dem, igen);
+                Self::QMode(*q, Box::new(m2))
+            }
             Self::LogOpN(op, vs) => {
                 // Demand all of the args
                 for v in vs {
@@ -160,7 +165,7 @@ impl Comp {
                 }
                 Self::Return(vs.clone())
             }
-            Self::Bind1(Binder1::LogNot(v), x, m) => {
+            Self::Bind1(Binder1::LogOp1(LogOp1::Not, v), x, m) => {
                 let m2 = m.neg_normal_form_r(sig,dem,igen);
                 match dem.get(x) {
                     None => m2,
@@ -219,8 +224,8 @@ impl Comp {
             // BinderN::Call that could be inside 'b' here?
             Self::BindN(b, ps, m) => {
                 match b {
-                    BinderN::Call(code, args) => {
-                        for a in args {
+                    BinderN::Call(call) => {
+                        for a in &call.args {
                             a.demand_positive(dem);
                         }
                     }

@@ -62,10 +62,14 @@ impl Binder1 {
                 expand_types_q(xs, subs),
                 Box::new(m.expand_types(subs)),
             ),
-            Self::LogNot(v) => Self::LogNot(v.expand_types(subs)),
+            Self::LogOp1(op, v) => Self::LogOp1(op, v.expand_types(subs)),
             Self::LogOpN(op, vs) => Self::LogOpN(
                 op.expand_types(subs),
                 vs.into_iter().map(|v| v.expand_types(subs)).collect(),
+            ),
+            Self::QMode(q, m) => Self::QMode(
+                q,
+                Box::new(m.expand_types(subs)),
             ),
         }
     }
@@ -101,10 +105,17 @@ impl OpCode {
 impl BinderN {
     pub fn expand_types(self, subs: &Subs) -> Self {
         match self {
-            Self::Call(oc, vs) => Self::Call(
-                oc.expand_types(subs),
-                vs.into_iter().map(|v| v.expand_types(subs)).collect(),
-            ),
+            Self::Call(mut call) => {
+                call.code = call.code.expand_types(subs);
+                call.args = call.args.into_iter()
+                    .map(|v| v.expand_types(subs))
+                    .collect();
+                Self::Call(call)
+            }
+            //     Self::Call(
+            //     oc.expand_types(subs),
+            //     vs.into_iter().map(|v| v.expand_types(subs)).collect(),
+            // ),
             Self::Seq(m) => Self::Seq(Box::new(m.expand_types(subs))),
         }
     }

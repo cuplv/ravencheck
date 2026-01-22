@@ -22,7 +22,6 @@ use ravenlang::{
     HypotheticalCall,
     InstMode,
     Op,
-    OpCode,
     Pattern,
     Quantifier,
     RirFn,
@@ -284,10 +283,10 @@ impl Rcc {
             })
             .collect();
 
-        // Create a snapshot a version of the sig which does not
-        // assume the property under verification.  This sig marks the
-        // quantified base types as inductive, so that their substruct
-        // relations are defined and axiomatized.
+        // Create a snapshot of the sig which does not assume the
+        // property under verification.  This sig marks the quantified
+        // base types as inductive, so that their substruct relations
+        // are defined and axiomatized.
         let mut qbases_set = HashSet::new();
         for b in &qbases {
             qbases_set.insert(b.clone());
@@ -365,14 +364,19 @@ impl Rcc {
             // Every hyp_x must be substructure of its corresponding
             // top_x (that is, equal to it or a smaller part of it).
             Builder::and_many(hyp_le_top)
-                // At least one hyp_x must be a proper substructure of
-                // its corresponding top_x (not equal to it).
+            // At least one hyp_x must be a proper substructure of its
+            // corresponding top_x (not equal to it).
                 .and(Builder::or_many(hyp_smaller_top))
-                // Under those conditions, assume that the property
-                // holds for the hypothetical substructure variables.
-                .implies(inhyp_body.builder())
-                // Wrap it all in a quantifier for the hypothetical
-                // substructure variables.
+            // Under those conditions, assume that the property holds
+            // for the hypothetical substructure variables.
+            //
+            // Use undef_or so that calls in the assumption do not
+            // create sort edges.
+                .implies(
+                    inhyp_body.builder().into_undef_or()
+                )
+            // Wrap it all in a quantifier for the hypothetical
+            // substructure variables.
                 .into_quantifier(Quantifier::Forall, inhyp_sig)
         });
 

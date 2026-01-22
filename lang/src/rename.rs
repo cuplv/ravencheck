@@ -18,7 +18,7 @@ impl Binder1 {
                 vs1.into_iter().map(|v| v.rename_r(igen)).collect(),
                 vs2.into_iter().map(|v| v.rename_r(igen)).collect(),
             ),
-            Self::LogNot(v) => Self::LogNot(v.rename_r(igen)),
+            Self::LogOp1(b, v) => Self::LogOp1(b, v.rename_r(igen)),
             Self::LogOpN(op, vs) => {
                 let vs2 = vs
                     .into_iter()
@@ -46,6 +46,9 @@ impl Binder1 {
                 Self::LogQuantifier(q, new_sig, Box::new(
                     m.rename_r(igen).substitute_many(&subs)
                 ))
+            }
+            Self::QMode(q, m) => {
+                Self::QMode(q, Box::new(m.rename_r(igen)))
             }
         }
     }

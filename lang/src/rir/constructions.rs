@@ -168,12 +168,29 @@ impl Builder {
                         applied_code_clause(con_code, input_xs, output_x)
                             .implies(Builder::and_many(srels))
                     } else {
-                        Builder::true_()
+                        // If there are no same-type arguments, this
+                        // is a base case.  Thus we specify that no
+                        // proper substruct value exists.
+                        let output_x_clone = output_x.clone();
+                        let no_proper_substruct_exists =
+                            Builder::forall(output_t.clone(), move |other_x| {
+                                let srel = f_clone.builder()
+                                    .apply_v([
+                                        other_x.clone(),
+                                        output_x_clone.clone()
+                                    ]);
+                                // Another value is substruct of the
+                                // constructed value iff they are
+                                // equal.
+                                srel.is_eq(
+                                    Builder::is_eq_v(other_x, output_x_clone))
+                            });
+                        applied_code_clause(con_code, input_xs, output_x)
+                            .implies(no_proper_substruct_exists)
                     }
                 })
             }));
         }
-        // todo!("add substructure axioms for contstructors");
 
         out
     }

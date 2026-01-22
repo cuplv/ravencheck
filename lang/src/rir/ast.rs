@@ -154,12 +154,38 @@ impl Pattern {
     }
 }
 
+/// The details of a symbolic function call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Call {
+    pub code: OpCode,
+    pub args: Vec<Val>,
+    pub qmode: Option<Quantifier>,
+}
+
+impl Call {
+    pub fn new(code: OpCode, args: Vec<Val>) -> Self {
+        Self{ code, args, qmode: None }
+    }
+    pub fn new_q(
+        code: OpCode,
+        args: Vec<Val>,
+        qmode: Option<Quantifier>
+    ) -> Self {
+        Self{ code, args, qmode }
+    }
+}
+
 /// Computations that bind multiple variables for use in a body
 /// computation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinderN {
-    Call(OpCode, Vec<Val>),
+    Call(Call),
     Seq(Box<Comp>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum LogOp1 {
+    Not,
 }
 
 /// A logical operator that takes zero or more arguments.
@@ -191,8 +217,9 @@ impl Quantifier {
 pub enum Binder1 {
     Eq(bool, Vec<Val>, Vec<Val>),
     LogQuantifier(Quantifier, Vec<(Ident, VType)>, Box<Comp>),
-    LogNot(Val),
+    LogOp1(LogOp1, Val),
     LogOpN(LogOpN, Vec<Val>),
+    QMode(Quantifier, Box<Comp>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -345,7 +372,11 @@ impl Comp {
     }
 
     pub fn not<V: Into<Val>, C: Into<Comp>>(v: V, x: Ident, m: C) -> Self {
-        Self::Bind1(Binder1::LogNot(v.into()), x, Box::new(m.into()))
+        Self::Bind1(
+            Binder1::LogOp1(LogOp1::Not, v.into()),
+            x,
+            Box::new(m.into())
+        )
     }
 }
 

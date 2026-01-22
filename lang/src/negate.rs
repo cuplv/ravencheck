@@ -1,6 +1,7 @@
 use crate::{
     Binder1,
     Comp,
+    LogOp1,
     LogOpN,
     neg_normal_form::DemandSet,
     IGen,
@@ -22,8 +23,17 @@ impl Binder1 {
                     Box::new(m_neg),
                 )
             }
-            Self::LogNot(_v) =>
-                panic!("Tried to directly negate a LogNot binder."),
+            Self::QMode(q, m) => {
+                let m_neg = m
+                    .negate_with(igen)
+                    .partial_eval_single_case(sig,igen);
+                Self::QMode(q.invert(), Box::new(m_neg))
+            }
+            Self::LogOp1(b, v) => match b {
+                LogOp1::Not => panic!(
+                    "LogNot binder should not be directly negated."
+                ),
+            }
             Self::LogOpN(op, vs) => match op {
                 LogOpN::And => {
                     let vs_neg =
@@ -37,7 +47,6 @@ impl Binder1 {
                 }
                 LogOpN::Pred(s,is_neg) =>
                     Self::LogOpN(LogOpN::Pred(s.clone(), !is_neg), vs.clone()),
-                // op => todo!("Negation for {:?}", op),
             }
         }
     }
