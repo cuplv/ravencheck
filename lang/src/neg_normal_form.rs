@@ -1,5 +1,6 @@
 use crate::{
     Binder1,
+    BinderN,
     Comp,
     Literal,
     OpMode,
@@ -217,6 +218,16 @@ impl Comp {
             // Todo: do we need to demand the arguments to a
             // BinderN::Call that could be inside 'b' here?
             Self::BindN(b, ps, m) => {
+                match b {
+                    BinderN::Call(code, args) => {
+                        for a in args {
+                            a.demand_positive(dem);
+                        }
+                    }
+                    BinderN::Seq(_) => unreachable!(
+                        "BinderN::Seq should be gone before neg-normal_form"
+                    )
+                }
                 Self::BindN(
                     b.clone(),
                     ps.clone(),
