@@ -3,7 +3,7 @@
 #[allow(dead_code)]
 mod bool_fun {
     #[declare]
-    fn foo(b: bool) -> u32 {
+    fn foo(_b: bool) -> u32 {
         0
     }
 

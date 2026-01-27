@@ -37,15 +37,15 @@ impl Stack {
 }
 
 impl Comp {
+    /// This may generate multiple cases.
     pub fn partial_eval(self, sig: &Sig, igen: &mut IGen, name: CaseName) -> Vec<(CaseName,Self)> {
-        let cases = self.partial_eval_loop(sig, igen, Stack::new(), Vec::new(), name, None);
+        let cases = self.partial_eval_loop(sig, igen, Stack::new(), Vec::new(), name, None, true);
         // println!("partial_eval passing up {} cases", cases.len());
         // println!("\npartial_eval returning {:?}\n", cases);
         cases
     }
 
-    /// Only use this on comps that don't have contain case-splitting
-    /// constructs (if-then-else and match).
+    /// This will only generate a single case.
     pub fn partial_eval_single_case(self, sig: &Sig, igen: &mut IGen) -> Self {
         // Give the partial_eval_loop the root() case name, which we
         // will discard.
@@ -56,6 +56,7 @@ impl Comp {
             Vec::new(),
             CaseName::root(),
             None,
+            false,
         );
         assert!(
             cases.len() == 1,
@@ -74,7 +75,8 @@ impl Comp {
         mut stack: Stack,
         mut anti_stack: Vec<Rebuild>,
         case_name: CaseName,
-        mut qmode: Option<Quantifier>,
+        qmode: Option<Quantifier>,
+        split_cases: bool,
     ) -> Vec<(CaseName,Self)> {
         loop {
             match self {
@@ -136,18 +138,36 @@ impl Comp {
                         // to the quantifier body) into the quantifier's
                         // body.
 
-                        // Problem here: how can we split cases when inside a quantifier?
-                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), qmode);
-                        assert!(
-                            body_cases.len() == 1,
-                            "For now, quantifier body should only have one case, but it had {} cases",
-                            body_cases.len(),
-                        );
-                        let body = body_cases.pop().unwrap().1;
-                        anti_stack.push(
-                            Rebuild::Quantifier(q, sig2, body, x)
-                        );
-                        self = *m;
+                        // Problem here: how can we split cases when
+                        // inside a quantifier?
+                        //
+                        // Solution: we can do it inside a ∀, but not
+                        // inside an ∃.
+                        let body_cases = match q {
+                            Quantifier::Forall => body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), qmode, split_cases),
+                            Quantifier::Exists => body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), qmode, false),
+                        };
+
+                        let mut out = Vec::new();
+                        for (name,comp) in body_cases.into_iter() {
+                            let mut case_anti_stack = anti_stack.clone();
+                            case_anti_stack.push(
+                                Rebuild::Quantifier(q, sig2.clone(), comp, x.clone())
+                            );
+                            let mut cont_cases = (*m).clone().partial_eval_loop(sig, igen, stack.clone(), case_anti_stack, name, qmode, split_cases);
+                            out.append(&mut cont_cases);
+                        }
+                        return out
+                        // assert!(
+                        //     body_cases.len() == 1,
+                        //     "For now, quantifier body should only have one case, but it had {} cases",
+                        //     body_cases.len(),
+                        // );
+                        // let body = body_cases.pop().unwrap().1;
+                        // anti_stack.push(
+                        //     Rebuild::Quantifier(q, sig2, body, x)
+                        // );
+                        // self = *m;
                     }
                     // Binder1::QMode(q, body) => {
                     //     let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), Some(q));
@@ -156,8 +176,8 @@ impl Comp {
                     //     self = Comp::seq(body, x, *m);
                     // }
                     Binder1::QMode(q, body) => {
-                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), Some(q));
-                        assert!(body_cases.len() == 1);
+                        let mut body_cases = body.partial_eval_loop(sig, igen, Stack(Vec::new()), Vec::new(), case_name.clone(), Some(q), split_cases);
+                        assert!(body_cases.len() == 1, "Handle multiple cases from QMode body");
                         let body = body_cases.pop().unwrap().1;
                         anti_stack.push(Rebuild::QMode(q, body, x));
                         self = *m;
@@ -364,7 +384,7 @@ impl Comp {
                     match cond {
                         Val::Literal(Literal::LogTrue) => { self = *then_b; }
                         Val::Literal(Literal::LogFalse) => { self = *else_b; }
-                        Val::Var(x, types, path, is_pos) => {
+                        var @ Val::Var(..) => {
                             // Branches evaluate in parallel and don't
                             // affect each other, so we send two distinct
                             // copies of the stack down each.
@@ -373,25 +393,62 @@ impl Comp {
                             // that vars are still unique across both
                             // branches.
                             let mut then_cases = then_b
-                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode);
-                            assert!(
-                                then_cases.len() == 1,
-                                "For now, then-branch should have 1 case, but it had {} cases",
-                                then_cases.len(),
-                            );
-                            let then_b = then_cases.pop().unwrap().1;
-
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode, split_cases);
                             let mut else_cases = else_b
-                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode);
-                            assert!(
-                                else_cases.len() == 1,
-                                "For now, else-branch should have 1 case, but it had {} cases",
-                                else_cases.len(),
-                            );
-                            let else_b = else_cases.pop().unwrap().1;
+                                .partial_eval_loop(sig, igen, stack.clone(), Vec::new(), case_name.clone(), qmode, split_cases);
+                            if split_cases {
+                                let mut out_cases = Vec::new();
+                                for (mut name, branch_result) in then_cases.into_iter() {
+                                    name.extend("then");
+                                    let branch =
+                                        // The (positive) condition
+                                        var.clone().ret().builder()
+                                        // implies that the branch
+                                        // evaluates to true
+                                        .implies(branch_result.builder())
+                                        .build_with(igen)
+                                        // We need to re-evaluate to
+                                        // break down the implies
+                                        // term.
+                                        .partial_eval_single_case(sig,igen)
+                                        // We didn't pass down the
+                                        // anti-stack, so we need to
+                                        // rebuild from it here.
+                                        .rebuild_from_stack(anti_stack.clone());
+                                    out_cases.push((name, branch));
+                                }
+                                for (mut name, branch_result) in else_cases.into_iter() {
+                                    name.extend("else");
+                                    let branch =
+                                        // The (negative) condition
+                                        var.clone().ret().builder().not()
+                                        // implies that the branch
+                                        // evaluates to true
+                                        .implies(branch_result.builder())
+                                        .build_with(igen)
+                                        .partial_eval_single_case(sig,igen)
+                                        .rebuild_from_stack(anti_stack.clone());
+                                    out_cases.push((name, branch));
+                                }
+                                return out_cases
+                            } else {
+                                assert!(
+                                    then_cases.len() == 1,
+                                    "then-branch should have 1 case, but it had {} cases",
+                                    then_cases.len(),
+                                );
+                                assert!(
+                                    else_cases.len() == 1,
+                                    "else-branch should have 1 case, but it had {} cases",
+                                    else_cases.len(),
+                                );
+                                let then_b = then_cases.pop().unwrap().1;
 
-                            self = Self::ite(Val::Var(x, types, path, is_pos), then_b, else_b);
-                            return vec![(case_name, self.rebuild_from_stack(anti_stack))]
+                                let else_b = else_cases.pop().unwrap().1;
+
+                                self = Self::ite(var, then_b, else_b);
+                                return vec![(case_name, self.rebuild_from_stack(anti_stack))]
+                            }
                         }
                         v => {
                             panic!("partial_eval found {:?} as ite-condition", v)
@@ -446,6 +503,7 @@ impl Comp {
                                             Vec::new(),
                                             case_name.clone(),
                                             qmode,
+                                            split_cases,
                                         );
                                     let branch =
                                         branch_cases.pop().unwrap().1;

@@ -132,7 +132,7 @@ impl Binder1 {
                 Self::LogQuantifier(*q, xs.clone(), Box::new(m2))
             }
             Self::QMode(q, m) => {
-                let mut m2 = m.neg_normal_form_r(sig, dem, igen);
+                let m2 = m.neg_normal_form_r(sig, dem, igen);
                 Self::QMode(*q, Box::new(m2))
             }
             Self::LogOpN(op, vs) => {
@@ -230,7 +230,7 @@ impl Comp {
                         }
                     }
                     BinderN::Seq(_) => unreachable!(
-                        "BinderN::Seq should be gone before neg-normal_form"
+                        "BinderN::Seq should be gone before neg_normal_form"
                     )
                 }
                 Self::BindN(
@@ -248,7 +248,7 @@ impl Comp {
                 )
             }
             Self::Apply(_m, _targs, _vs) => {
-                panic!(
+                unreachable!(
                     "Apply should be gone before neg_normal_form_r: {:?}",
                     self,
                 )

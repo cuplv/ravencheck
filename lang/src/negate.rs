@@ -29,11 +29,9 @@ impl Binder1 {
                     .partial_eval_single_case(sig,igen);
                 Self::QMode(q.invert(), Box::new(m_neg))
             }
-            Self::LogOp1(b, v) => match b {
-                LogOp1::Not => panic!(
-                    "LogNot binder should not be directly negated."
-                ),
-            }
+            Self::LogOp1(LogOp1::Not, _v) => panic!(
+                "LogNot binder should not be directly negated."
+            ),
             Self::LogOpN(op, vs) => match op {
                 LogOpN::And => {
                     let vs_neg =

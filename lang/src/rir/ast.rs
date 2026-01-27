@@ -395,9 +395,8 @@ impl fmt::Display for CaseName {
 
 impl CaseName {
     pub fn root() -> Self { CaseName(Vec::new()) }
-    pub fn extend<T: ToString>(mut self, segment: T) -> Self {
+    pub fn extend<T: ToString>(&mut self, segment: T) {
         self.0.push(segment.to_string());
-        self
     }
 }
 

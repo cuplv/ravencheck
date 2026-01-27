@@ -1,4 +1,5 @@
 #[crate::check_module(crate)]
+#[allow(dead_code)]
 mod induction {
     #[define]
     enum Nat { Z, S(Box<Nat>) }

@@ -483,7 +483,7 @@ fn query_negative_c(
         Err(e) => panic!("{}", e),
     };
     println!("Checking {} cases...", p.cases.len());
-    assert!(p.is_single_case(), "Should only be single-case props so far.");
+    // assert!(p.is_single_case(), "Should only be single-case props so far.");
     p.negate(sig.inner_sig());
     for (name, case) in p.cases {
         let g = sig.inner_sig().sort_graph_combined(&case);
