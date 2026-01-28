@@ -385,18 +385,45 @@ pub struct CaseName(Vec<String>);
 
 impl fmt::Display for CaseName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = String::from("root");
-        for seg in self.0.clone() {
-            out.push_str(&format!("::{}", seg));
-        }
+        let out = if self.0.len() == 0 {
+            String::from("root")
+        } else if self.0.len() == 1 {
+            self.0[0].clone()
+        } else {
+            let mut first = true;
+            let mut out = String::new();
+            for seg in self.0.clone() {
+                if !first {
+                    out.push_str("→");
+                }
+                out.push_str(&format!("{}", seg));
+                first = false;
+            }
+            out
+        };
         write!(f, "{}", out)
     }
 }
 
 impl CaseName {
     pub fn root() -> Self { CaseName(Vec::new()) }
+    pub fn is_root(&self) -> bool { self.0.len() == 0 }
     pub fn extend<T: ToString>(&mut self, segment: T) {
         self.0.push(segment.to_string());
+    }
+    pub fn render_vec(v: &Vec<Self>) -> String {
+        let mut out = String::new();
+        out.push_str("[");
+        let mut first = true;
+        for name in v {
+            if !first {
+                out.push_str(", ");
+            }
+            out.push_str(&format!("{}", name));
+            first = false;
+        }
+        out.push_str("]");
+        out
     }
 }
 
