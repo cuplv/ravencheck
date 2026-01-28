@@ -17,7 +17,6 @@ pub use rir::ast::{
     Val,
 };
 pub use rir::builder::Builder;
-mod eliminate_match;
 pub mod epr_check;
 pub use epr_check::{Cycle, render_cycle};
 mod expand_funs;
@@ -138,13 +137,6 @@ impl Comp {
             }).collect::<Vec<_>>(),
             None => cases,
         };
-
-        // Match elimination
-        let cases = cases.into_iter().map(|(name,comp)| {
-            let comp = comp.eliminate_match(sig,igen);
-            // println!("After match elimination: {:?}", comp);
-            (name, comp)
-        }).collect::<Vec<_>>();
 
         // Negation normal form (NNF)
         let cases = cases.into_iter().map(|(name,comp)| {

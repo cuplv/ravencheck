@@ -8,6 +8,7 @@ use crate::{
     IGen,
     Literal,
     LogOpN,
+    MatchArm,
     Oc,
     Op,
     OpCode,
@@ -460,54 +461,65 @@ impl Comp {
                     // parallel and don't affect each other,
                     // so we send distinct copies of the stack
                     // down each.
-                    let arms = arms
-                        .into_iter()
-                        .map(|(arm, branch)| {
-                            // Before evaluating the branch,
-                            // we need to handle the bound
-                            // contents of the constructor
-                            // just like we would from a
-                            // quantifier.
-
-                            // First, get the list of inputs
-                            // types for the arm's
-                            // constructor.
-
-                            // Next, zip them with the arm's
-                            // patterns (unwrapped into
-                            // vnames).
-
-                            // But we can't "modify the match
-                            // signature" like we do for
-                            // quantifiers... how do we save
-                            // the fact that tuples have been
-                            // split?
-
-                            // I'll leave this for later, and
-                            // avoid putting tuples in enums
-                            // for now.
-
-                            let mut branch_cases = branch
-                                .partial_eval_loop(
-                                    sig,
-                                    igen,
-                                    stack.clone(),
-                                    Vec::new(),
-                                    case_name.clone(),
-                                    qmode,
-                                    split_cases,
-                                );
-                            let branch =
-                                branch_cases.pop().unwrap().1;
-                            (arm, Box::new(branch))
-                        })
-                        .collect();
-
-                    self = Self::Match(
-                        var,
-                        arms,
-                    );
-                    return vec![(case_name, self.rebuild_from_stack(anti_stack))]
+                    let mut cases = Vec::new();
+                    for (arm, branch) in arms {
+                        let mut name = case_name.clone();
+                        name.extend(&arm.code.ident);
+                        let branch_cases = branch.partial_eval_loop(
+                            sig,
+                            igen,
+                            stack.clone(),
+                            Vec::new(),
+                            name,
+                            qmode,
+                            split_cases
+                        );
+                        for (name, case) in branch_cases {
+                            let case = build_symbolic_branch(
+                                var.clone(),
+                                arm.clone(),
+                                case,
+                                sig,
+                            )
+                                .build_with(igen)
+                                .partial_eval_single_case(sig, igen);
+                            cases.push((name, case));
+                        }
+                    }
+                    if !split_cases && cases.len() == 1 {
+                        // If there is only one branch/case, rebuild
+                        // from that and return.
+                        let case = cases.pop().unwrap().1;
+                        return vec![
+                            (case_name, case.rebuild_from_stack(anti_stack))
+                        ]
+                    } else if !split_cases {
+                        // If there are multiple branches/cases, but
+                        // we cannot split, AND them together, rebuild
+                        // from the whole, and return.
+                        let comps: Vec<Builder> = cases.into_iter()
+                            .map(|(_n,c)| c.builder())
+                            .collect();
+                        let conj = Builder::and_many(comps)
+                            .build_with(igen)
+                            // Don't forget to re-evaluate, since we
+                            // built up a term again!
+                            .partial_eval_single_case(sig, igen);
+                        return vec![
+                            (case_name, conj.rebuild_from_stack(anti_stack))
+                        ]
+                    } else {
+                        // If we can case-split, rebuild each case
+                        // separately using clones of the anti_stack,
+                        // and return all cases.
+                        let mut out = Vec::new();
+                        for (name, case) in cases {
+                            let rebuilt = case
+                                .rebuild_from_stack(anti_stack.clone());
+                            out.push((name, rebuilt))
+                        }
+                        return out
+                    }
                 }
                 Val::Var(_x, _types, _path, false) => {
                     panic!("Tried to match on a negative var, which should be bool type. You cannot match on bools, only enum types.")
@@ -621,4 +633,41 @@ impl Val {
             v => Ok(v),
         }
     }
+}
+
+fn build_symbolic_branch(
+    target: Val,
+    arm: MatchArm,
+    branch: Comp,
+    sig: &Sig,
+) -> Builder {
+    // First, get the list of input types for the arm's constructor.
+    let types = match sig.get_applied_op_or_con(&arm.code) {
+        Ok(Oc::Con(ts)) => ts,
+        _ => panic!("match arm code was not for a constructor: {:?}", &arm.code),
+    };
+    // Next, get the arm's patterns, and unwrap them into flat
+    // Idents. We do not currently allow underscores or tuple patterns
+    // here.
+    let xs = arm.binders.into_iter().map(|p| p.unwrap_vname().expect("In a match statement, constructor arguments must be simple variable names, like \"x\". They cannot be complex patterns like \"_\" or \"(x,y)\"."));
+    let mut rel_args: Vec<Val> =
+        xs.clone().into_iter().map(|x| x.val()).collect();
+    rel_args.push(target.clone());
+    let qsig = xs.zip(types).collect::<Vec<_>>();
+
+    let cond = if qsig.len() == 0 {
+        // Equate target to the constructor as a constant.
+        Builder::return_(target)
+            .is_eq(Builder::return_(arm.code.as_zero_arg_as_const()))
+    } else {
+        // Relate target to the newly quantified vars, using the
+        // relational abstraction of the arm's opcode.
+        Builder::force(Val::OpCode(OpMode::RelAbs, arm.code))
+            .apply_v(rel_args)
+    };
+    // The condition should then imply the remaining comp.
+    let branch = cond
+        .implies(branch.builder())
+        .into_quantifier(Quantifier::Forall, qsig);
+    branch
 }
