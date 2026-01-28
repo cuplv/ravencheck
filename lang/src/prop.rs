@@ -61,7 +61,8 @@ impl Comp {
                 let cases = self.normal_form_x(
                     sig,
                     &mut igen,
-                    CaseName::root()
+                    CaseName::root(),
+                    true,
                 );
                 Ok(Prop{cases, igen})
             }

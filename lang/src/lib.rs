@@ -103,14 +103,14 @@ impl Comp {
     }
     pub fn normal_form(self, sig: &Sig) -> Cases {
         let mut igen = self.get_igen();
-        self.normal_form_x(sig, &mut igen, CaseName::root())
+        self.normal_form_x(sig, &mut igen, CaseName::root(), true)
     }
     pub fn normal_form_single_case(
         self,
         sig: &Sig,
         igen: &mut IGen,
     ) -> Self {
-        let mut cases = self.normal_form_x(sig, igen, CaseName::root());
+        let mut cases = self.normal_form_x(sig, igen, CaseName::root(), false);
         assert!(
             cases.len() == 1,
             "normal_form_single_case should only be called on comps that produce 1 case, but comp produced {} cases",
@@ -123,9 +123,15 @@ impl Comp {
         sig: &Sig,
         igen: &mut IGen,
         starting_name: CaseName,
+        split_cases: bool,
     ) -> Cases {
         // Partial evaluation
-        let cases = self.partial_eval(sig, igen, starting_name);
+        let cases = if split_cases {
+            self.partial_eval(sig, igen, starting_name)
+        } else {
+            let comp = self.partial_eval_single_case(sig, igen);
+            vec![(starting_name, comp)]
+        };
         // println!("got {} cases from partial_eval", cases_pe.len());
 
         // Add recursion guards if defined
