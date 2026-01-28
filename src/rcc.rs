@@ -669,6 +669,7 @@ impl Rcc {
 
         let mut igen = def.get_igen();
         f_axiom.advance_igen(&mut igen);
+        let f_axiom = f_axiom.rename(&mut igen);
 
         // Define a condition that...
         //
