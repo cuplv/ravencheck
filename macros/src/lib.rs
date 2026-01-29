@@ -151,10 +151,10 @@ impl RvnItemAttr {
             ForCall(..) | ForInst(..) | ForValues(..) => format!("{} should only be used under {} on a 'fn' item", rt, AnnotateMulti.refer_text()),
             Import => format!("{} should only be used as the first ravencheck attribute on a 'use' item", rt),
             InstRule(..) => format!("{} should only be used under {} on a 'fn' item", rt, Assume.refer_text()),
-            Phantom => format!("{} should only be used under {} or {}, on a 'fn', 'type', or 'struct', or 'enum' item.", rt, Declare.refer_text(), Define.refer_text()),
+            Phantom => format!("{} should only be used under {} or {}, on a 'fn', 'type', 'struct', or 'enum' item.", rt, Declare.refer_text(), Define.refer_text()),
             Recursive => format!("{} should only be used under {} on a 'fn' item.", rt, Define.refer_text()),
             ShouldFail => format!("{} should only be used under {} on a 'fn' item.", rt, AnnotateMulti.refer_text()),
-            Total => format!("{}, should only be used under {} or {} on a 'fn' item.", rt, Declare.refer_text(), Define.refer_text()),
+            Total => format!("{}, should only be used under {} or under both {} and {} on a 'fn' item.", rt, Declare.refer_text(), Define.refer_text(), Recursive.refer_text()),
         }
     }
 
@@ -172,6 +172,11 @@ impl RvnItemAttr {
 
     fn under_define(attrs: &Vec<Self>) -> bool {
         attrs.iter().any(|a| match a { Self::Define => true, _ => false })
+    }
+
+    fn under_define_recursive(attrs: &Vec<Self>) -> bool {
+        Self::under_define(attrs)
+            && attrs.iter().any(|a| *a == Self::Recursive)
     }
 
     fn from_attr_context(
@@ -298,8 +303,8 @@ impl RvnItemAttr {
 
             // Recursive: only on a 'fn' or 'enum' under 'define'.
             (Recursive, Tag::Fn | Tag::Enum) if Self::under_define(rvn_attrs) => (),
-            // Total: only on a 'fn' under 'declare' or 'define'.
-            (Total, Tag::Fn) if Self::under_declare(rvn_attrs) || Self::under_define(rvn_attrs) => (),
+            // Total: only on a 'fn' under 'declare' or under 'define' and also 'recursive'.
+            (Total, Tag::Fn) if Self::under_declare(rvn_attrs) || Self::under_define_recursive(rvn_attrs) => (),
 
             // If no valid combinations have matched, then show the
             // user an error that explains the context requirement for
