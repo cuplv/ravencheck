@@ -247,7 +247,7 @@ impl Comp {
                     else_b.neg_normal_form_r(sig,dem,igen),
                 )
             }
-            Self::Apply(_m, _targs, _vs) => {
+            Self::Apply(..) => {
                 unreachable!(
                     "Apply should be gone before neg_normal_form_r: {:?}",
                     self,

@@ -175,12 +175,41 @@ impl Call {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeSeq {
+    pub content: Box<Comp>,
+    pub unroll: bool,
+}
+
+impl NodeSeq {
+    pub fn new(content: Box<Comp>) -> Self {
+        Self { content, unroll: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeApply {
+    pub f: Box<Comp>,
+    pub types: Vec<VType>,
+    pub vals: Vec<Val>,
+    pub unroll: bool,
+}
+
+impl NodeApply {
+    pub fn new(f: Comp, types: Vec<VType>, vals: Vec<Val>) -> Self {
+        Self { f: Box::new(f), types, vals, unroll: true }
+    }
+    pub fn no_unroll(f: Comp, types: Vec<VType>, vals: Vec<Val>) -> Self {
+        Self { f: Box::new(f), types, vals, unroll: false }
+    }
+}
+
 /// Computations that bind multiple variables for use in a body
 /// computation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinderN {
     Call(Call),
-    Seq(Box<Comp>),
+    Seq(NodeSeq),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -256,7 +285,7 @@ impl MatchArm {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Comp {
-    Apply(Box<Comp>, Vec<VType>, Vec<Val>),
+    Apply(NodeApply),
     BindN(BinderN, Vec<Pattern>, Box<Comp>),
     Bind1(Binder1, Ident, Box<Comp>),
     Force(Val),
@@ -270,7 +299,10 @@ pub enum Comp {
 
 impl Comp {
     pub fn apply<Ts: Into<Vec<VType>>, Vs: Into<Vec<Val>>>(m: Self, targs: Ts, vs: Vs) -> Self {
-        Self::Apply(Box::new(m), targs.into(), vs.into())
+        Self::Apply(NodeApply::new(m, targs.into(), vs.into()))
+    }
+    pub fn apply_no_unroll<Ts: Into<Vec<VType>>, Vs: Into<Vec<Val>>>(m: Self, targs: Ts, vs: Vs) -> Self {
+        Self::Apply(NodeApply::no_unroll(m, targs.into(), vs.into()))
     }
     pub fn force<V: Into<Val>>(v: V) -> Self {
         Self::Force(v.into())
@@ -288,7 +320,7 @@ impl Comp {
     where C1: Into<Self>, C2: Into<Self>
     {
         Self::BindN(
-            BinderN::Seq(Box::new(m1.into())),
+            BinderN::Seq(NodeSeq::new(Box::new(m1.into()))),
             vec![Pattern::Atom(x)],
             Box::new(m2.into()),
         )
@@ -301,7 +333,22 @@ impl Comp {
         let mut m = m2;
         for (m1, x1) in ms.into_iter().zip(xs) {
             m = Comp::BindN(
-                BinderN::Seq(Box::new(m1)),
+                BinderN::Seq(NodeSeq::new(Box::new(m1))),
+                vec![Pattern::Atom(x1)],
+                Box::new(m)
+            );
+        }
+        m
+    }
+    pub fn seq1_many_no_unroll(ms: Vec<Self>, xs: Vec<Ident>, m2: Self) -> Self {
+        assert!(
+            ms.len() == xs.len(),
+            "seq1_many with mismatched comp and name vecs"
+        );
+        let mut m = m2;
+        for (m1, x1) in ms.into_iter().zip(xs) {
+            m = Comp::BindN(
+                BinderN::Seq(NodeSeq{unroll: false, content: Box::new(m1)}),
                 vec![Pattern::Atom(x1)],
                 Box::new(m)
             );

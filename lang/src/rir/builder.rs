@@ -6,6 +6,7 @@ use crate::{
     Ident,
     LogOpN,
     MatchArm,
+    NodeSeq,
     Pattern,
     Quantifier,
     VType,
@@ -356,7 +357,7 @@ impl Builder {
         Self::new(|igen: &mut IGen| {
             let m1 = self.build_with(igen);
             Comp::BindN(
-                BinderN::Seq(Box::new(m1)),
+                BinderN::Seq(NodeSeq::new(Box::new(m1))),
                 vec![p],
                 Box::new(cont.build_with(igen)),
             )
@@ -410,6 +411,22 @@ impl Builder {
                 cont(xs.clone().into_iter().map(|x| x.val()).collect())
                 .build_with(igen);
             Comp::seq1_many(ms, xs, m2)
+        })
+    }
+
+    pub fn seq_many_igen_no_unroll<Cs,F>(bs: Cs, cont: F) -> Self
+    where
+        Cs: Into<Vec<Self>> + 'static,
+        F: FnOnce(Vec<Val>) -> Self + 'static,
+    {
+        Self::new(|igen: &mut IGen| {
+            let ms: Vec<Comp> =
+                bs.into().into_iter().map(|b| b.build_with(igen)).collect();
+            let xs = igen.next_many(ms.len());
+            let m2 =
+                cont(xs.clone().into_iter().map(|x| x.val()).collect())
+                .build_with(igen);
+            Comp::seq1_many_no_unroll(ms, xs, m2)
         })
     }
 
@@ -810,12 +827,30 @@ impl Builder {
         })
     }
 
+    pub fn apply_v_no_unroll<Vs>(self, vs: Vs) -> Self
+    where
+        Vs: Into<Vec<Val>> + 'static
+    {
+        Self::new(|igen: &mut IGen| {
+            Comp::apply_no_unroll(self.build_with(igen), Vec::new(), vs)
+        })
+    }
+
     pub fn apply<Bs>(self, bs: Bs) -> Self
     where
         Bs: Into<Vec<Self>> + 'static,
     {
         Self::seq_many_igen(bs, |xs| {
             self.apply_v(xs)
+        })
+    }
+
+    pub fn apply_no_unroll<Bs>(self, bs: Bs) -> Self
+    where
+        Bs: Into<Vec<Self>> + 'static,
+    {
+        Self::seq_many_igen(bs, |xs| {
+            self.apply_v_no_unroll(xs)
         })
     }
 

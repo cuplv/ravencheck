@@ -2,6 +2,8 @@ use crate::{
     Binder1,
     BinderN,
     Comp,
+    NodeApply,
+    NodeSeq,
     Pattern,
     Val,
 };
@@ -11,6 +13,13 @@ fn try_vec_1<T>(mut v: Vec<T>) -> Result<T, Vec<T>> {
         Ok(v.pop().unwrap())
     } else {
         Err(v)
+    }
+}
+
+impl NodeSeq {
+    pub fn erase_wildcard_lets(mut self) -> Self {
+        self.content = Box::new((*self.content).erase_wildcard_lets());
+        self
     }
 }
 
@@ -42,13 +51,20 @@ impl Binder1 {
 impl BinderN {
     pub fn erase_wildcard_lets(self) -> Self { match self {
         BinderN::Call(c) => BinderN::Call(c),
-        BinderN::Seq(m) => BinderN::Seq(Box::new(m.erase_wildcard_lets())),
+        BinderN::Seq(m) => BinderN::Seq(m.erase_wildcard_lets()),
     }}
+}
+
+impl NodeApply {
+    fn erase_wildcard_lets(mut self) -> Self {
+        self.f = Box::new(self.f.erase_wildcard_lets());
+        self
+    }
 }
 
 impl Comp {
     pub fn erase_wildcard_lets(self) -> Self { match self {
-        Self::Apply(m, ts, vs) => Self::Apply(Box::new(m.erase_wildcard_lets()), ts, vs),
+        Self::Apply(e) => Self::Apply(e.erase_wildcard_lets()),
         Self::Bind1(b, x, m) => Self::Bind1(b.erase_wildcard_lets(), x, Box::new(m.erase_wildcard_lets())),
         Self::BindN(b, ps, m2) => match try_vec_1(ps) {
             Ok(Pattern::NoBind) => m2.erase_wildcard_lets(),

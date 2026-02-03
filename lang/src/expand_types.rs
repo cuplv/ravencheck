@@ -116,7 +116,10 @@ impl BinderN {
             //     oc.expand_types(subs),
             //     vs.into_iter().map(|v| v.expand_types(subs)).collect(),
             // ),
-            Self::Seq(m) => Self::Seq(Box::new(m.expand_types(subs))),
+            Self::Seq(mut m) => {
+                m.content = Box::new(m.content.expand_types(subs));
+                Self::Seq(m)
+            }
         }
     }
 }
@@ -136,11 +139,14 @@ impl Comp {
     }
     pub fn expand_types(self, subs: &Subs) -> Self {
         match self {
-            Self::Apply(m, tas, vs) => Self::Apply(
-                Box::new(m.expand_types(subs)),
-                expand_types_tas(tas, subs),
-                vs.into_iter().map(|v| v.expand_types(subs)).collect(),
-            ),
+            Self::Apply(mut e) => {
+                e.f = Box::new(e.f.expand_types(subs));
+                e.types = expand_types_tas(e.types, subs);
+                e.vals = e.vals.into_iter()
+                    .map(|v| v.expand_types(subs))
+                    .collect();
+                Self::Apply(e)
+            }
             Self::BindN(b, ps, m) => Self::BindN(
                 b.expand_types(subs),
                 ps,

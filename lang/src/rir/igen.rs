@@ -74,7 +74,7 @@ impl BinderN {
                 }
             }
             Self::Seq(m) => {
-                m.advance_igen(igen);
+                m.content.advance_igen(igen);
             }
         }
     }
@@ -85,9 +85,9 @@ impl Comp {
     /// computation.
     pub fn advance_igen(&self, igen: &mut IGen) {
         match self {
-            Self::Apply(m,_,vs) => {
-                m.advance_igen(igen);
-                for v in vs {
+            Self::Apply(e) => {
+                e.f.advance_igen(igen);
+                for v in &e.vals {
                     v.advance_igen(igen);
                 }
             }

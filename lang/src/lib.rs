@@ -11,6 +11,8 @@ pub use rir::ast::{
     LogOp1,
     LogOpN,
     MatchArm,
+    NodeApply,
+    NodeSeq,
     OpMode,
     Pattern,
     Quantifier,

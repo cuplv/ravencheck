@@ -557,6 +557,21 @@ pub fn syn_to_builder(e: Expr) -> Result<Builder, Error> {
                         let left = args.pop().unwrap().into_value();
                         def_and_eq(left, right)
                     }
+                    Expr::Path(p) if p.path.segments.len() == 1 && p.path.segments.first().unwrap().ident.to_string().as_str() == "no_unroll" => {
+                        assert!(args.len() == 1, "no_unroll takes 1 argument");
+                        match args.pop().unwrap().into_value() {
+                            Expr::Call(ExprCall{ func, args, .. }) => {
+                                let func = *func;
+                                let f = syn_to_builder(func)?;
+                                let mut cs = Vec::new();
+                                for arg in args {
+                                    cs.push(syn_to_builder(arg)?);
+                                }
+                                Ok(f.flatten().apply_no_unroll(cs))
+                            }
+                            _ => panic!("no_unroll must wrap a function call"),
+                        }
+                    }
                     func => {
                         let f = syn_to_builder(func)?;
                         let mut cs = Vec::new();

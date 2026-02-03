@@ -4,6 +4,8 @@ use crate::{
     Comp,
     IGen,
     Ident,
+    NodeApply,
+    NodeSeq,
     Pattern,
     Val,
 };
@@ -43,16 +45,43 @@ impl Binder1 {
     }}
 }
 
+impl NodeSeq {
+    pub fn unroll_rec(mut self, defs: &HashMap<String, Comp>, igen: &mut IGen) -> Self {
+        self.content = Box::new((*self.content).unroll_rec(defs, igen));
+        self
+    }
+}
+
 impl BinderN {
     pub fn unroll_rec(self, defs: &HashMap<String, Comp>, igen: &mut IGen) -> Self { match self {
         BinderN::Call(c) => BinderN::Call(c),
-        BinderN::Seq(m) => BinderN::Seq(Box::new(m.unroll_rec(defs, igen))),
+        BinderN::Seq(m) if m.unroll => {
+            BinderN::Seq(m.unroll_rec(defs, igen))
+        }
+        BinderN::Seq(m) => {
+            panic!("Got no-unroll for {:?}", m);
+            // BinderN::Seq(m)
+        }
     }}
+}
+
+impl NodeApply {
+    fn unroll_rec(mut self, defs: &HashMap<String, Comp>, igen: &mut IGen) -> Self {
+        if self.unroll {
+            self.f = Box::new(self.f.unroll_rec(defs, igen));
+        } else {
+            // panic!("Got no-unroll for {:?}", &self.f)
+        }
+        self.vals = self.vals.into_iter()
+            .map(|v| v.unroll_rec(defs, igen))
+            .collect();
+        self
+    }
 }
 
 impl Comp {
     pub fn unroll_rec(self, defs: &HashMap<String, Comp>, igen: &mut IGen) -> Self { match self {
-        Self::Apply(m, ts, vs) => Self::Apply(Box::new(m.unroll_rec(defs, igen)), ts, vs),
+        Self::Apply(e) => Self::Apply(e.unroll_rec(defs, igen)),
         Self::Bind1(b, x, m) => Self::Bind1(b.unroll_rec(defs, igen), x, Box::new(m.unroll_rec(defs, igen))),
         Self::BindN(b, ps, m2) => match try_vec_1(ps) {
             // For a "let _ = ..", we don't actually want to unroll

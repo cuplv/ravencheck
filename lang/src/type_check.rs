@@ -89,17 +89,17 @@ impl Comp {
     }
     pub fn type_of(&self, mut tc: TypeContext) -> Result<CType, TypeError> {
         match self {
-            Self::Apply(m, _targs, vs) => match m.type_of(tc.clone())? {
+            Self::Apply(e) => match e.f.type_of(tc.clone())? {
                 CType::Fun(ts, ct) => {
-                    if ts.len() != vs.len() {
+                    if ts.len() != e.vals.len() {
                         return Err(format!(
                             "Function expected {} arg(s) of type {:?}, but was applied to {} value(s).",
                             ts.len(),
                             ts,
-                            vs.len(),
+                            e.vals.len(),
                         ))
                     }
-                    for (v,t) in vs.iter().zip(ts) {
+                    for (v,t) in e.vals.iter().zip(ts) {
                         let vt = v.type_of(tc.clone())?;
                         if vt != t {
                             return Err(format!(
@@ -173,7 +173,7 @@ impl Comp {
             }
             Self::BindN(BinderN::Seq(m1), ps, m) => {
                 let p = unwrap_one(ps)?;
-                let vt = m1.type_of(tc.clone())?.unwrap_return()?;
+                let vt = m1.content.type_of(tc.clone())?.unwrap_return()?;
                 let ct2 = p.bindings(vt)?;
                 m.type_of(tc.append(ct2))
             }

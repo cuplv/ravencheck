@@ -13,6 +13,7 @@ use crate::{
     Op,
     OpCode,
     OpMode,
+    NodeApply,
     Pattern,
     Quantifier,
     Rebuild,
@@ -79,10 +80,14 @@ impl Comp {
         qmode: Option<Quantifier>,
         split_cases: bool,
     ) -> Vec<(CaseName,Self)> { loop { match self {
-        Self::Apply(m, targs, vs) => {
-            stack.0.push(Frame::Args(targs,vs));
-            self = *m;
+        Self::Apply(NodeApply{f, types, vals, ..}) => {
+            stack.0.push(Frame::Args(types, vals));
+            self = *f;
         }
+        // Self::Apply(m, targs, vs) => {
+        //     stack.0.push(Frame::Args(targs,vs));
+        //     self = *m;
+        // }
         Self::BindN(b, ps, m) => match b {
             BinderN::Call(c) => {
                 anti_stack.push(Rebuild::Call(c,ps));
@@ -90,7 +95,7 @@ impl Comp {
             }
             BinderN::Seq(m1) => {
                 stack.0.push(Frame::Seq(ps, *m));
-                self = *m1;
+                self = *m1.content;
             }
         }
         Self::Bind1(b, x, m) => match b {

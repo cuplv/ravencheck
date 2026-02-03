@@ -2,6 +2,7 @@ use crate::{
     Binder1,
     BinderN,
     Comp,
+    NodeApply,
     Pattern,
     Val,
     Ident,
@@ -51,24 +52,28 @@ impl BinderN {
                     .collect();
                 Self::Call(call)
             }
-            Self::Seq(m) => Self::Seq(Box::new(m.substitute(x, v))),
+            Self::Seq(mut m) => {
+                m.content = Box::new(m.content.substitute(x,v));
+                Self::Seq(m)
+            }
         }
+    }
+}
+
+impl NodeApply {
+    fn substitute(mut self, x: &Ident, v: &Val) -> Self {
+        self.f = Box::new(self.f.substitute(x, v));
+        self.vals = self.vals.into_iter()
+            .map(|v1| v1.substitute(x, v))
+            .collect();
+        self
     }
 }
 
 impl Comp {
     pub fn substitute(self, x: &Ident, v: &Val) -> Self {
         match self {
-            Self::Apply(m, targs, vs) => {
-                Self::apply(
-                    m.substitute(x,v),
-                    targs,
-                    vs
-                        .into_iter()
-                        .map(|v1| v1.substitute(x,v))
-                        .collect::<Vec<Val>>()
-                )
-            }
+            Self::Apply(e) => Self::Apply(e.substitute(x, v)),
             Self::Return(vs) => {
                 Self::return_many(
                     vs

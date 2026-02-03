@@ -58,7 +58,10 @@ impl BinderN {
     fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
             Self::Call(..) => todo!(),
-            Self::Seq(m) => Self::Seq(Box::new(m.rename_r(igen))),
+            Self::Seq(mut m) => {
+                m.content = Box::new(m.content.rename_r(igen));
+                Self::Seq(m)
+            }
         }
     }
 }
@@ -74,13 +77,12 @@ impl Comp {
 
     pub fn rename_r(self, igen: &mut IGen) -> Self {
         match self {
-            Self::Apply(m, targs, vs) => {
-                let m2 = m.rename_r(igen);
-                let mut vs2 = Vec::new();
-                for v in vs.into_iter() {
-                    vs2.push(v.rename_r(igen));
-                }
-                Self::apply(m2, targs, vs2)
+            Self::Apply(mut e) => {
+                e.f = Box::new(e.f.rename_r(igen));
+                e.vals = e.vals.into_iter()
+                    .map(|v| v.rename_r(igen))
+                    .collect();
+                Self::Apply(e)
             }
             Self::Return(vs) => {
                 let vs2 = vs

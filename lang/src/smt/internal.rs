@@ -546,7 +546,7 @@ impl <'a> Context<'a> {
 
     fn smt_comp(&mut self, term: &Comp) -> std::io::Result<Vec<SExpr>> {
         match term {
-            Comp::Apply(_m, _targs, _vs) =>
+            Comp::Apply(..) =>
                 panic!("Apply must be eliminated before smt generation"),
             Comp::BindN(_b,_vs,_m) => todo!(
                 "Comp::BindN terms should be eliminated before smt generation: {:?}",
