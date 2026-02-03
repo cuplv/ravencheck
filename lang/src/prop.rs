@@ -12,6 +12,7 @@ use std::fmt;
 /// The Comp cases in a Prop are normal-form and prop-type.
 pub struct Prop {
     pub cases: Vec<(CaseName, Comp)>,
+    pub single_case: Comp,
     igen: IGen,
 }
 
@@ -34,17 +35,11 @@ impl fmt::Display for Error {
 pub type Result<A> = std::result::Result<A, Error>;
 
 impl Prop {
-    pub fn parse(input: &str, sig: &Sig) -> Result<Self> {
-        match parse_str_cbpv(input) {
-            Ok(c) => c.as_prop(sig),
-            Err(e) => Err(Error::Parse(e)),
-        }
-    }
-
     pub fn negate(&mut self, sig: &Sig) {
         for (_,c) in self.cases.iter_mut() {
             *c = c.negate().normal_form_single_case(sig, &mut self.igen);
         }
+        self.single_case = self.single_case.negate().normal_form_single_case(sig, &mut self.igen);
     }
 
     pub fn is_single_case(&self) -> bool {
@@ -58,13 +53,19 @@ impl Comp {
         match self.type_check(&CType::return_prop(), sig) {
             Ok(()) => {
                 let mut igen = self.get_igen();
-                let cases = self.normal_form_x(
+                let cases = self.clone().normal_form_x(
                     sig,
                     &mut igen,
                     CaseName::root(),
                     true,
                 );
-                Ok(Prop{cases, igen})
+                let single_case = self.clone().normal_form_x(
+                    sig,
+                    &mut igen,
+                    CaseName::root(),
+                    false,
+                ).pop().unwrap().1;
+                Ok(Prop{cases, single_case, igen})
             }
             Err(e) => Err(Error::Type(e)),
         }

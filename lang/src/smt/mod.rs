@@ -529,7 +529,38 @@ fn query_negative_c(
         // If we made it here, the overall answer is UNSAT.
         RvnResponse::verified()
     } else {
-        RvnResponse::falsified(f_cases)
+        // Check combined query, for completeness.
+
+        let g = sig.inner_sig().sort_graph_combined(&p.single_case);
+        let cycles = g.get_cycles();
+        if cycles.len() > 0 {
+            println!("Sort cycles detected in combined case");
+            for c in cycles.clone() {
+                println!("=> {}", render_cycle(&c));
+            }
+            println!("Query is undecidable due to sort cycles.");
+            return RvnResponse::SortCycles(cycles,CaseName::root())
+        }
+        println!("--------------------------");
+        println!("Checking combined case");
+        println!("--------------------------");
+        match internal::check_sat_of_normal(&p.single_case, sig.inner_sig(), solver_config).unwrap() {
+            Response::Sat => {
+                println!("Got SAT for combined case");
+                // We return the previously-identified specific
+                // falsified cases.
+                RvnResponse::falsified(f_cases)
+            }
+            Response::Unsat => {
+                RvnResponse::verified()
+            }
+            Response::Unknown => {
+                println!("Got UNKNOWN for combined case");
+                return RvnResponse::unknown()
+            }
+        }
+
+        
     }
 }
 
