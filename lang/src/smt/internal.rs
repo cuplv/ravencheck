@@ -295,6 +295,7 @@ pub fn check_sat_of_normal(
 ) -> std::io::Result<Response> {
     // let solver_config = SolverConfig::default();
     let mut ctx = solver_config.context_builder().build()?;
+    ctx.set_logic("ALL")?;
     declare_sig(&mut ctx, sig, term)?;
     let mut builder = Context::new(&mut ctx);
     let e = builder.smt(&term)?;
