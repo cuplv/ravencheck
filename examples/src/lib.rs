@@ -11,8 +11,6 @@ pub mod main_example_set;
 pub mod minimal;
 pub mod minimal_polymorphic;
 pub mod minimal_filter;
-pub mod annotate_multi;
-pub mod annotate_nat;
 pub mod recursive;
 pub mod loopify;
 pub mod incomplete_map;
