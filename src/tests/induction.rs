@@ -132,6 +132,7 @@ mod induct_non_enum {
 }
 
 #[crate::check_module(crate)]
+#[allow(dead_code)]
 mod induct_instantiations {
     #[define]
     enum Nat { Z, S(Box<Nat>) }

@@ -3,7 +3,6 @@ use crate::{
     Comp,
     CType,
     IGen,
-    parse_str_cbpv,
     Sig,
 };
 
