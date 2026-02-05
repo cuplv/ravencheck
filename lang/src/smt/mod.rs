@@ -22,6 +22,8 @@ use crate::{
 };
 use easy_smt::Response;
 
+use rayon::prelude::*;
+
 #[cfg(test)]
 mod tests; 
 
@@ -497,31 +499,41 @@ fn query_negative_c(
     println!("Checking {} cases...", p.cases.len());
     // assert!(p.is_single_case(), "Should only be single-case props so far.");
     p.negate(sig.inner_sig());
-    let mut f_cases = Vec::new();
-    for (name, case) in p.cases {
-        let g = sig.inner_sig().sort_graph_combined(&case);
-        let cycles = g.get_cycles();
-        if cycles.len() > 0 {
-            println!("Sort cycles detected in case [{}]:", name);
-            for c in cycles.clone() {
-                println!("=> {}", render_cycle(&c));
+
+    let results: Vec<(CaseName, Result<Response, RvnResponse>)> =
+        p.cases.into_par_iter()
+        .map(|(name, case)| {
+            let g = sig.inner_sig().sort_graph_combined(&case);
+            let cycles = g.get_cycles();
+            if cycles.len() > 0 {
+                // println!("Sort cycles detected in case [{}]:", name);
+                // for c in cycles.clone() {
+                //     println!("=> {}", render_cycle(&c));
+                // }
+                // println!("Query is undecidable due to sort cycles.");
+                (name.clone(), Err(RvnResponse::SortCycles(cycles,name)))
+            } else {
+            // println!("--------------------------");
+            // println!("Checking case: {}", name);
+            // println!("--------------------------");
+                (name, Ok(internal::check_sat_of_normal(&case, sig.inner_sig(), solver_config).unwrap()))
             }
-            println!("Query is undecidable due to sort cycles.");
-            return RvnResponse::SortCycles(cycles,name)
-        }
-        println!("--------------------------");
-        println!("Checking case: {}", name);
-        println!("--------------------------");
-        match internal::check_sat_of_normal(&case, sig.inner_sig(), solver_config).unwrap() {
-            Response::Sat => {
+        })
+        .collect();
+
+    let mut f_cases = Vec::new();
+    for (name, resp) in results.into_iter() {
+        match resp {
+            Ok(Response::Sat) => {
                 println!("Got SAT for case [{}]", &name);
                 f_cases.push(name);
             }
-            Response::Unsat => {},
-            Response::Unknown => {
+            Ok(Response::Unsat) => {},
+            Ok(Response::Unknown) => {
                 println!("Got UNKNOWN for case [{}]", &name);
                 return RvnResponse::unknown()
             }
+            Err(r) => return r,
         }
     }
 
