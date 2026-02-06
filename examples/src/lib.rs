@@ -6,6 +6,7 @@ pub mod filter_nested_tuple;
 pub mod inductive;
 pub mod ite;
 pub mod import_test;
+pub mod heap;
 pub mod main_example_nat;
 pub mod main_example_set;
 pub mod minimal;
