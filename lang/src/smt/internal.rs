@@ -304,6 +304,12 @@ pub fn check_sat_of_normal(
     return ctx.check()    
 }
 
+// Note: this function is only used for the tests in
+// `lang/src/smt/test.rs`, and is not even compiled unless you run
+// `cargo test --all`.
+//
+// All real Ravencheck queries go through `check_sat_of_normal`,
+// defined above.
 #[cfg(test)]
 pub fn check_sat_simple(
     term: &Comp,
