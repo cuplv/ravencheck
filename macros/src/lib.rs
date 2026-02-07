@@ -79,18 +79,11 @@ impl SynItemTag {
 enum RvnItemAttr {
     AnnotateGeneral,
     Annotate(String),
-    AnnotateMulti,
     Assume,
     AssumeFor(String),
     Declare,
     Define,
     Falsify,
-    // Should only be used with AnnotateMulti
-    ForCall(String),
-    // Should only be used with AnnotateMulti
-    ForInst(String),
-    // Should only be used with AnnotateMulti
-    ForValues(String),
     Import,
     Inductive(String),
     InstRule(String),
@@ -98,7 +91,6 @@ enum RvnItemAttr {
     Loopify(Ident, Ident, Ident, Ident, Ident, Ident),
     Phantom,
     Recursive,
-    // Should only be used with AnnotateMulti
     ShouldFail,
     Total,
     Verify,
@@ -114,7 +106,7 @@ fn path_to_one_str(p: &Path) -> Option<String> {
 
 impl RvnItemAttr {
     fn is_primary(&self) -> bool { use RvnItemAttr::*; match self {
-        AnnotateGeneral | Annotate(..) | AnnotateMulti | Assume | AssumeFor(..)
+        AnnotateGeneral | Annotate(..) | Assume | AssumeFor(..)
             | Declare | Define | Falsify | Import | Loopify(..)
             | Verify => true,
         _ => false,
@@ -125,15 +117,11 @@ impl RvnItemAttr {
         match self {
             AnnotateGeneral => "#[annotate]",
             Annotate(..) => "#[annotate(..)]",
-            AnnotateMulti => "#[annotate_multi]",
             Assume => "#[assume]",
             AssumeFor(..) => "#[assume(..)]",
             Declare => "#[declare]",
             Define => "#[define]",
             Falsify => "#[falsify]",
-            ForCall(..) => "#[for_call(..)]",
-            ForInst(..) => "#[for_inst(..)]",
-            ForValues(..) => "#[for_values(..)]",
             Import => "#[import]",
             Inductive(..) => "#[inductive(..)]",
             InstRule(..) => "#[for_type(..)]",
@@ -150,21 +138,16 @@ impl RvnItemAttr {
         use RvnItemAttr::*;
         let rt = self.refer_text();
         match self {
-            AnnotateGeneral | Annotate(..) | AnnotateMulti | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify => format!("{} should only be used as the first ravencheck attribute on a 'fn' item", rt),
+            AnnotateGeneral | Annotate(..) | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify => format!("{} should only be used as the first ravencheck attribute on a 'fn' item", rt),
             Declare | Define => format!("{} should only be used as the first ravencheck attribute on a 'fn', 'type', 'struct', or 'enum' item.", rt),
-            ForCall(..) | ForInst(..) | ForValues(..) => format!("{} should only be used under {} on a 'fn' item", rt, AnnotateMulti.refer_text()),
             Import => format!("{} should only be used as the first ravencheck attribute on a 'use' item", rt),
             Inductive(..) => format!("{} should only be used under {} on a 'fn' item", rt, AnnotateGeneral.refer_text()),
             InstRule(..) => format!("{} should only be used under {} or {} on a 'fn' item with type parameters", rt, Assume.refer_text(), AnnotateGeneral.refer_text()),
             Phantom => format!("{} should only be used under {} or {}, on a 'fn', 'type', 'struct', or 'enum' item.", rt, Declare.refer_text(), Define.refer_text()),
             Recursive => format!("{} should only be used under {} on a 'fn' item.", rt, Define.refer_text()),
-            ShouldFail => format!("{} should only be used under {} on a 'fn' item.", rt, AnnotateMulti.refer_text()),
+            ShouldFail => format!("{} should only be used under {} on a 'fn' item.", rt, AnnotateGeneral.refer_text()),
             Total => format!("{}, should only be used under {} or under both {} and {} on a 'fn' item.", rt, Declare.refer_text(), Define.refer_text(), Recursive.refer_text()),
         }
-    }
-
-    fn under_annotate_multi(attrs: &Vec<Self>) -> bool {
-        attrs.iter().any(|a| match a { Self::AnnotateMulti => true, _ => false })
     }
 
     fn under_annotate_general(attrs: &Vec<Self>) -> bool {
@@ -208,7 +191,7 @@ impl RvnItemAttr {
             Meta::Path(p) if p.segments.len() == 1 => {
                 match path_to_one_str(p).as_deref() {
                     Some("annotate") => AnnotateGeneral,
-                    Some("annotate_multi") => AnnotateMulti,
+                    Some("annotate_multi") => error("#[annotate_multi] has been replaced by #[annotate] + #[inductive(..)]")?,
                     Some("assume") => Assume,
                     Some("declare") => Declare,
                     Some("define") => Define,
@@ -233,10 +216,7 @@ impl RvnItemAttr {
                     Some("define") => error("#[define] should not have arguments.")?,
                     Some("define_rec") => error("#[define_rec] has been replaced by #[define] followed by #[recursive]")?,
                     Some("falsify") => error("#[falsify] should not have arguments.")?,
-                    Some("for_call") => ForCall(l.tokens.to_string()),
-                    Some("for_inst") => ForInst(l.tokens.to_string()),
                     Some("for_type") => InstRule(l.tokens.to_string()),
-                    Some("for_values") => ForValues(l.tokens.to_string()),
                     Some("import") => error("#[import] should not have arguments.")?,
                     Some("inductive") => Inductive(l.tokens.to_string()),
                     Some("loopify") => {
@@ -297,12 +277,9 @@ impl RvnItemAttr {
             (Define, Tag::Enum | Tag::Fn | Tag::Struct | Tag::Type) => (),
 
             // Primary attributes that go on 'fn' items.
-            (Annotate(..) | AnnotateGeneral | AnnotateMulti | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify, Tag::Fn) => (),
+            (Annotate(..) | AnnotateGeneral | Assume | AssumeFor(..) | Falsify | Loopify(..) | Verify, Tag::Fn) => (),
 
             (ShouldFail, Tag::Fn) if Self::under_annotate_general(rvn_attrs) => (),
-
-            // Secondary attributes that go under 'annotate_multi'.
-            (ForCall(..) | ForInst(..) | ForValues(..) | ShouldFail, Tag::Fn) if Self::under_annotate_multi(rvn_attrs) => (),
 
             (Inductive(..), Tag::Fn) if Self::under_annotate_general(rvn_attrs) => (),
 
@@ -378,7 +355,6 @@ enum ShouldPanic {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RccCommand {
     Annotate(String, ItemFn),
-    AnnotateMulti(bool, Vec<String>, Vec<String>, Vec<String>, ItemFn),
     Assume(Vec<String>, ItemFn),
     AssumeFor(String, ItemFn),
     /// The first boolean is `true` if this is a phantom
@@ -580,34 +556,6 @@ impl RccCommand {
                 }
                 item => Err(SynError::new(item.span(), "The #[annotate(..)] attribute should only be used on fn items.")),
                 // item => panic!("Can't use #[annotate(..)] on {:?}", item),
-            }
-            AnnotateMulti => match item {
-                Item::Fn(i) => {
-                    let mut call_lines = Vec::new();
-                    let mut inst_lines = Vec::new();
-                    let mut value_lines = Vec::new();
-                    let mut should_fail = false;
-                    for a in ras { match a {
-                        RvnItemAttr::ForCall(c) => { call_lines.push(c); },
-                        RvnItemAttr::ForInst(i) => { inst_lines.push(i); },
-                        RvnItemAttr::ForValues(l) => { value_lines.push(l); },
-                        RvnItemAttr::ShouldFail => { should_fail = true; },
-                        a => panic!(
-                            "Unexpected {:?} on '{}'",
-                            a,
-                            i.sig.ident
-                        ),
-                    }}
-                    let c = RccCommand::AnnotateMulti(
-                        should_fail,
-                        value_lines,
-                        call_lines,
-                        inst_lines,
-                        i
-                    );
-                    Ok((vec![c], None))
-                }
-                item => Err(SynError::new(item.span(), "The #[annotate_multi(..)] attribute should only be used on fn items.")),
             }
             AnnotateGeneral => match item {
                 Item::Fn(i) => {
@@ -942,19 +890,6 @@ fn generate_stmts(commands: &Vec<RccCommand>, mode: GenMode) -> Vec<Stmt> {
                 let item_str = quote!{ #item_fn }.to_string();
                 let s: Stmt = syn::parse2(quote! {
                     rcc.reg_fn_annotate(#call_str, #item_str).unwrap();
-                }).unwrap();
-                out.push(s);
-            }
-            RccCommand::AnnotateMulti(should_fail, value_strs, call_strs, inst_strs, item_fn) => {
-                let item_str = quote!{ #item_fn }.to_string();
-                let s: Stmt = syn::parse2(quote! {
-                    rcc.reg_fn_annotate_multi(
-                        #should_fail,
-                        [#(#value_strs),*],
-                        [#(#call_strs),*],
-                        [#(#inst_strs),*],
-                        #item_str
-                    ).unwrap();
                 }).unwrap();
                 out.push(s);
             }
