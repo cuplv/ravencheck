@@ -1002,6 +1002,16 @@ fn result_to_tokens(r: Result<TokenStream, SynError>) -> TokenStream {
     }
 }
 
+/// Check verification conditions within a module, and make
+/// declared/defined items available for import into other modules.
+#[proc_macro_attribute]
+pub fn module(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    result_to_tokens(
+        process_module(attrs, input, RvnMod::new_export())
+    )
+}
+
+/// This is the same as [`export_module`].
 #[proc_macro_attribute]
 pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
     result_to_tokens(
@@ -1009,6 +1019,8 @@ pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
     )
 }
 
+/// Check verification conditions within a module, but don't make
+/// declared/defined items available for import into other modules.
 #[proc_macro_attribute]
 pub fn check_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
     result_to_tokens(
