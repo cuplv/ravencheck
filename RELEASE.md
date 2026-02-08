@@ -3,6 +3,7 @@ To perform a release to crates.io, do the following:
 1. update the version numbers found in the following files:
 
 ```
+* examples/Cargo.toml
 * lang/Cargo.toml
 * macros/Cargo.toml
 * Cargo.toml

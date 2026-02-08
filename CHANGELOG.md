@@ -1,3 +1,13 @@
+# 2026-02-08: v0.5.0
+
+* Replaced #[annotate_multi] with #[annotate] + #[inductive].
+* Added ability to log solver interaction.
+* Added forall-quantified arguments to forall/falsify/assume.
+* Added solver configuration attributes
+* Enabled tuple patterns in closure arguments (Kunha).
+* Enable query-splitting for if-then-else and match.
+* Add top-level crate documentation.
+
 # 2025-09-29: v0.4.1
 
 * Fix annotate_multi for relations, using recursion guards.

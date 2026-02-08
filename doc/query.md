@@ -1,3 +1,6 @@
+Here is an overview of how SMT queries are formed from `#[verify]`
+conditions.
+
 # Original query
 
 ```
@@ -22,13 +25,13 @@ fn add_twice_monotonic() -> bool {
 Ravencheck's internal representation
 is Call-By-Push-Value style.
 The conversion from surface-level Rust sytnax
-is implemented in `lang/src/syn_to_cbpv.rs`.
+is implemented in `lang/src/rir/from_syn.rs`.
 
 The converted query example here
 is written out using Rust syntax,
 but internally Ravencheck uses the AST 
-defined in `lang/src/cbpv.rs`
-to represented the code.
+defined in `lang/src/rir/ast.rs`
+to represent the code.
 The AST is defined by the mutually-inductive
 `Comp` and `Val` enum types.
 
