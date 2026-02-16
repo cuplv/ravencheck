@@ -1011,7 +1011,7 @@ pub fn module(attrs: TokenStream, input: TokenStream) -> TokenStream {
     )
 }
 
-/// This is the same as [`export_module`].
+/// This is the same as [`module`].
 #[proc_macro_attribute]
 pub fn export_module(attrs: TokenStream, input: TokenStream) -> TokenStream {
     result_to_tokens(

@@ -50,12 +50,12 @@ This allows you to choose which commit in the repo to use.
 
 ### Verifying a module
 
-You use `ravencheck` by adding the `#[ravencheck::check_module]` macro
+You use `ravencheck` by adding the `#[ravencheck::module]` macro
 attribute at the top of modules in which you want to use
 verification. 
 
 ```
-#[ravencheck::check_module]
+#[ravencheck::module]
 #[declare_types(u32)]
 mod rvn {
     #[declare]
